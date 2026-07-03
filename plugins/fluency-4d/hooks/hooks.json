@@ -13,6 +13,19 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Checkpoint de memoria (50% de contexto)...",
+            "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/memory_checkpoint.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": ".*",
