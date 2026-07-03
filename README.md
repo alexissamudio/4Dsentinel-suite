@@ -45,8 +45,9 @@ Requisito: [uv](https://docs.astral.sh/uv/) instalado (los hooks son scripts Pyt
 | `FLUENCY_4D_STRICT` | (apagada) | `1` activa el gate de discernimiento al terminar tareas. |
 
 Limitaciones conocidas (v0.2): el checkpoint dispara **una vez por sesión** (no se
-re-arma tras una compactación) y requiere una versión de Claude Code que exponga
-`context_window.used_percentage` a los hooks.
+re-arma tras una compactación). Usa `context_window.used_percentage` si tu versión
+de Claude Code lo expone a los hooks; si no, estima el porcentaje por el tamaño del
+archivo de transcript (conservador: puede disparar un poco antes del 50% real).
 
 ## Las 4D en una tabla
 

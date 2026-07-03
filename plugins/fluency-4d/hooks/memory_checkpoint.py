@@ -35,6 +35,37 @@ from hook_utils import (
 )
 
 DEFAULT_THRESHOLD = 50
+CONTEXT_LIMIT_TOKENS = 200_000
+
+
+def usage_percentage(data: dict) -> float | None:
+    """Porcentaje de contexto usado.
+
+    Preferencia: campo nativo context_window.used_percentage. Fallback
+    (verificado: el campo no viene en todas las versiones de Claude Code):
+    estimacion conservadora por tamano del archivo de transcript
+    (bytes/4 ~ tokens sobre 200k; el overhead del JSONL infla la estimacion,
+    asi que dispara un poco antes, nunca despues).
+    """
+    context_window = data.get("context_window")
+    if isinstance(context_window, dict):
+        pct = context_window.get("used_percentage")
+        if isinstance(pct, (int, float)):
+            return float(pct)
+
+    transcript_path = data.get("transcript_path")
+    if transcript_path:
+        try:
+            size_bytes = Path(transcript_path).stat().st_size
+        except OSError as exc:
+            log_debug(f"transcript_path ilegible: {exc}")
+            return None
+        estimated_tokens = size_bytes / 4
+        log_debug(f"estimacion por transcript: {size_bytes} bytes ~ {estimated_tokens:.0f} tokens")
+        return min(100.0, estimated_tokens / CONTEXT_LIMIT_TOKENS * 100)
+
+    log_debug("sin context_window.used_percentage ni transcript_path")
+    return None
 
 
 def parse_threshold() -> int:
@@ -79,10 +110,8 @@ def main() -> None:
     if not cwd or not (Path(cwd) / ".claude").is_dir():
         return output_empty()
 
-    context_window = data.get("context_window")
-    pct = context_window.get("used_percentage") if isinstance(context_window, dict) else None
-    if not isinstance(pct, (int, float)):
-        log_debug("context_window.used_percentage ausente")
+    pct = usage_percentage(data)
+    if pct is None:
         return output_empty()
 
     if pct < threshold:
