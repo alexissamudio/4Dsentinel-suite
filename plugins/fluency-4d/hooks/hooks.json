@@ -15,11 +15,22 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Chequeando docs del tema...",
+            "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/doc_drift.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": ".*",
         "hooks": [
           {
             "type": "command",
-            "statusMessage": "Checkpoint de memoria (50% de contexto)...",
+            "statusMessage": "Checkpoint de memoria...",
             "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/memory_checkpoint.py",
             "timeout": 5
           }
