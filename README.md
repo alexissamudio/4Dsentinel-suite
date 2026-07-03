@@ -11,7 +11,10 @@ Plugin de Claude Code (en español) que lleva a la práctica el marco **4D de AI
 | **Skill `/4d-init`** | Analiza tu proyecto y genera un **CLAUDE.md modular**: raíz corta con una tabla de "puentes" a docs por tema (`.claude/docs/auth.md`, `endpoints.md`, ...) más un manifiesto `bridges.json`. |
 | **Hook `bridge_router`** | En cada prompt, si mencionás un tema documentado (p. ej. "auth"), inyecta automáticamente la instrucción de leer `.claude/docs/auth.md` antes de responder. Se desactiva solo en proyectos sin puentes. |
 | **Hook `discernment_gate`** | Opcional (`FLUENCY_4D_STRICT=1`): antes de terminar una tarea, exige pasar una vez por la checklist de discernimiento. Apagado por defecto. |
-| **Hook `memory_checkpoint`** | Al cruzar el **50% de contexto** (configurable, `FLUENCY_4D_SAVE_PCT`), instruye guardar el estado de la sesión en `.claude/docs/estado-sesion.md` y consolidar lecciones. Una vez por sesión. |
+| **Hook `memory_checkpoint`** | ~Cada **50% de contexto** (configurable, `FLUENCY_4D_SAVE_PCT`), instruye guardar el estado de la sesión en `.claude/docs/estado-sesion.md` y consolidar lecciones. Se re-arma: por caída de porcentaje (compactación, modo nativo) o por intervalo de tokens acumulados (modo estimación por transcript). |
+| **Hook `doc_drift`** | Si editás archivos bajo las `rutas` de un tema documentado (p. ej. `src/auth/`), te recuerda revisar el doc del tema al terminar. Una vez por tema por sesión. |
+| **Skill `/4d-status`** | Reporte de solo lectura: temas puenteados, temas sin `rutas`, lecciones vs límite de 30, edad del estado de sesión, convenciones. |
+| **`convenciones.md`** | `/4d-init` SIEMPRE genera un doc de style guidelines del proyecto (naming, formato, linters); si hay poca evidencia lo marca honestamente (`evidence: low`). |
 | **Autoaprendizaje** | Las correcciones y errores cazados por el Discernimiento se guardan como lecciones en `.claude/docs/lecciones.md`; al arrancar una sesión nueva, el plugin te recuerda leerlas (y retomar `estado-sesion.md` si existe, avisando su antigüedad). |
 
 ## Instalación
@@ -44,10 +47,11 @@ Requisito: [uv](https://docs.astral.sh/uv/) instalado (los hooks son scripts Pyt
 | `FLUENCY_4D_SAVE_PCT` | `50` | Umbral de contexto del checkpoint de memoria; `0` lo desactiva. |
 | `FLUENCY_4D_STRICT` | (apagada) | `1` activa el gate de discernimiento al terminar tareas. |
 
-Limitaciones conocidas (v0.2): el checkpoint dispara **una vez por sesión** (no se
-re-arma tras una compactación). Usa `context_window.used_percentage` si tu versión
-de Claude Code lo expone a los hooks; si no, estima el porcentaje por el tamaño del
-archivo de transcript (conservador: puede disparar un poco antes del 50% real).
+Notas (v0.3): el checkpoint usa `context_window.used_percentage` si tu versión de
+Claude Code lo expone; si no, estima por el tamaño del transcript (conservador y
+aproximado: "~cada 50%" puede llegar un poco antes). Los proyectos inicializados con
+v0.2 no tienen `rutas` en su bridges.json: el aviso de doc desactualizado queda
+inactivo hasta re-correr `/4d-init`.
 
 ## Las 4D en una tabla
 

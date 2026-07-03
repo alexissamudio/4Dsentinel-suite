@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Marco 4D de AI Fluency (Delegación, Descripción, Discernimiento, Diligencia) aplicado a Claude Code + CLAUDE.md modular con puentes por tema",
-    "version": "0.2.1"
+    "version": "0.3.0"
   },
   "plugins": [
     {
       "name": "fluency-4d",
       "source": "./plugins/fluency-4d",
       "description": "Aplica el marco 4D de AI Fluency en tu flujo de trabajo (/4d) y genera un CLAUDE.md modular con puentes a docs por tema (/4d-init) con enrutamiento automático vía hook",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "author": {
         "name": "Alexis Samudio"
       },
@@ -34,7 +34,8 @@
       "category": "productivity",
       "skills": [
         "./skills/4d",
-        "./skills/4d-init"
+        "./skills/4d-init",
+        "./skills/4d-status"
       ]
     }
   ]

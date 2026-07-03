@@ -51,12 +51,25 @@ Calculá el hash con: `uv run python -c "import hashlib,sys; print(hashlib.sha25
 (o equivalente sobre el texto del cuerpo). El contenido: cómo funciona el tema EN ESTE
 proyecto (archivos clave con rutas, flujo, convenciones, gotchas) — no teoría genérica.
 
-Generá `.claude/docs/bridges.json`:
+**Excepción a la regla de evidencia:** `.claude/docs/convenciones.md` se genera
+SIEMPRE (naming, formato, idioma de identificadores, estructura de carpetas,
+linters detectados). Si la evidencia es poca, el doc lo dice honestamente:
+línea "⚠ Generado con poca evidencia — validar" y `evidence: low` en el
+frontmatter. Pasa por la misma protección de hash en re-ejecución. Su entrada
+en bridges.json usa keywords específicas: `["convenciones", "styleguide",
+"estilo de codigo", "lint", "linting", "naming"]` (NO "style"/"estilo"/"formato"
+a secas: false-positives con estilos de UI).
+
+Generá `.claude/docs/bridges.json`. Cada tema lleva **`rutas`**: prefijos de
+ruta posix relativos a la raíz (carpetas con `/` final o archivos exactos),
+derivados de la evidencia de la exploración — activan el aviso automático de
+doc desactualizado cuando se editan archivos del tema:
 
 ```json
 { "version": 1, "temas": [
     { "tema": "auth", "archivo": ".claude/docs/auth.md",
-      "keywords": ["auth", "autenticacion", "login", "token", "sesion", "jwt"] }
+      "keywords": ["auth", "autenticacion", "login", "token", "sesion", "jwt"],
+      "rutas": ["src/auth/", "config/auth.js"] }
 ] }
 ```
 
@@ -78,6 +91,7 @@ en cualquier prompt ("api", "codigo", "test" solo, "base", "dato").
 | Auth | login, tokens, sesiones | .claude/docs/auth.md |
 
 Si la pregunta o tarea toca un tema de la tabla, LEÉ ese archivo ANTES de responder.
+Al escribir código, respetá `.claude/docs/convenciones.md`.
 <!-- END 4D-BRIDGES -->
 ```
 
