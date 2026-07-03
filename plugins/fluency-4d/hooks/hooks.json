@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Buscando puentes de documentación...",
+            "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/bridge_router.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Gate de discernimiento (opt-in)...",
+            "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/discernment_gate.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
