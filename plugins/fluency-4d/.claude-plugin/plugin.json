@@ -1,0 +1,26 @@
+{
+  "name": "fluency-4d",
+  "version": "0.1.0",
+  "description": "Aplica el marco 4D de AI Fluency en tu flujo de trabajo (/4d) y genera un CLAUDE.md modular con puentes a docs por tema (/4d-init) con enrutamiento automático vía hook",
+  "author": {
+    "name": "Alexis Samudio",
+    "url": "https://github.com/alexissamudio"
+  },
+  "repository": "https://github.com/alexissamudio/ai-fluency-4d",
+  "license": "MIT",
+  "keywords": [
+    "ai-fluency",
+    "4d",
+    "delegacion",
+    "descripcion",
+    "discernimiento",
+    "diligencia",
+    "claude-md",
+    "progressive-disclosure",
+    "espanol"
+  ],
+  "skills": [
+    "./skills/4d",
+    "./skills/4d-init"
+  ]
+}
