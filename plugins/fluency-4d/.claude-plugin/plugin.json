@@ -1,6 +1,6 @@
 {
   "name": "fluency-4d",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Aplica el marco 4D de AI Fluency en tu flujo de trabajo (/4d) y genera un CLAUDE.md modular con puentes a docs por tema (/4d-init) con enrutamiento automático vía hook",
   "author": {
     "name": "Alexis Samudio",

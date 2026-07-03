@@ -11,6 +11,8 @@ Plugin de Claude Code (en español) que lleva a la práctica el marco **4D de AI
 | **Skill `/4d-init`** | Analiza tu proyecto y genera un **CLAUDE.md modular**: raíz corta con una tabla de "puentes" a docs por tema (`.claude/docs/auth.md`, `endpoints.md`, ...) más un manifiesto `bridges.json`. |
 | **Hook `bridge_router`** | En cada prompt, si mencionás un tema documentado (p. ej. "auth"), inyecta automáticamente la instrucción de leer `.claude/docs/auth.md` antes de responder. Se desactiva solo en proyectos sin puentes. |
 | **Hook `discernment_gate`** | Opcional (`FLUENCY_4D_STRICT=1`): antes de terminar una tarea, exige pasar una vez por la checklist de discernimiento. Apagado por defecto. |
+| **Hook `memory_checkpoint`** | Al cruzar el **50% de contexto** (configurable, `FLUENCY_4D_SAVE_PCT`), instruye guardar el estado de la sesión en `.claude/docs/estado-sesion.md` y consolidar lecciones. Una vez por sesión. |
+| **Autoaprendizaje** | Las correcciones y errores cazados por el Discernimiento se guardan como lecciones en `.claude/docs/lecciones.md`; al arrancar una sesión nueva, el plugin te recuerda leerlas (y retomar `estado-sesion.md` si existe, avisando su antigüedad). |
 
 ## Instalación
 
@@ -32,6 +34,19 @@ Requisito: [uv](https://docs.astral.sh/uv/) instalado (los hooks son scripts Pyt
 2. En una sesión nueva, preguntá por ejemplo "¿cómo funciona el auth?" — el hook detecta
    la keyword y Claude lee `auth.md` antes de responder.
 3. Para tareas grandes, invocá `/4d` y dejate guiar por las 4 dimensiones.
+4. Trabajá normal: al cruzar el 50% de contexto el plugin dispara el checkpoint de
+   memoria (estado + lecciones), y en la próxima sesión te recuerda retomarlos.
+
+## Variables de entorno
+
+| Variable | Default | Efecto |
+|----------|---------|--------|
+| `FLUENCY_4D_SAVE_PCT` | `50` | Umbral de contexto del checkpoint de memoria; `0` lo desactiva. |
+| `FLUENCY_4D_STRICT` | (apagada) | `1` activa el gate de discernimiento al terminar tareas. |
+
+Limitaciones conocidas (v0.2): el checkpoint dispara **una vez por sesión** (no se
+re-arma tras una compactación) y requiere una versión de Claude Code que exponga
+`context_window.used_percentage` a los hooks.
 
 ## Las 4D en una tabla
 
