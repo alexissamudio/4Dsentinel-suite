@@ -58,6 +58,11 @@ en vez de re-describir todo. Repetí el loop Descripción → Discernimiento has
 checklist pase. Advertencia honesta: si el dominio excede tu capacidad de verificación
 o la del usuario, decilo y proponé un paso de verificación independiente.
 
+**Autoaprendizaje:** al cerrar el loop, si hubo correcciones del usuario o errores/
+alucinaciones cazadas, guardá la lección en `.claude/docs/lecciones.md` con formato
+`## [fecha] — [título]` + contexto + lección + cómo aplicar. Consolidá: máximo ~30
+lecciones, fusioná duplicadas, borrá las supersedidas.
+
 ## Fase 4 — Diligencia (¿quién se hace responsable?)
 
 Leé `references/diligencia.md`.

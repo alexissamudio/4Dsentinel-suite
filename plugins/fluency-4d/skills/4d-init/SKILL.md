@@ -97,6 +97,7 @@ Si no hay CLAUDE.md, crealo solo con un título y el bloque. Mantené el bloque 
 ## Reglas duras
 
 - NUNCA tocar contenido fuera de los centinelas `<!-- BEGIN 4D-BRIDGES -->` / `<!-- END 4D-BRIDGES -->`.
+- `lecciones.md` y `estado-sesion.md` NO son docs de tema: no los regeneres, no los metas en `bridges.json`, no les exijas frontmatter con hash (los escribe Claude durante el trabajo, no este generador).
 - NUNCA crear CLAUDE.md anidados por directorio (eso es territorio de /init-deep).
 - NUNCA generar un tema sin evidencia en el código.
 - SIEMPRE backup antes de modificar un CLAUDE.md existente.
