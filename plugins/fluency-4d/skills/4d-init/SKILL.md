@@ -77,14 +77,39 @@ doc desactualizado cuando se editan archivos del tema:
 normaliza) e inglés; mínimo 4 caracteres; RECHAZÁ keywords genéricas que matchearían
 en cualquier prompt ("api", "codigo", "test" solo, "base", "dato").
 
+## Fase 4.5 — Reglas-siempre vs conocimiento-por-tema
+
+Dos tipos de contenido: **conocimiento-por-tema** (cómo funciona X acá; solo
+importa al tocar X) → `.claude/docs/<tema>.md` con puente. **Regla-siempre**
+(aplica al escribir CUALQUIER código) → inline en el bloque centinela del
+CLAUDE.md, que se carga en TODA sesión.
+
+**Regla de decisión:** es **regla-siempre** sii (a) es imperativa/prohibitiva Y
+(b) un revisor marcaría su violación en un diff SIN saber qué feature implementa.
+**Ante la duda: inline** (falso positivo = 1 línea de ruido; falso negativo =
+regla no negociable escondida tras un keyword). Ejemplos trabajados:
+`references/ejemplo-clasificacion.md`.
+
+**Confirmación humana:** generá los candidatos y presentálos con AskUserQuestion
+multiSelect ("¿cuáles son no negociables e inline?"). NO clasifiques en silencio.
+Apuntá a ≤10-12; más es decisión del usuario. El DETALLE (ejemplos bien/mal, el
+porqué) va a `convenciones.md`; la línea inline lo restatea 1:1.
+
 ## Fase 5 — Fusión en CLAUDE.md (con Discernimiento)
 
 1. **Mostrá al usuario un resumen** de todo lo que vas a escribir y esperá aprobación.
 2. Si existe CLAUDE.md, copialo primero a `.claude/backups/CLAUDE.md.<fecha>.bak`.
 3. Insertá o reemplazá SOLO el bloque entre centinelas — el resto del archivo no se toca:
 
+Layout FIJO del bloque, en este orden: sección de reglas → tabla de puentes →
+líneas de cierre:
+
 ```markdown
 <!-- BEGIN 4D-BRIDGES -->
+## Reglas del proyecto (siempre)
+- SIEMPRE early returns; NUNCA if/else anidado.
+- (una línea por regla-siempre confirmada, en el orden en que el usuario las eligió)
+
 ## Puentes de documentación
 | Tema | Cuándo leer | Archivo |
 |------|-------------|---------|
@@ -95,8 +120,10 @@ Al escribir código, respetá `.claude/docs/convenciones.md`.
 <!-- END 4D-BRIDGES -->
 ```
 
-Si no hay CLAUDE.md, crealo solo con un título y el bloque. Mantené el bloque CORTO
-(una línea por tema): el detalle vive en los docs, no en la tabla.
+- **Vacío-seguro:** sin reglas-siempre confirmadas, OMITÍ la sección
+  "## Reglas del proyecto" entera (nada de `##` vacío). El pointer a
+  `convenciones.md` SIEMPRE queda. Si no hay CLAUDE.md, crealo con título + bloque.
+  Todo corto: una línea por regla y por tema; el detalle vive en los docs.
 
 ## Re-ejecución (modo actualización)
 
@@ -107,13 +134,16 @@ Si no hay CLAUDE.md, crealo solo con un título y el bloque. Mantené el bloque 
 3. Temas nuevos detectados se proponen como en la Fase 3; temas cuyos archivos fuente
    desaparecieron se proponen para eliminar de la tabla.
 4. El bloque entre centinelas se regenera; todo lo demás en CLAUDE.md queda intacto.
+5. **Reglas-siempre (sin hash propio):** baseline = el backup previo. Compará la
+   sección "## Reglas del proyecto" del bloque actual contra la del backup más
+   reciente; si difieren, el humano las editó → AskUserQuestion (conservar /
+   regenerar / fusionar). Orden de reglas estable entre corridas (evita diffs
+   fantasma).
 
 ## Reglas duras
 
 - NUNCA tocar contenido fuera de los centinelas `<!-- BEGIN 4D-BRIDGES -->` / `<!-- END 4D-BRIDGES -->`.
-- `lecciones.md` y `estado-sesion.md` NO son docs de tema: no los regeneres, no los metas en `bridges.json`, no les exijas frontmatter con hash (los escribe Claude durante el trabajo, no este generador).
-- NUNCA crear CLAUDE.md anidados por directorio (eso es territorio de /init-deep).
-- NUNCA generar un tema sin evidencia en el código.
-- SIEMPRE backup antes de modificar un CLAUDE.md existente.
-- Cerrá con una nota de diligencia: "Docs generados con asistencia de IA (fluency-4d);
-  revisalos antes de confiar en ellos como fuente de verdad."
+- `lecciones.md` y `estado-sesion.md` NO son docs de tema: no los regeneres ni los metas en `bridges.json` (los escribe Claude durante el trabajo, no este generador).
+- NUNCA crear CLAUDE.md anidados por directorio (territorio de /init-deep); NUNCA generar un tema sin evidencia en el código.
+- SIEMPRE backup antes de modificar un CLAUDE.md; NUNCA pisar el pointer "respetá convenciones.md" (la sección de reglas lo suplementa).
+- Cerrá con nota de diligencia: "Docs generados con asistencia de IA (fluency-4d); revisalos antes de confiar en ellos."

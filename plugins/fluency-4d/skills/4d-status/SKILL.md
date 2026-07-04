@@ -22,6 +22,11 @@ existan) y armá el reporte.
    de 24 h, sugerí revisarlo o borrarlo si la tarea ya terminó.
 4. **`.claude/docs/convenciones.md`** — presente/ausente; si tiene
    `evidence: low` en el frontmatter, recordá validarlo.
+4b. **Sección de reglas** — leé el bloque centinela del `CLAUDE.md`: reportá si
+   existe "## Reglas del proyecto (siempre)" y cuántas reglas tiene. Si el bloque
+   NO la tiene (proyecto inicializado con v0.4), sugerí "re-ejecutá /4d-init para
+   separar las reglas-siempre de los puentes: hoy tus reglas no negociables podrían
+   estar solo en convenciones.md, gated por keyword".
 5. **Métricas de uso** — leé `~/.claude/fluency4d/stats.json` y buscá la
    entrada cuya clave es la ruta resuelta de este proyecto en minúsculas
    (`str(Path(cwd).resolve()).casefold()`). Reportá: sesiones registradas y,
