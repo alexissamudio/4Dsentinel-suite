@@ -54,13 +54,27 @@ privado — **NUNCA** de vuelta en `references/iso-27000/`. Una guarda de CI por
 checksum (`check_kb_blank.py`) + un pre-commit local fallan si la KB se modifica,
 para que el repo público nunca exponga la postura de controles de una organización.
 
+## Orquestación — `/sentinel-audit`
+
+El skill `/sentinel-audit` encadena los agentes con **handoff real**: el main corre
+un agente, toma su bloque SENTINEL-REPORT y lo pega en la invocación del siguiente,
+y arma un informe combinado. Tipos: `security` (default), `compliance` (security →
+compliance con el handoff ISO), `review` (code-reviewer + validator), `full`.
+
+```
+/sentinel-audit tipo=compliance target=src/
+```
+
+Dueños/dedup por tipo de id (best-effort): un `CWE-*` es de security, un `CTRL-*`
+de compliance; el otro referencia sin re-enunciar. Marcador `handoff: A→B` en el
+informe cuando el relay ocurrió.
+
 ## Roadmap
 
 - **0.1.0:** compliance-auditor + security-auditor.
-- **0.2.0 (esta):** los 6 agentes de revisión (advisor, critic, code-reviewer,
-  validator, risk-assessor, librarian) — 7 read-only + 1 ejecutor.
-- **0.3.0:** skill `/sentinel-audit` que orquesta el handoff entre agentes + el
-  protocolo de dueños/dedup.
+- **0.2.0:** los 6 agentes de revisión — 7 read-only + 1 ejecutor.
+- **0.3.0 (esta):** skill `/sentinel-audit` (handoff orquestado) + dueños/dedup +
+  mejoras a los agentes (scope-check, verificación de evidencia, stack-awareness).
 
 ## Licencias
 
