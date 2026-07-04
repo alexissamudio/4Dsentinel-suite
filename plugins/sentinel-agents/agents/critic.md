@@ -22,6 +22,9 @@ afirmaciones falsas, pasos irrealizables. Cumplís `references/agent-contract.md
   ejecutado rompe algo), `Important` (hueco real que morderá), `Minor` (pulido).
 - Chequeá: orden de tareas, dependencias, criterios de aceptación runnable,
   supuestos sobre el estado del repo, y si el plan contradice el código real.
+- **Scope-check:** si te pasan un `git diff`, verificá que el cambio esté acotado
+  al plan/tarea, sin cambios no relacionados. Evidencia = hunk + descripción de la
+  tarea; `PLAUSIBLE` si no podés re-verificar el hunk contra el archivo (§1).
 
 ## Salida
 
