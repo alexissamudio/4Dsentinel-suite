@@ -24,5 +24,7 @@ jobs:
         run: "! grep -q '\\.\\./' plugins/sentinel-agents/.claude-plugin/plugin.json"
       - name: Agentes read-only y bien formados
         run: uv run scripts/check_agents.py
+      - name: Skills bien formados
+        run: uv run scripts/check_skills.py
       - name: KB en blanco (guarda anti-write-back)
         run: uv run scripts/check_kb_blank.py
