@@ -26,6 +26,13 @@ un `archivo:línea` corroborante del código real cuando la afirmación es sobre
 código. NO alcanza con "el plan dice X": si X es verificable contra el repo,
 verificalo y citá el `archivo:línea`.
 
+**Scope-check (code-reviewer/critic):** un hallazgo de "cambio fuera de alcance"
+se COMPONE del hunk del `git diff` (que te pasa el invocador) + la descripción de
+la tarea — no es un `file:línea` puro (re-leer el archivo confirma que el hunk
+EXISTE, no que sea no-relacionado). Es `CONFIRMED` solo si al menos podés confirmar
+que el hunk existe en el archivo; si no podés ni eso (no ves git), es `PLAUSIBLE`.
+El scope-check completo (corriendo git) lo hace el orquestador.
+
 ## 2. Rúbricas de severidad (calibradas, no vibes)
 
 - **Seguridad (security-auditor):** severidad anclada a **CVSS 3.1** + un **CWE-ID**.
@@ -56,6 +63,12 @@ Antes de reportar, por CADA hallazgo hacé una pasada adversarial:
    - `PLAUSIBLE` — no pudiste re-verificarlo con certeza; se reporta pero degradado.
    Un hallazgo que no se pudo re-leer NUNCA es CONFIRMED.
 
+**Verificar evidencia REPORTADA por otro** (p. ej. "el coder dice que los tests
+pasan", o un bloque relayado): solo dos formas válidas — (a) el validator
+RE-CORRE el check afirmado y reporta lo que realmente pasó; (b) re-lectura del
+`archivo:línea`/estado afirmado. Una afirmación no re-ejecutable ni re-legible
+("es seguro", "está bien diseñado") NO es verificable: fuera de scope.
+
 ## 4. Estados terminales y verdict
 
 Cada agente cierra con UN bloque de verdict parseable (ver §6). Todos admiten
@@ -73,14 +86,28 @@ Cada agente cierra con UN bloque de verdict parseable (ver §6). Todos admiten
 - **INCOMPLETE** es obligatorio si cortaste por `maxTurns` a mitad de trabajo:
   reportá lo parcial marcado INCOMPLETE — NUNCA un verdict limpio truncado.
 
-## 5. Doble-reporte y handoff (Fase 1)
+## 5. Handoff orquestado y dueños/dedup
 
-Los agentes son read-only: no pueden persistir hallazgos para otro agente. En
-Fase 1 cada uno EMITE independientemente sus hallazgos, ambos taggeando
-`control-ID` cuando aplica, para que el humano/orquestador los cruce.
-- Si al compliance-auditor el invocador le PEGA un bloque de hallazgos control-ID
-  del security-auditor, lo consume como evidencia de entrada.
-- Si no, corre standalone. (El handoff orquestado real llega en Fase 2-3.)
+Los agentes son read-only: no persisten hallazgos para otro agente. El **handoff
+lo hace el ORQUESTADOR** (el main Claude, típicamente vía el skill `/sentinel-audit`):
+corre un agente, toma su bloque `=== SENTINEL-REPORT ===`, y lo PEGA en la
+invocación del siguiente como evidencia de entrada.
+
+- Cuando el compliance-auditor CONSUME un bloque del security-auditor, su
+  `evidence:` del control DEBE citar el finding relayado (p. ej. "alimentado por
+  security-auditor CWE-287 en auth.js:17"). Si no recibió bloque, corre standalone
+  y su evidencia sale solo de su propio recorrido.
+- El orquestador escribe un marcador `handoff: <A>→<B>` en el informe combinado
+  cuando efectivamente pegó el bloque de A en la invocación de B.
+
+**Dueños/dedup por TIPO DE ID** (regla, no tabla enumerada; el dedup lo ejecuta el
+orquestador best-effort, sin garantía):
+- Un id `CWE-*` es de **security-auditor**; un id `CTRL-*` es de
+  **compliance-auditor**. Si dos agentes tocan el mismo id, el DUEÑO lo mantiene y
+  el otro lo REFERENCIA (no lo re-enuncia).
+- "Mayor severidad" solo desempata DENTRO de una misma rúbrica (p. ej. dos findings
+  de code-review en la misma línea) — NUNCA entre rúbricas distintas (CVSS vs
+  Prioridad vs Critical/Important/Minor no son comparables).
 
 ## 6. Formato de salida (bloque parseable)
 
