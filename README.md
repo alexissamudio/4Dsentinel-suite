@@ -18,6 +18,7 @@ Plugin de Claude Code (en español) que lleva a la práctica el marco **4D de AI
 | **Skill `/4d-status`** | Reporte de solo lectura: temas puenteados, temas sin `rutas`, lecciones vs límite de 30, edad del estado de sesión, convenciones, **puentes nunca usados** (métricas) y **docs que quedaron detrás del código** (por fecha de commit). |
 | **Skill `/4d-quiz`** | Practicá la certificación AI Fluency: 24 preguntas de opción múltiple del marco 4D con corrección explicada, puntaje y detección de secciones débiles. `/4d-quiz [n]` (default 10). |
 | **`convenciones.md`** | `/4d-init` SIEMPRE genera un doc de style guidelines del proyecto (naming, formato, linters); si hay poca evidencia lo marca honestamente (`evidence: low`). |
+| **Reglas-siempre inline** | `/4d-init` separa las **reglas no negociables** (early returns, manejo de errores, prohibiciones de estilo) del conocimiento-por-tema: las reglas van inline en el CLAUDE.md (cargadas en TODA sesión), el detalle a docs con puente. Una regla no negociable nunca queda escondida detrás de un keyword. Clasificación confirmada por vos vía multiSelect. |
 | **Autoaprendizaje** | Las correcciones y errores cazados por el Discernimiento se guardan como lecciones en `.claude/docs/lecciones.md`; al arrancar una sesión nueva, el plugin te recuerda leerlas (y retomar `estado-sesion.md` si existe, avisando su antigüedad). |
 
 ## Instalación

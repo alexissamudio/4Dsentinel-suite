@@ -4,14 +4,6 @@ Marketplace y plugin de Claude Code que aplica el marco 4D de AI Fluency.
 El plugin vive en `plugins/fluency-4d/`; este repo es su fuente de desarrollo.
 
 <!-- BEGIN 4D-BRIDGES -->
-## Reglas del proyecto (siempre)
-- SIEMPRE `uv run`; NUNCA el `python` del PATH (apunta al venv de hermes-agent).
-- SIEMPRE ASCII en los `.py`; NUNCA acentos en strings de hooks (cp1252 en Windows).
-- Los hooks NUNCA escriben dentro del proyecto: solo temp o `~/.claude/fluency4d/`.
-- Commits convencionales: subject ≤50 chars; NUNCA atribución de IA.
-- Versión sincronizada en los 3 lugares vía `bump_version.py`; NUNCA a mano.
-- Tag/release SOLO tras CI verde.
-
 ## Puentes de documentación
 | Tema | Cuándo leer | Archivo |
 |------|-------------|---------|
