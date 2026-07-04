@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from conftest import write_bridges
 
 HOOK = "doc_drift.py"
@@ -17,7 +19,10 @@ def payload(project, session, file_path=None, notebook_path=None):
 
 
 def win(project, rel):
-    return str(project / rel).replace("/", "\\")
+    """Path absoluto en estilo nativo: backslashes SOLO en Windows (en Linux
+    el backslash no es separador y el caso mixto no existe fuera de NTFS)."""
+    p = str(project / rel)
+    return p.replace("/", "\\") if os.name == "nt" else p
 
 
 def test_backslash_absoluto_case_insensitive(run_hook, project, state_of):
