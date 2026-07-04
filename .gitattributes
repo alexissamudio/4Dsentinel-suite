@@ -1,0 +1,7 @@
+# La base ISO se versiona con LF fijo: el manifest de checksums
+# (check_kb_blank.py) se calcula sobre LF y debe ser estable en cualquier
+# plataforma. Sin esto, un checkout en Windows (CRLF) rompería la guarda.
+plugins/sentinel-agents/references/iso-27000/** text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
