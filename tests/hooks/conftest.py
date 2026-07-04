@@ -24,6 +24,9 @@ def run_hook(tmp_path):
             "TMPDIR": str(tmp_path),
             "TEMP": str(tmp_path),
             "TMP": str(tmp_path),
+            # Aisla tambien el home: las stats van a ~/.claude/fluency4d/
+            "HOME": str(tmp_path / "home"),
+            "USERPROFILE": str(tmp_path / "home"),
             "PYTHONUTF8": "1",
         }
         env.pop("FLUENCY_4D_SAVE_PCT", None)

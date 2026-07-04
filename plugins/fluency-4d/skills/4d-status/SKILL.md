@@ -22,6 +22,21 @@ existan) y armá el reporte.
    de 24 h, sugerí revisarlo o borrarlo si la tarea ya terminó.
 4. **`.claude/docs/convenciones.md`** — presente/ausente; si tiene
    `evidence: low` en el frontmatter, recordá validarlo.
+5. **Métricas de uso** — leé `~/.claude/fluency4d/stats.json` y buscá la
+   entrada cuya clave es la ruta resuelta de este proyecto en minúsculas
+   (`str(Path(cwd).resolve()).casefold()`). Reportá: sesiones registradas y,
+   por tema, las inyecciones. **Puentes con 0 inyecciones en varias sesiones
+   → candidatos a podar.** Si no hay entrada: "sin datos de uso todavía".
+   (Los contadores son best-effort: señal, no contabilidad.)
+6. **Staleness de docs** — por cada tema con `rutas`, compará la fecha de
+   commit del doc contra la del código:
+   `git log -1 --format=%ct -- <archivo-doc>` vs el máximo de
+   `git log -1 --format=%ct -- <ruta>` entre sus rutas. Si el código es más
+   nuevo → "el doc quedó detrás de cambios en <ruta>". Sumá
+   `git status --porcelain -- <ruta>` para detectar cambios sin commitear.
+   Si el proyecto NO es un repo git: fallback a mtime CON el disclaimer de
+   que clones/checkouts lo hacen impreciso. NO uses mtime en repos git
+   (checkout resetea mtimes → falsos positivos).
 
 ## Formato del reporte
 

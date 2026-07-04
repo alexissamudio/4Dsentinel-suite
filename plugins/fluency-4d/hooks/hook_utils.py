@@ -129,6 +129,46 @@ def load_state(key: str) -> dict:
     return state
 
 
+def bump_stats(cwd: str, temas_nuevos: list[str], nueva_sesion: bool) -> None:
+    """Telemetria de uso de puentes, best-effort y SIN lock.
+
+    Vive en ~/.claude/fluency4d/stats.json (nunca dentro del proyecto del
+    usuario). Dos sesiones concurrentes pueden pisarse un contador: los
+    numeros son senal para podar puentes, no contabilidad. Cualquier error
+    degrada a no-op para no romper el hot path del router.
+    """
+    try:
+        directory = Path.home() / ".claude" / "fluency4d"
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / "stats.json"
+        try:
+            stats = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            stats = {}
+        if not isinstance(stats, dict):
+            stats = {}
+        now = time.time()
+        # Poda de proyectos inactivos: 90 dias sin actividad.
+        stats = {
+            k: v
+            for k, v in stats.items()
+            if isinstance(v, dict) and now - v.get("_ts", now) <= 90 * 24 * 3600
+        }
+        key = str(Path(cwd).resolve()).casefold()
+        entry = stats.setdefault(key, {"sesiones": 0, "temas": {}})
+        entry["_ts"] = now
+        entry["ultima_actividad"] = time.strftime("%Y-%m-%d")
+        if nueva_sesion:
+            entry["sesiones"] = int(entry.get("sesiones", 0)) + 1
+        for tema in temas_nuevos:
+            registro = entry.setdefault("temas", {}).setdefault(tema, {"inyecciones": 0})
+            registro["inyecciones"] = int(registro.get("inyecciones", 0)) + 1
+            registro["ultima"] = time.strftime("%Y-%m-%d")
+        path.write_text(json.dumps(stats, ensure_ascii=True), encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001 - telemetria jamas rompe el hook
+        log_debug(f"stats no disponibles: {exc}")
+
+
 def save_state(key: str, state: dict) -> None:
     state["_ts"] = time.time()
     try:

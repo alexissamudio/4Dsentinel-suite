@@ -30,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from hook_utils import (
+    bump_stats,
     hook_main,
     load_state,
     log_debug,
@@ -158,12 +159,20 @@ def main() -> None:
     key = session_key(data)
     state = load_state(key)
     state_before = json.dumps(state, sort_keys=True, ensure_ascii=True)
+    arranque_previo = bool(state.get("arranque_inyectado"))
+    temas_previos = set(state.get("temas_inyectados", []))
 
     lines = arranque_lines(cwd, state) + tema_lines(cwd, prompt, state)
 
     # Punto de emision y persistencia unicos.
     if json.dumps(state, sort_keys=True, ensure_ascii=True) != state_before:
         save_state(key, state)
+        # Telemetria: la sesion se cuenta en la TRANSICION del flag de
+        # arranque (inyecte lineas o no); los temas, solo los nuevos.
+        nueva_sesion = not arranque_previo and bool(state.get("arranque_inyectado"))
+        temas_nuevos = sorted(set(state.get("temas_inyectados", [])) - temas_previos)
+        if nueva_sesion or temas_nuevos:
+            bump_stats(cwd_raw, temas_nuevos, nueva_sesion)
     if lines:
         lines.append("(inyectado por fluency-4d; no se repetira en esta sesion)")
         output_context("UserPromptSubmit", "\n".join(lines))

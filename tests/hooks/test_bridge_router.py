@@ -91,3 +91,55 @@ def test_bridges_malformado_no_rompe(run_hook, project):
     (project / ".claude" / "docs" / "lecciones.md").write_text("# L", encoding="utf-8")
     out = run_hook(HOOK, payload(project, "s10", "login"))
     assert "lecciones.md" in out  # el arranque sobrevive al JSON roto
+
+
+# --- Metricas (v0.4) ---------------------------------------------------------
+
+import json as _json
+
+
+def stats_de(tmp_path, project):
+    path = tmp_path / "home" / ".claude" / "fluency4d" / "stats.json"
+    if not path.is_file():
+        return None
+    stats = _json.loads(path.read_text(encoding="utf-8"))
+    from pathlib import Path as _P
+
+    return stats.get(str(_P(str(project)).resolve()).casefold())
+
+
+def test_stats_cuenta_sesion_aunque_no_inyecte(run_hook, project, tmp_path):
+    run_hook(HOOK, payload(project, "m1"))  # sin archivos: salida vacia
+    entry = stats_de(tmp_path, project)
+    assert entry["sesiones"] == 1 and entry["temas"] == {}
+
+
+def test_stats_cuenta_tema_y_segunda_sesion(run_hook, project, tmp_path):
+    write_bridges(project)
+    run_hook(HOOK, payload(project, "m2", "como anda el login?"))
+    run_hook(HOOK, payload(project, "m3", "mas login por favor"))  # otra sesion
+    entry = stats_de(tmp_path, project)
+    assert entry["sesiones"] == 2
+    assert entry["temas"]["auth"]["inyecciones"] == 2
+
+
+def test_stats_ilegible_no_rompe_la_inyeccion(run_hook, project, tmp_path):
+    # stats.json como DIRECTORIO: toda escritura falla -> degradacion silenciosa
+    (tmp_path / "home" / ".claude" / "fluency4d" / "stats.json").mkdir(parents=True)
+    write_bridges(project)
+    out = run_hook(HOOK, payload(project, "m4", "login"))
+    assert "auth.md" in out  # la inyeccion sale igual
+
+
+def test_stats_poda_entradas_viejas(run_hook, project, tmp_path):
+    import time
+
+    stats_path = tmp_path / "home" / ".claude" / "fluency4d" / "stats.json"
+    stats_path.parent.mkdir(parents=True)
+    stats_path.write_text(
+        _json.dumps({"c:\\proyecto\\muerto": {"sesiones": 9, "temas": {}, "_ts": time.time() - 91 * 86400}}),
+        encoding="utf-8",
+    )
+    run_hook(HOOK, payload(project, "m5"))
+    todo = _json.loads(stats_path.read_text(encoding="utf-8"))
+    assert "c:\\proyecto\\muerto" not in todo and len(todo) == 1
