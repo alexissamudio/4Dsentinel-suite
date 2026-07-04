@@ -31,8 +31,10 @@ from hook_utils import (
 CHECKLIST = (
     "DISCERNIMIENTO (fluency-4d, modo estricto) - antes de terminar, verifica y "
     "reporta en tu respuesta final: "
-    "1) PRODUCT: el resultado cumple el criterio de exito pedido (correcto, completo, apropiado). "
-    "2) PROCESS: toda cifra, cita o fuente que no dio el usuario esta verificada o marcada como NO VERIFICADA. "
+    "1) PRODUCT: el resultado cumple el criterio de exito pedido "
+    "(correcto, completo, apropiado). "
+    "2) PROCESS: toda cifra, cita o fuente que no dio el usuario esta "
+    "verificada o marcada como NO VERIFICADA. "
     "3) PERFORMANCE: se mantuvo el rol/tono/formato pedido de punta a punta. "
     "Si algo no pasa, corregilo ahora; si pasa, termina normalmente e incluye una "
     "linea 'Discernimiento: OK' con lo verificado. Este gate no volvera a bloquear en esta sesion."

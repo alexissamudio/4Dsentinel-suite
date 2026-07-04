@@ -1,5 +1,7 @@
 # ai-fluency-4d
 
+[![validate](https://github.com/alexissamudio/ai-fluency-4d/actions/workflows/validate.yml/badge.svg)](https://github.com/alexissamudio/ai-fluency-4d/actions/workflows/validate.yml)
+
 Plugin de Claude Code (en español) que lleva a la práctica el marco **4D de AI Fluency**
 (Rick Dakan · Joseph Feller · Anthropic): **Delegación, Descripción, Discernimiento y Diligencia**.
 
@@ -13,7 +15,8 @@ Plugin de Claude Code (en español) que lleva a la práctica el marco **4D de AI
 | **Hook `discernment_gate`** | Opcional (`FLUENCY_4D_STRICT=1`): antes de terminar una tarea, exige pasar una vez por la checklist de discernimiento. Apagado por defecto. |
 | **Hook `memory_checkpoint`** | ~Cada **50% de contexto** (configurable, `FLUENCY_4D_SAVE_PCT`), instruye guardar el estado de la sesión en `.claude/docs/estado-sesion.md` y consolidar lecciones. Se re-arma: por caída de porcentaje (compactación, modo nativo) o por intervalo de tokens acumulados (modo estimación por transcript). |
 | **Hook `doc_drift`** | Si editás archivos bajo las `rutas` de un tema documentado (p. ej. `src/auth/`), te recuerda revisar el doc del tema al terminar. Una vez por tema por sesión. |
-| **Skill `/4d-status`** | Reporte de solo lectura: temas puenteados, temas sin `rutas`, lecciones vs límite de 30, edad del estado de sesión, convenciones. |
+| **Skill `/4d-status`** | Reporte de solo lectura: temas puenteados, temas sin `rutas`, lecciones vs límite de 30, edad del estado de sesión, convenciones, **puentes nunca usados** (métricas) y **docs que quedaron detrás del código** (por fecha de commit). |
+| **Skill `/4d-quiz`** | Practicá la certificación AI Fluency: 24 preguntas de opción múltiple del marco 4D con corrección explicada, puntaje y detección de secciones débiles. `/4d-quiz [n]` (default 10). |
 | **`convenciones.md`** | `/4d-init` SIEMPRE genera un doc de style guidelines del proyecto (naming, formato, linters); si hay poca evidencia lo marca honestamente (`evidence: low`). |
 | **Autoaprendizaje** | Las correcciones y errores cazados por el Discernimiento se guardan como lecciones en `.claude/docs/lecciones.md`; al arrancar una sesión nueva, el plugin te recuerda leerlas (y retomar `estado-sesion.md` si existe, avisando su antigüedad). |
 

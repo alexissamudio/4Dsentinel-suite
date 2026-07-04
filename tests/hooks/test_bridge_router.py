@@ -3,6 +3,7 @@ el bloque de emision/persistencia unico."""
 
 from __future__ import annotations
 
+import json as _json
 import os
 import time
 
@@ -95,8 +96,6 @@ def test_bridges_malformado_no_rompe(run_hook, project):
 
 # --- Metricas (v0.4) ---------------------------------------------------------
 
-import json as _json
-
 
 def stats_de(tmp_path, project):
     path = tmp_path / "home" / ".claude" / "fluency4d" / "stats.json"
@@ -136,10 +135,8 @@ def test_stats_poda_entradas_viejas(run_hook, project, tmp_path):
 
     stats_path = tmp_path / "home" / ".claude" / "fluency4d" / "stats.json"
     stats_path.parent.mkdir(parents=True)
-    stats_path.write_text(
-        _json.dumps({"c:\\proyecto\\muerto": {"sesiones": 9, "temas": {}, "_ts": time.time() - 91 * 86400}}),
-        encoding="utf-8",
-    )
+    viejo = {"sesiones": 9, "temas": {}, "_ts": time.time() - 91 * 86400}
+    stats_path.write_text(_json.dumps({"c:\\proyecto\\muerto": viejo}), encoding="utf-8")
     run_hook(HOOK, payload(project, "m5"))
     todo = _json.loads(stats_path.read_text(encoding="utf-8"))
     assert "c:\\proyecto\\muerto" not in todo and len(todo) == 1
