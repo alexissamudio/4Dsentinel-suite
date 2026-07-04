@@ -4,6 +4,11 @@ Contrato COMPARTIDO por todos los agentes de este plugin. Cada agente lo cumple
 al pie. Existe para que la salida sea consistente, parseable y verificable —
 las 5 debilidades que este suite corrige respecto de suites genéricos.
 
+**Modelo de permisos:** 7 agentes read-only (security-auditor, compliance-auditor,
+advisor, critic, code-reviewer, risk-assessor, librarian: `tools: Read, Grep, Glob`)
++ **1 ejecutor**: `validator`, que ejecuta checks vía Bash pero NUNCA edita. Bash es
+la única excepción al read-only, restringida a validator por allowlist en el CI.
+
 ## 1. Regla de evidencia dura (sin válvulas de escape)
 
 NO afirmes un hallazgo sin evidencia CONCRETA y RE-LEÍDA:
@@ -15,6 +20,12 @@ Prohibido: "según el prompt", "probablemente", "suele", citar de memoria sin
 re-leer. Si no tenés evidencia re-leída, NO es un hallazgo — es una hipótesis, y
 va marcada como tal (ver §3).
 
+**Agentes de plan (advisor/critic/risk-assessor):** revisan un plan o un cambio,
+no solo código. Su evidencia = la ubicación en el plan/PR (`plan §N` / cita) MÁS
+un `archivo:línea` corroborante del código real cuando la afirmación es sobre el
+código. NO alcanza con "el plan dice X": si X es verificable contra el repo,
+verificalo y citá el `archivo:línea`.
+
 ## 2. Rúbricas de severidad (calibradas, no vibes)
 
 - **Seguridad (security-auditor):** severidad anclada a **CVSS 3.1** + un **CWE-ID**.
@@ -24,6 +35,16 @@ va marcada como tal (ver §3).
   (Crítica/Alta/Media/Baja, del propio item de control). Regla de riesgo residual:
   cualquier control de Prioridad Crítica en estado `NO_CUMPLE` BLOQUEA la
   certificación (verdict no puede ser limpio).
+- **Code review (code-reviewer):** severidad por finding, definida:
+  - `Critical` — rompe/corrompe datos, es inseguro, o hace fallar la funcionalidad.
+  - `Important` — bug real no crítico, o deuda seria que va a morder pronto.
+  - `Minor` — estilo, naming, micro-optimización; no cambia comportamiento.
+- **Riesgo de cambio (risk-assessor):** rúbrica **1-10 calibrada** (banda por finding):
+  - `1-3` bajo — cambio local, reversible, sin datos ni seguridad.
+  - `4-6` medio — toca varios módulos o una interfaz; rollback simple.
+  - `7-8` alto — datos, seguridad, migraciones, o rollback difícil.
+  - `9-10` crítico — irreversible, o toca producción/dinero/datos sensibles.
+  El `verdict:` global es la recomendación `PROCEED|PROCEED_WITH_CAUTION|DEFER`.
 
 ## 3. Auto-verificación adversarial (segunda pasada obligatoria)
 
@@ -37,11 +58,18 @@ Antes de reportar, por CADA hallazgo hacé una pasada adversarial:
 
 ## 4. Estados terminales y verdict
 
-Cada agente cierra con UN bloque de verdict parseable (ver §6). Enums:
-- **security-auditor:** `SECURE` | `CONCERNS` | `INSECURE` | `INCOMPLETE`
+Cada agente cierra con UN bloque de verdict parseable (ver §6). Todos admiten
+`INCOMPLETE`. Enums por agente:
+- **security-auditor:** `SECURE` | `CONCERNS` | `INSECURE`
 - **compliance-auditor:** por control usa los estados de la KB
   `CUMPLE` | `PARCIAL` | `NO_CUMPLE` | `NO_APLICA` | `POR_VERIFICAR`; el verdict
-  global es `CONFORME` | `NO_CONFORME` | `PARCIAL` | `INCOMPLETE`.
+  global es `CONFORME` | `NO_CONFORME` | `PARCIAL`.
+- **advisor:** `CLEAR` | `GAPS_FOUND` | `INSUFFICIENT_CONTEXT`
+- **critic:** `APPROVED` | `NEEDS_REVISION` | `REJECTED`
+- **code-reviewer:** `CLEAN` | `CONCERNS` | `BLOCKED` (+ findings `Critical|Important|Minor`)
+- **validator:** `PASS` | `FAIL` | `INCONCLUSIVE`
+- **risk-assessor:** `PROCEED` | `PROCEED_WITH_CAUTION` | `DEFER` (+ banda 1-10 por finding)
+- **librarian:** `OK` | `NOT_FOUND` | `OUT_OF_SCOPE` (no es un gate; usa el mismo campo `verdict:`)
 - **INCOMPLETE** es obligatorio si cortaste por `maxTurns` a mitad de trabajo:
   reportá lo parcial marcado INCOMPLETE — NUNCA un verdict limpio truncado.
 
@@ -60,7 +88,7 @@ Terminá SIEMPRE con un bloque cercado así (tokens exactos, un hallazgo por ít
 
 ```
 === SENTINEL-REPORT ===
-agent: <security-auditor|compliance-auditor>
+agent: <security-auditor|compliance-auditor|advisor|critic|code-reviewer|validator|risk-assessor|librarian>
 verdict: <ENUM de §4>
 findings:
 - id: <control-ID o CWE-ref>

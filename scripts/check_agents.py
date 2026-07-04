@@ -19,7 +19,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENTS_DIR = REPO_ROOT / "plugins" / "sentinel-agents" / "agents"
-PROHIBIDAS = {"Write", "Edit", "MultiEdit", "NotebookEdit", "Bash"}
+# Escritura/edición: prohibidas SIEMPRE, sin excepción.
+PROHIBIDAS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
+# Bash: prohibido por defecto; permitido SOLO para los agentes de este set
+# (ejecutores). Allowlist cerrada y bidireccional (ver check_agent): un agente
+# con Bash fuera del set falla; un agente del set sin Bash falla (drift).
+BASH_ALLOWED = {"validator"}
 
 
 def frontmatter(text: str) -> dict[str, str]:
@@ -43,10 +48,17 @@ def check_agent(path: Path) -> list[str]:
             errs.append(f"falta frontmatter '{campo}'")
     if fm.get("model") != "inherit":
         errs.append(f"model debe ser 'inherit' (es '{fm.get('model')}')")
+    # tools inline con comas (constraint documentado en el contrato).
     tools = {t.strip() for t in fm.get("tools", "").split(",") if t.strip()}
     conflict = tools & PROHIBIDAS
     if conflict:
-        errs.append(f"tools incluye herramientas de escritura/ejecución: {sorted(conflict)}")
+        errs.append(f"tools incluye herramientas de escritura/edición: {sorted(conflict)}")
+    # Bash: allowlist cerrada y bidireccional, evaluada por-archivo (file-driven).
+    name = fm.get("name", path.stem)
+    if "Bash" in tools and name not in BASH_ALLOWED:
+        errs.append(f"'{name}' declara Bash pero no está en BASH_ALLOWED (read-only)")
+    if name in BASH_ALLOWED and "Bash" not in tools:
+        errs.append(f"'{name}' está en BASH_ALLOWED pero NO declara Bash (drift)")
     if "agent-contract" not in text:
         errs.append("el cuerpo no referencia agent-contract.md")
     return errs
