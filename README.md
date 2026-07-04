@@ -2,13 +2,19 @@
 
 [![validate](https://github.com/alexissamudio/sentinel-agents/actions/workflows/validate.yml/badge.svg)](https://github.com/alexissamudio/sentinel-agents/actions/workflows/validate.yml)
 
-Suite de **agentes de auditoría** para Claude Code, read-only y más rigurosos que
-un suite genérico. Fase 1: los dos agentes diferenciados.
+Suite de **agentes** para Claude Code, más rigurosos que un suite genérico:
+**7 auditores read-only + 1 ejecutor** (validator). Todos hablan el mismo contrato.
 
 | Agente | Qué hace |
 |--------|----------|
-| **`compliance-auditor`** | Audita un proyecto contra ISO 27000 (27001/27002/27017/27018/27032) recorriendo checklists por control-ID, con máquina de estados de evidencia. Se niega a marcar `CUMPLE` sin evidencia. |
-| **`security-auditor`** | AppSec exploitable: OWASP Top 10 + CWE, severidad anclada a CVSS, trazado boundary-to-sink. |
+| **`compliance-auditor`** | Audita contra ISO 27000 (27001/27002/27017/27018/27032) por control-ID, con máquina de estados de evidencia. Se niega a marcar `CUMPLE` sin evidencia. |
+| **`security-auditor`** | AppSec exploitable: OWASP Top 10 + CWE, severidad CVSS, boundary-to-sink. |
+| **`advisor`** | Análisis pre-plan: requisitos ocultos y gaps rankeados, forzando lectura del código. |
+| **`critic`** | Revisa un plan verificándolo contra el código real; verdict de listo/no-listo. |
+| **`code-reviewer`** | Review de código con verdict global escalar (CLEAN/CONCERNS/BLOCKED) + severidad. |
+| **`risk-assessor`** | Riesgo del cambio con rúbrica 1-10 calibrada. |
+| **`librarian`** | Lectura/resumen eficiente, solo-archivos, anti-alucinación. |
+| **`validator`** | El único ejecutor: corre type/lint/test/build vía Bash (nunca edita), con timeouts. |
 
 ## Qué los hace "superiores"
 
@@ -50,9 +56,11 @@ para que el repo público nunca exponga la postura de controles de una organizac
 
 ## Roadmap
 
-- **Fase 1 (esta):** compliance-auditor + security-auditor.
-- **Fase 2-3:** los agentes de revisión (advisor, critic, code-reviewer, validator,
-  risk-assessor) con el mismo contrato superior, y el handoff orquestado.
+- **0.1.0:** compliance-auditor + security-auditor.
+- **0.2.0 (esta):** los 6 agentes de revisión (advisor, critic, code-reviewer,
+  validator, risk-assessor, librarian) — 7 read-only + 1 ejecutor.
+- **0.3.0:** skill `/sentinel-audit` que orquesta el handoff entre agentes + el
+  protocolo de dueños/dedup.
 
 ## Licencias
 
