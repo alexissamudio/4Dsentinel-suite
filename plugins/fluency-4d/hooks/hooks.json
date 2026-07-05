@@ -22,6 +22,17 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Modo caveman...",
+            "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/caveman_injector.py",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [

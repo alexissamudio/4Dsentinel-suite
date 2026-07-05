@@ -129,6 +129,27 @@ def load_state(key: str) -> dict:
     return state
 
 
+def load_caveman() -> dict:
+    """Lee el flag global de modo caveman (~/.claude/fluency4d/caveman.json).
+
+    Solo lectura. Devuelve el dict si esta prendido (on=True) y level es valido;
+    ante cualquier error / JSON invalido / OFF / level fuera del set -> {}
+    (pass-through). El writer es la tool Write del skill, no este helper.
+    """
+    path = Path.home() / ".claude" / "fluency4d" / "caveman.json"
+    try:
+        st = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(st, dict):
+        return {}
+    if st.get("on") is not True:
+        return {}
+    if st.get("level") not in ("auto", "lite", "full", "ultra"):
+        return {}
+    return st
+
+
 def bump_stats(cwd: str, temas_nuevos: list[str], nueva_sesion: bool) -> None:
     """Telemetria de uso de puentes, best-effort y SIN lock.
 
