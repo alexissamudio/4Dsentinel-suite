@@ -11,6 +11,17 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Calibrando el nivel de plan...",
+            "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/plan_calibrator.py",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
