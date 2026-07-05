@@ -1,6 +1,6 @@
 {
   "name": "sentinel-agents",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Agentes de auditoría de compliance (ISO 27000) y seguridad (OWASP/CWE/CVSS), read-only con evidencia dura",
   "author": {
     "name": "Alexis Samudio",

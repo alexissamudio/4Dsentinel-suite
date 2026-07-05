@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Suite de agentes de auditoría: compliance ISO 27000 + security endurecido",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "plugins": [
     {
       "name": "sentinel-agents",
       "source": "./plugins/sentinel-agents",
       "description": "Agentes de auditoría de compliance (ISO 27000) y seguridad (OWASP/CWE/CVSS), read-only con evidencia dura",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "author": {
         "name": "Alexis Samudio"
       },

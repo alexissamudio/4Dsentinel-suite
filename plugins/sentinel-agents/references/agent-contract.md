@@ -4,10 +4,12 @@ Contrato COMPARTIDO por todos los agentes de este plugin. Cada agente lo cumple
 al pie. Existe para que la salida sea consistente, parseable y verificable —
 las 5 debilidades que este suite corrige respecto de suites genéricos.
 
-**Modelo de permisos:** 7 agentes read-only (security-auditor, compliance-auditor,
-advisor, critic, code-reviewer, risk-assessor, librarian: `tools: Read, Grep, Glob`)
-+ **1 ejecutor**: `validator`, que ejecuta checks vía Bash pero NUNCA edita. Bash es
-la única excepción al read-only, restringida a validator por allowlist en el CI.
+**Modelo de permisos:** 8 agentes read-only (security-auditor, compliance-auditor,
+advisor, critic, code-reviewer, risk-assessor, librarian, bug-hunter:
+`tools: Read, Grep, Glob`) + **2 ejecutores**: `validator` (corre checks) y
+`debugger` (reproduce/diagnostica fallas), que ejecutan vía Bash pero NUNCA editan.
+Bash es la única excepción al read-only, restringida a validator y debugger por
+allowlist cerrada en el CI.
 
 ## 1. Regla de evidencia dura (sin válvulas de escape)
 
@@ -46,6 +48,12 @@ El scope-check completo (corriendo git) lo hace el orquestador.
   - `Critical` — rompe/corrompe datos, es inseguro, o hace fallar la funcionalidad.
   - `Important` — bug real no crítico, o deuda seria que va a morder pronto.
   - `Minor` — estilo, naming, micro-optimización; no cambia comportamiento.
+- **Bugs de correctitud (bug-hunter):** severidad por finding, por impacto en la
+  correctitud del comportamiento:
+  - `Critical` — corrompe datos, cuelga/crashea, o da un resultado incorrecto en un
+    camino común.
+  - `Important` — bug real en un camino menos común o edge case plausible; muerde pronto.
+  - `Minor` — defecto latente de bajo impacto o solo bajo condiciones improbables.
 - **Riesgo de cambio (risk-assessor):** rúbrica **1-10 calibrada** (banda por finding):
   - `1-3` bajo — cambio local, reversible, sin datos ni seguridad.
   - `4-6` medio — toca varios módulos o una interfaz; rollback simple.
@@ -80,6 +88,8 @@ Cada agente cierra con UN bloque de verdict parseable (ver §6). Todos admiten
 - **advisor:** `CLEAR` | `GAPS_FOUND` | `INSUFFICIENT_CONTEXT`
 - **critic:** `APPROVED` | `NEEDS_REVISION` | `REJECTED`
 - **code-reviewer:** `CLEAN` | `CONCERNS` | `BLOCKED` (+ findings `Critical|Important|Minor`)
+- **bug-hunter:** `CLEAN` | `BUGS_FOUND` (+ findings `Critical|Important|Minor`)
+- **debugger:** `DIAGNOSED` | `NOT_REPRODUCED` | `INCONCLUSIVE`
 - **validator:** `PASS` | `FAIL` | `INCONCLUSIVE`
 - **risk-assessor:** `PROCEED` | `PROCEED_WITH_CAUTION` | `DEFER` (+ banda 1-10 por finding)
 - **librarian:** `OK` | `NOT_FOUND` | `OUT_OF_SCOPE` (no es un gate; usa el mismo campo `verdict:`)
@@ -115,7 +125,7 @@ Terminá SIEMPRE con un bloque cercado así (tokens exactos, un hallazgo por ít
 
 ```
 === SENTINEL-REPORT ===
-agent: <security-auditor|compliance-auditor|advisor|critic|code-reviewer|validator|risk-assessor|librarian>
+agent: <security-auditor|compliance-auditor|advisor|critic|code-reviewer|bug-hunter|debugger|validator|risk-assessor|librarian>
 verdict: <ENUM de §4>
 findings:
 - id: <control-ID o CWE-ref>

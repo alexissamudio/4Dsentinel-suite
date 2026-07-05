@@ -24,7 +24,7 @@ PROHIBIDAS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 # Bash: prohibido por defecto; permitido SOLO para los agentes de este set
 # (ejecutores). Allowlist cerrada y bidireccional (ver check_agent): un agente
 # con Bash fuera del set falla; un agente del set sin Bash falla (drift).
-BASH_ALLOWED = {"validator"}
+BASH_ALLOWED = {"validator", "debugger"}
 
 
 def frontmatter(text: str) -> dict[str, str]:

@@ -3,7 +3,7 @@
 [![validate](https://github.com/alexissamudio/sentinel-agents/actions/workflows/validate.yml/badge.svg)](https://github.com/alexissamudio/sentinel-agents/actions/workflows/validate.yml)
 
 Suite de **agentes** para Claude Code, más rigurosos que un suite genérico:
-**7 auditores read-only + 1 ejecutor** (validator). Todos hablan el mismo contrato.
+**8 auditores read-only + 2 ejecutores** (validator y debugger). Todos hablan el mismo contrato.
 
 | Agente | Qué hace |
 |--------|----------|
@@ -13,8 +13,10 @@ Suite de **agentes** para Claude Code, más rigurosos que un suite genérico:
 | **`critic`** | Revisa un plan verificándolo contra el código real; verdict de listo/no-listo. |
 | **`code-reviewer`** | Review de código con verdict global escalar (CLEAN/CONCERNS/BLOCKED) + severidad. |
 | **`risk-assessor`** | Riesgo del cambio con rúbrica 1-10 calibrada. |
+| **`bug-hunter`** | Caza bugs de correctitud (lógica, off-by-one, null deref, races, edge cases) con razonamiento entrada→efecto. Read-only; no seguridad ni estilo. |
 | **`librarian`** | Lectura/resumen eficiente, solo-archivos, anti-alucinación. |
-| **`validator`** | El único ejecutor: corre type/lint/test/build vía Bash (nunca edita), con timeouts. |
+| **`validator`** | Ejecutor: corre type/lint/test/build vía Bash (nunca edita), con timeouts. |
+| **`debugger`** | Ejecutor: reproduce una falla determinísticamente, localiza la causa raíz y recomienda el fix vía Bash (nunca edita ni parchea), con timeouts. |
 
 ## Qué los hace "superiores"
 
