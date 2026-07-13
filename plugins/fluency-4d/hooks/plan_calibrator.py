@@ -7,7 +7,7 @@
 
 Ultraplan CALIBRADO por 4D: al ENTRAR en plan mode, inyecta un protocolo que hace
 a Claude calibrar el tamano de la tarea (Delegacion del marco 4D) y aplicar rigor
-proporcional — tarea grande => flujo riguroso (advisor -> plan -> critic con los
+proporcional - tarea grande => flujo riguroso (advisor -> plan -> critic con los
 agentes de sentinel-agents); tarea chica => planificacion liviana.
 
 A diferencia del ultraplan de oh-my-claude (que dispara la ceremonia en TODO plan
@@ -39,18 +39,19 @@ from hook_utils import (
 )
 
 PROTOCOLO = (
-    "[Calibrador de plan (fluency-4d) — Delegacion 4D aplicada a planificar]\n"
+    "[Calibrador de plan (fluency-4d) - Delegacion 4D aplicada a planificar]\n"
     "Antes de planificar, CLASIFICA la tarea:\n"
     "- GRANDE: feature nueva, release, refactor, cambio de arquitectura, algo de "
     "varios pasos, o riesgoso/irreversible. Ante la duda, mira el blast-radius y "
     "sesga hacia GRANDE.\n"
     "- CHICA: fix puntual, typo, edicion de una linea, consulta, cambio trivial.\n"
-    "Si es CHICA: planifica LIVIANO — entende, hace, verifica. NO invoques advisor/"
+    "Si es CHICA: planifica LIVIANO - entende, hace, verifica. NO invoques advisor/"
     "critic ni una ceremonia de varios pasos.\n"
-    "Si es GRANDE: flujo RIGUROSO — recon -> (opcional entrevista) -> advisor "
+    "Si es GRANDE: flujo RIGUROSO - recon -> (opcional entrevista) -> advisor "
     "(gap analysis) -> escribi el plan -> critic (revision) -> recien ExitPlanMode. "
-    "Usa los agentes de la tabla de delegacion del CLAUDE.md (advisor/critic de "
-    "sentinel-agents, read-only: analizan y revisan, no editan el plan).\n"
+    "Si tenes el plugin sentinel-agents instalado, delega en sentinel-agents:advisor "
+    "(gap analysis pre-plan) y sentinel-agents:critic (revision del plan); son "
+    "read-only: analizan y revisan, no editan el plan.\n"
     "El rigor es PROPORCIONAL al tamano: no impongas la ceremonia sobre lo trivial."
 )
 

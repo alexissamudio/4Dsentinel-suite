@@ -25,7 +25,18 @@ Leé `references/delegacion.md` de esta skill antes de ejecutar la fase.
    (usá AskUserQuestion si hay opciones claras).
 2. **Límites de la herramienta**: identificá si la tarea choca con límites conocidos
    (datos recientes, cifras exactas, información privada) y decilo explícitamente.
-3. **Tabla de reparto**: presentá las sub-tareas etiquetadas **IA / Usuario / Ambos**.
+3. **Gap analysis opcional (orquestación con sentinel-agents)**: SOLO si el entregable
+   es técnico/de código o un plan (gate: para texto puro, saltá esta oferta y seguí la
+   guía pasiva). Ofrecé al usuario —con AskUserQuestion, opt-in— correr un gap analysis
+   pre-tarea con `sentinel-agents:advisor`.
+   - Si acepta: invocá el agente `sentinel-agents:advisor` vía Agent tool, pasándole la
+     frase-objetivo y el contexto de la tarea; después surface-á su bloque
+     `=== SENTINEL-REPORT ===` al usuario como insumo de la fase Descripción.
+   - Fallback reactivo (no es detección): si la invocación falla porque el agente no
+     resuelve (el plugin sentinel-agents no está instalado), seguí con la guía pasiva
+     actual SIN error. El skill no puede detectar plugins: intenta y cae con gracia.
+   - Mapeo completo de fases 4D ↔ agentes: `references/delegacion-agentes.md`.
+4. **Tabla de reparto**: presentá las sub-tareas etiquetadas **IA / Usuario / Ambos**.
    Principio: la IA toma lo repetitivo; el usuario conserva el criterio, las cifras
    reales y la relación con terceros. Pedí confirmación del reparto antes de seguir.
 
