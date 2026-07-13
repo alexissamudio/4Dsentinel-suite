@@ -46,6 +46,20 @@ fluency-4d es una **disciplina de colaboración humano-IA** — el método 4D de
 - **NO solo-código.** Invocar agentes de código sobre un entregable de texto es un error de
   categoría (`skills/4d/references/delegacion-agentes.md:28-31`).
 
+## Framework vs. Foundations (un matiz honesto)
+
+El PDF fuente tiene **dos capas**: el *Framework* (las 4D como disciplina) y las
+*Foundations* (el "cómo funciona por dentro": IA generativa vs. tradicional, los tres
+pilares, cómo se entrena un LLM, la ventana de contexto). El plugin **porta el
+Framework** —la disciplina— con fidelidad casi 1:1. Las Foundations no se disuelven en el
+flujo operativo: viven, **por diseño**, como referencia pedagógica en
+`skills/4d/references/fundamentos.md` y se practican en `/4d-quiz`.
+
+Esto **no contradice** el "NO una base de conocimiento" de arriba: `fundamentos.md` es una
+capa fina de contexto para *entender por qué* las 4D funcionan (por qué la IA suena segura
+y se equivoca), no un catálogo de contenido de dominio componible. La disciplina sigue
+siendo el centro; los fundamentos la sostienen.
+
 ## Criterio de decisión (para toda feature o port)
 
 Antes de sumar una capacidad al plugin, tiene que pasar este checklist. Si falla una, o se
@@ -78,3 +92,10 @@ Corriendo el criterio sobre la propuesta de mining (ver `estado-sesion.md`):
 El propio proceso de mining ya fue 4D en acción: cuando el advisor dijo *"no portes ciego"*,
 eso fue **Discernimiento**. Extraer patrones ≠ importar la filosofía ajena — siempre que se
 discierna, que es lo que el marco manda.
+
+## La línea-misión (cierre del PDF, p12)
+
+> **La fluidez con IA no es generar más rápido, sino generar mejor y con criterio.**
+
+Es el norte del plugin: cada guardrail, cada checklist y cada `references/*.md` existe para
+que el resultado sea uno del que te podés hacer responsable — no para acelerar la generación.

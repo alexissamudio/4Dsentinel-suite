@@ -189,7 +189,7 @@ explicación y qué reference releer si se falla.
 - C) Porque su ventana de contexto es infinita
 - D) Porque el fine-tuning lo hace más creativo
 - **Correcta: B.** La arquitectura (transformers) modela "la palabra siguiente más probable": por eso la fluidez no garantiza exactitud.
-- Releer: `4d/references/delegacion.md` (tabla de limitaciones)
+- Releer: `4d/references/fundamentos.md` (los tres pilares)
 
 **P23.** En un chat muy largo, notás que la IA "olvidó" un dato del principio. ¿Qué hacés?
 - A) Regañarla para que recuerde
@@ -197,7 +197,7 @@ explicación y qué reference releer si se falla.
 - C) Bajar la temperatura
 - D) Empezar otro chat siempre
 - **Correcta: B.** La ventana de contexto es la "mesa de trabajo" limitada: lo del principio puede caerse; se re-pega en vez de asumir que lo recuerda.
-- Releer: `4d/references/delegacion.md`
+- Releer: `4d/references/fundamentos.md` (la ventana de contexto)
 
 **P24. (LA trampa del examen)** Armar la tabla de reparto IA/Yo/Ambos ANTES de empezar vs. revisar la checklist del email DESPUÉS de recibirlo. ¿Qué competencias son?
 - A) Ambas son Discernimiento

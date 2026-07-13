@@ -44,3 +44,10 @@ explique el motivo elegido y ofrezca una vía de contacto.
 6. **Definir su rol o tono**
    - ✕ "Revisá este contrato."
    - ✓ "Actuá como un abogado corporativo cauteloso. Revisá el contrato y marcá cláusulas de riesgo."
+
+## En chats largos, re-pegá lo que importa
+
+La ventana de contexto es limitada: es la "mesa de trabajo" del modelo (ver
+`references/fundamentos.md`). En chats muy largos, la info del principio puede "caerse"
+de la mesa. Si notás que la IA se olvidó de algo importante, no asumas que lo recuerda:
+**volvé a pegarlo en el mensaje actual.**

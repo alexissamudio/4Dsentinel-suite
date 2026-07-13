@@ -49,3 +49,9 @@ forma fiable algo que no entendés.** Si no sos experto:
 1. Delegá solo tareas verificables,
 2. sumá un revisor humano que sí lo sea, o
 3. diseñá un paso de verificación independiente (una fuente, un dato de control).
+
+## No lo confundas con Delegación (trampa del examen)
+
+Evaluar el resultado **después** (¿esto sirve?) es Discernimiento; diseñar el reparto
+**por adelantado** (quién hace qué) es Delegación (`references/delegacion.md`). No
+mezcles el *después* con el *antes*: es la trampa más habitual del examen.
