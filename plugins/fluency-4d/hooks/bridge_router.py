@@ -43,12 +43,20 @@ from hook_utils import (
 )
 
 MAX_TEMAS_POR_PROMPT = 2
+MAX_RELACIONADOS = 1
 MIN_KEYWORD_LEN = 3
 ESTADO_VIEJO_SEGUNDOS = 24 * 60 * 60
 
+# Verbo de relacion -> frase ASCII. Verbo desconocido cae en la frase neutra.
+VERBOS = {
+    "depende_de": "depende de",
+    "va_con": "va con",
+    "alimenta_a": "alimenta a",
+}
+
 
 def normalize(text: str) -> str:
-    """casefold + sin acentos, para que 'autenticación' matchee 'autenticacion'."""
+    """casefold + sin acentos, para que 'autenticacion' matchee 'autenticacion'."""
     decomposed = unicodedata.normalize("NFKD", text)
     stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
     return stripped.casefold()
@@ -113,9 +121,11 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
     if not isinstance(temas, list):
         return []
 
-    injected = set(state.get("temas_inyectados", []))
-    norm_prompt = normalize(prompt)
-    hits: list[tuple[str, str]] = []
+    # Indice tema -> entry en una pasada COMPLETA y separada del loop de hits.
+    # El loop de hits corta con break en el cap, asi que no sirve para resolver
+    # destinos de relaciones mas alla del cap (un destino valido se marcaria
+    # como dangling). Este indice recorre todos los temas validos.
+    entry_por_tema: dict[str, dict] = {}
     for entry in temas:
         if not isinstance(entry, dict):
             continue
@@ -124,10 +134,17 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
         keywords = entry.get("keywords")
         if not tema or not archivo or not isinstance(keywords, list):
             continue
+        entry_por_tema[tema] = entry
+
+    injected = set(state.get("temas_inyectados", []))
+    norm_prompt = normalize(prompt)
+    hits: list[tuple[str, str]] = []
+    for tema, entry in entry_por_tema.items():
         if tema in injected:
             continue
+        keywords = entry["keywords"]
         if any(keyword_matches(kw, norm_prompt) for kw in keywords if isinstance(kw, str)):
-            hits.append((tema, archivo))
+            hits.append((tema, entry["archivo"]))
             if len(hits) >= MAX_TEMAS_POR_PROMPT:
                 break
 
@@ -135,11 +152,49 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
         return []
     injected.update(tema for tema, _ in hits)
     state["temas_inyectados"] = sorted(injected)
-    return [
+    lineas_directas = [
         f"Este proyecto documenta '{tema}' en `{archivo}`. "
         "LEE ese archivo ANTES de responder sobre este tema."
         for tema, archivo in hits
     ]
+
+    # Pasada de relacionados: sugerir (no ordenar) el puente relacionado.
+    # Guardas isinstance explicitas: una 'relaciones' malformada NUNCA debe
+    # lanzar, o el catch-all del hook descartaria la inyeccion COMPLETA.
+    # No toca state (G3): la sugerencia no consume el cap de temas ni se
+    # marca como inyectada. Dedup local via 'sugeridos'.
+    sugeridos: set[str] = set()
+    lineas_sugerencia: list[str] = []
+    for tema, _archivo in hits:
+        if len(lineas_sugerencia) >= MAX_RELACIONADOS:
+            break
+        relaciones = entry_por_tema.get(tema, {}).get("relaciones")
+        if not isinstance(relaciones, list):
+            continue
+        for rel in relaciones:
+            if len(lineas_sugerencia) >= MAX_RELACIONADOS:
+                break
+            if not isinstance(rel, dict):
+                continue
+            rt = rel.get("tema")
+            verbo = rel.get("verbo")
+            if not rt:
+                continue
+            if rt in injected:  # G2: ya inyectado (previo o hit de este prompt)
+                continue
+            if rt in sugeridos:  # dedup local
+                continue
+            if rt not in entry_por_tema:  # G1: destino dangling
+                continue
+            frase = VERBOS.get(verbo, "se relaciona con")
+            archivo_rt = entry_por_tema[rt]["archivo"]
+            sugeridos.add(rt)
+            lineas_sugerencia.append(
+                f"Tema relacionado: '{tema}' {frase} '{rt}' -- "
+                f"quizas quieras leer `{archivo_rt}`."
+            )
+
+    return lineas_directas + lineas_sugerencia
 
 
 @hook_main("UserPromptSubmit")

@@ -5,31 +5,36 @@
       "tema": "hooks",
       "archivo": ".claude/docs/hooks.md",
       "keywords": ["hook", "hooks", "bridge_router", "memory_checkpoint", "doc_drift", "discernment_gate", "hook_utils", "stdin", "additionalContext"],
-      "rutas": ["plugins/fluency-4d/hooks/"]
+      "rutas": ["plugins/fluency-4d/hooks/"],
+      "relaciones": [{"verbo": "va_con", "tema": "testing"}]
     },
     {
       "tema": "skills",
       "archivo": ".claude/docs/skills.md",
       "keywords": ["skill", "skills", "frontmatter", "triggers", "references", "4d-init", "4d-quiz", "4d-status"],
-      "rutas": ["plugins/fluency-4d/skills/"]
+      "rutas": ["plugins/fluency-4d/skills/"],
+      "relaciones": [{"verbo": "va_con", "tema": "hooks"}]
     },
     {
       "tema": "testing",
       "archivo": ".claude/docs/testing.md",
       "keywords": ["test", "tests", "pytest", "conftest", "run_hook", "fixture"],
-      "rutas": ["tests/", "pyproject.toml"]
+      "rutas": ["tests/", "pyproject.toml"],
+      "relaciones": [{"verbo": "alimenta_a", "tema": "release"}]
     },
     {
       "tema": "release",
       "archivo": ".claude/docs/release.md",
       "keywords": ["release", "version", "bump", "publicar", "marketplace", "cache", "workflow", "deploy"],
-      "rutas": ["scripts/", ".github/", ".claude-plugin/marketplace.json", "plugins/fluency-4d/.claude-plugin/plugin.json"]
+      "rutas": ["scripts/", ".github/", ".claude-plugin/marketplace.json", "plugins/fluency-4d/.claude-plugin/plugin.json"],
+      "relaciones": [{"verbo": "depende_de", "tema": "testing"}]
     },
     {
       "tema": "convenciones",
       "archivo": ".claude/docs/convenciones.md",
       "keywords": ["convenciones", "styleguide", "estilo de codigo", "lint", "linting", "ruff", "naming"],
-      "rutas": []
+      "rutas": [],
+      "relaciones": [{"verbo": "va_con", "tema": "hooks"}]
     }
   ]
 }

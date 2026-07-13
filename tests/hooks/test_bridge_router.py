@@ -94,6 +94,140 @@ def test_bridges_malformado_no_rompe(run_hook, project):
     assert "lecciones.md" in out  # el arranque sobrevive al JSON roto
 
 
+# --- Relaciones entre puentes (v0.11) ----------------------------------------
+
+BRIDGES_REL = {
+    "version": 1,
+    "temas": [
+        {
+            "tema": "testing",
+            "archivo": ".claude/docs/testing.md",
+            "keywords": ["pytest", "testing"],
+            "relaciones": [{"verbo": "alimenta_a", "tema": "release"}],
+        },
+        {
+            "tema": "release",
+            "archivo": ".claude/docs/release.md",
+            "keywords": ["release", "deploy"],
+        },
+    ],
+}
+
+
+def test_relacion_sugiere_destino_con_archivo(run_hook, project):
+    write_bridges(project, data=BRIDGES_REL)
+    out = run_hook(HOOK, payload(project, "r1", "corramos pytest"))
+    assert "Este proyecto documenta 'testing'" in out
+    assert "Tema relacionado: 'testing' alimenta a 'release'" in out
+    assert ".claude/docs/release.md" in out
+
+
+def test_relacion_no_marca_destino_como_inyectado(run_hook, project, state_of):
+    write_bridges(project, data=BRIDGES_REL)
+    run_hook(HOOK, payload(project, "r2", "corramos pytest"))
+    inyectados = state_of("r2")["temas_inyectados"]
+    assert "testing" in inyectados
+    assert "release" not in inyectados  # la sugerencia no consume el cap ni el state
+
+
+def test_relacion_dedup_si_destino_ya_es_hit_directo(run_hook, project):
+    write_bridges(project, data=BRIDGES_REL)
+    # el prompt matchea testing (fuente) y release (destino) directamente
+    out = run_hook(HOOK, payload(project, "r3", "pytest antes del release"))
+    assert out.count("Este proyecto documenta") == 2
+    assert "Tema relacionado" not in out  # release ya fue hit directo -> no se sugiere
+
+
+def test_relacion_dangling_no_crashea(run_hook, project):
+    dangling = {
+        "version": 1,
+        "temas": [
+            {
+                "tema": "solo",
+                "archivo": ".claude/docs/solo.md",
+                "keywords": ["solo"],
+                "relaciones": [{"verbo": "depende_de", "tema": "fantasma"}],
+            }
+        ],
+    }
+    write_bridges(project, data=dangling)
+    out = run_hook(HOOK, payload(project, "r4", "trabajo solo hoy"))
+    assert "Este proyecto documenta 'solo'" in out
+    assert "Tema relacionado" not in out  # destino inexistente -> skip silencioso
+
+
+def test_relacion_verbo_desconocido_frase_neutra(run_hook, project):
+    data = {
+        "version": 1,
+        "temas": [
+            {
+                "tema": "testing",
+                "archivo": ".claude/docs/testing.md",
+                "keywords": ["pytest"],
+                "relaciones": [{"verbo": "verbo_raro", "tema": "release"}],
+            },
+            {"tema": "release", "archivo": ".claude/docs/release.md", "keywords": ["release"]},
+        ],
+    }
+    write_bridges(project, data=data)
+    out = run_hook(HOOK, payload(project, "r5", "corramos pytest"))
+    assert "se relaciona con" in out
+
+
+def test_relacion_tope_uno_por_prompt(run_hook, project):
+    data = {
+        "version": 1,
+        "temas": [
+            {
+                "tema": "multi",
+                "archivo": ".claude/docs/multi.md",
+                "keywords": ["multi"],
+                "relaciones": [
+                    {"verbo": "va_con", "tema": "uno"},
+                    {"verbo": "va_con", "tema": "dos"},
+                ],
+            },
+            {"tema": "uno", "archivo": ".claude/docs/uno.md", "keywords": ["uno"]},
+            {"tema": "dos", "archivo": ".claude/docs/dos.md", "keywords": ["dos"]},
+        ],
+    }
+    write_bridges(project, data=data)
+    out = run_hook(HOOK, payload(project, "r6", "esto es multi"))
+    assert out.count("Tema relacionado") == 1  # tope MAX_RELACIONADOS
+
+
+def test_relacion_malformada_no_rompe_inyeccion(run_hook, project):
+    data = {
+        "version": 1,
+        "temas": [
+            {
+                "tema": "testing",
+                "archivo": ".claude/docs/testing.md",
+                "keywords": ["pytest"],
+                "relaciones": "esto no es una lista",
+            }
+        ],
+    }
+    write_bridges(project, data=data)
+    out = run_hook(HOOK, payload(project, "r7", "corramos pytest"))
+    assert "Este proyecto documenta 'testing'" in out  # la inyeccion directa sobrevive
+    assert "Tema relacionado" not in out
+
+
+def test_bridges_reales_integridad_referencial():
+    from conftest import REPO_ROOT
+
+    data = _json.loads(
+        (REPO_ROOT / ".claude" / "docs" / "bridges.json").read_text(encoding="utf-8")
+    )
+    temas = {t["tema"] for t in data["temas"]}
+    for t in data["temas"]:
+        for rel in t.get("relaciones", []):
+            assert rel["tema"] in temas, (
+                f"relacion dangling en bridges.json: {t['tema']} -> {rel['tema']}"
+            )
+
+
 # --- Metricas (v0.4) ---------------------------------------------------------
 
 
