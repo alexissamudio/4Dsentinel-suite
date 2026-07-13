@@ -21,6 +21,8 @@ jobs:
           uv run python -m json.tool plugins/fluency-4d/hooks/hooks.json > /dev/null
       - name: Version sincronizada en los 3 lugares
         run: uv run scripts/bump_version.py --check
+      - name: Contrato de skills (registro doble, refs, auto-contencion)
+        run: uv run scripts/check_skills.py
       - name: Sin rutas ../ en plugin.json
         run: "! grep -q '\\.\\./' plugins/fluency-4d/.claude-plugin/plugin.json"
       - name: Lint (ruff)
