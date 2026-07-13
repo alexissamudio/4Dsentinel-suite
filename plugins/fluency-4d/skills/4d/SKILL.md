@@ -69,6 +69,13 @@ en vez de re-describir todo. Repetí el loop Descripción → Discernimiento has
 checklist pase. Advertencia honesta: si el dominio excede tu capacidad de verificación
 o la del usuario, decilo y proponé un paso de verificación independiente.
 
+**Barrido de cobertura (opcional, cierre del Discernimiento):** para tareas con
+entregable real, OFRECÉ en una línea —opt-in, declinar sin fricción— un barrido
+final donde cada concern del entregable que ya evaluaste arriba queda **RESUELTO**
+(tras evaluarlo el humano) o **DIFERIDO** con una razón de una línea, para que nada
+quede sin abrir en silencio. El modelo lista y a lo sumo sugiere; **el humano
+discierne y cierra cada item**. Mecánica y formato: `references/discernimiento.md`.
+
 **Autoaprendizaje:** al cerrar el loop, si hubo correcciones del usuario o errores/
 alucinaciones cazadas, guardá la lección en `.claude/docs/lecciones.md` con formato
 `## [fecha] — [título]` + contexto + lección + cómo aplicar. Consolidá: máximo ~30
@@ -85,7 +92,8 @@ INFORME DE DILIGENCIA
 - Creación: qué herramienta/modelo se usó y qué datos sensibles se evitaron o anonimizaron.
 - Transparencia: qué parte hizo la IA y qué parte el humano (nota lista para compartir).
 - Despliegue: qué debe verificar el usuario ANTES de publicar/enviar (lista concreta:
-  cifras contra fuente, lectura completa, aprobación consciente).
+  cifras contra fuente, lectura completa, aprobación consciente; sumá acá los items
+  DIFERIDO del barrido de cobertura, si lo hubo).
 ```
 
 Recordale al usuario: el resultado es suyo — la IA es el martillo, no el responsable.

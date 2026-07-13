@@ -41,6 +41,35 @@ fuente). 2) Reemplazá "si no está de acuerdo, puede cancelar" por una frase
 que invite a conversar dudas. Mantené las ~130 palabras.
 ```
 
+## Barrido de cobertura — cierre del Discernimiento (opcional)
+
+Antes de dar por cerrado el loop podés ofrecer un **barrido de cobertura**: un pase
+final para que ningún concern del entregable quede sin abrir en silencio. Es
+**opt-in** —se ofrece en una línea y, si el usuario declina, seguís sin fricción—;
+nunca un loop automático.
+
+**Qué se barre (no hay lista nueva):** el barrido TOMA los concerns que ya surgieron
+en esta fase —la checklist de criterios de éxito (arriba), las alucinaciones que
+cazaste, y los tres niveles Product / Process / Performance— y les aplica un cierre
+explícito. Son los concerns del entregable de ESTA tarea; nunca un catálogo técnico
+genérico ajeno al entregable.
+
+**Cómo se cierra (el humano, no el modelo):** presentás la tabla y el humano cierra
+cada fila —no se aprueba la tabla en bloque—.
+
+| Concern (de los ya evaluados) | Estado | Razón si DIFERIDO |
+|-------------------------------|--------|-------------------|
+
+- **RESUELTO** solo después de que el humano lo evaluó él mismo —sobre todo las cifras
+  y fuentes, que verifica el humano contra el original (ver *Punto crítico*)—. El
+  modelo lista y a lo sumo sugiere un estado marcado como sugerencia; **no
+  auto-certifica RESUELTO**.
+- **DIFERIDO** con una razón de una línea. Diferir con criterio es legítimo; dejarlo
+  sin abrir en silencio no.
+
+Los items **DIFERIDO** alimentan el eje Despliegue del informe de Diligencia: son
+parte de lo que el usuario verifica antes de publicar.
+
 ## Punto crítico
 
 El discernimiento depende de tu propio conocimiento del dominio. **No podés evaluar de
