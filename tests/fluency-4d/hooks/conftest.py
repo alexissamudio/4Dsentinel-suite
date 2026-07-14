@@ -31,7 +31,7 @@ def run_hook(tmp_path):
         }
         env.pop("FLUENCY_4D_SAVE_PCT", None)
         env.pop("FLUENCY_4D_STRICT", None)
-        env.pop("FLUENCY_4D_CONTEXT_TOKENS", None)
+        env.pop("FLUENCY_4D_CHECKPOINT_EVERY_TOKENS", None)
         if env_extra:
             env.update(env_extra)
         result = subprocess.run(

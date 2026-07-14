@@ -5,19 +5,23 @@
 # ///
 """memory_checkpoint.py - Hook PostToolUse del plugin fluency-4d.
 
-Al cruzar el umbral de contexto (default 50%, env FLUENCY_4D_SAVE_PCT; "0"
-desactiva), inyecta la instruccion de guardar el estado en
-.claude/docs/estado-sesion.md y consolidar lecciones en lecciones.md.
+Inyecta la instruccion de guardar el estado en .claude/docs/estado-sesion.md y
+consolidar lecciones en lecciones.md. Con FLUENCY_4D_SAVE_PCT == "0" el hook
+queda desactivado (aplica a ambos modos).
 
-Re-armado dual (v0.3):
-- Modo nativo (context_window.used_percentage presente): una caida de >20
-  puntos = compactacion detectada -> se re-arma y vuelve a disparar al cruzar
-  el umbral. Una compactacion que cae <20 puntos no re-arma (tolerancia
-  aceptada).
-- Modo fallback (estimacion por tamano del transcript, append-only: el %
-  nunca baja): re-dispara por intervalo de tokens (~cada {umbral}% de
-  contexto acumulado). Si el archivo se achica (se reseteo), el intervalo
-  se re-ancla.
+Re-armado dual (v0.4):
+- Modo nativo (context_window.used_percentage presente): dispara al cruzar el
+  umbral de % (default 50%, env FLUENCY_4D_SAVE_PCT). Una caida de >20 puntos =
+  compactacion detectada -> se re-arma y vuelve a disparar al cruzar el umbral.
+  Una compactacion que cae <20 puntos no re-arma (tolerancia aceptada). Este
+  modo es adaptable: usa el % real de la ventana que reporta el host.
+- Modo fallback (estimacion por tamano del transcript, append-only: el numero
+  de tokens nunca baja): dispara por una CADENCIA ABSOLUTA de tokens de
+  crecimiento del transcript, INDEPENDIENTE de la ventana de contexto (que el
+  host NO expone al hook). Cada FLUENCY_4D_CHECKPOINT_EVERY_TOKENS tokens
+  acumulados (default 120k) re-dispara; ya NO se calcula "% de ventana", asi el
+  fallback se comporta igual con ventanas de 200k o 1M. Si el archivo se achica
+  (se reseteo el transcript), el ancla de tokens se re-ancla.
 
 El hook solo inyecta la instruccion: Claude escribe los archivos. El estado
 se escribe en cada tool call (refresca el TTL de 4 h en sesiones activas:
@@ -45,17 +49,19 @@ from hook_utils import (
 )
 
 DEFAULT_THRESHOLD = 50
-DEFAULT_CONTEXT_LIMIT_TOKENS = 200_000
+DEFAULT_CHECKPOINT_INTERVAL_TOKENS = 120_000
 NATIVE_DROP_POINTS = 20  # caida de % que interpretamos como compactacion
 
 
-def _context_limit_tokens() -> int:
-    """Ventana de contexto (tokens) para el modo fallback (estimacion por
-    transcript). Configurable via env FLUENCY_4D_CONTEXT_TOKENS: con ventana de
-    1M, anclar a 200k dispara el checkpoint ~5x temprano y repetido. Un valor
-    no-entero o <= 0 cae al default de 200k (jamas desactiva ni rompe el hook)."""
-    default = DEFAULT_CONTEXT_LIMIT_TOKENS
-    raw = os.environ.get("FLUENCY_4D_CONTEXT_TOKENS")
+def _checkpoint_interval_tokens() -> int:
+    """Cadencia ABSOLUTA de tokens (crecimiento del transcript) que dispara el
+    checkpoint en modo fallback. Independiente de la ventana de contexto: el
+    host NO la expone al hook, asi que en vez de un "% de ventana" disparamos
+    cada N tokens acumulados. Configurable via env FLUENCY_4D_CHECKPOINT_EVERY_TOKENS
+    (default 120k). Un valor no-entero o <= 0 cae al default (jamas desactiva ni
+    rompe el hook; para desactivar se usa FLUENCY_4D_SAVE_PCT == 0)."""
+    default = DEFAULT_CHECKPOINT_INTERVAL_TOKENS
+    raw = os.environ.get("FLUENCY_4D_CHECKPOINT_EVERY_TOKENS")
     if raw is None:
         return default
     try:
@@ -63,12 +69,11 @@ def _context_limit_tokens() -> int:
     except (TypeError, ValueError):
         value = 0
     if value <= 0:
-        log_debug(f"FLUENCY_4D_CONTEXT_TOKENS invalido ({raw!r}); usando {default}")
+        log_debug(
+            f"FLUENCY_4D_CHECKPOINT_EVERY_TOKENS invalido ({raw!r}); usando {default}"
+        )
         return default
     return value
-
-
-CONTEXT_LIMIT_TOKENS = _context_limit_tokens()
 
 
 def usage_value(data: dict) -> tuple[float, bool] | None:
@@ -104,9 +109,17 @@ def parse_threshold() -> int:
         return DEFAULT_THRESHOLD
 
 
-def checkpoint_text(pct: float) -> str:
+def checkpoint_text(value: float, es_nativo: bool) -> str:
+    if es_nativo:
+        head = f"Contexto ~{min(value, 100.0):.0f}% usado (fluency-4d)."
+    else:
+        # En fallback no hay "%" real de ventana: reportamos tokens acumulados.
+        head = (
+            f"Checkpoint de memoria (~{value / 1000:.0f}k tokens de sesion "
+            "acumulados) (fluency-4d)."
+        )
     return (
-        f"Contexto ~{min(pct, 100.0):.0f}% usado (fluency-4d). Al completar el paso actual: "
+        f"{head} Al completar el paso actual: "
         "1) guarda el estado en `.claude/docs/estado-sesion.md` (encabezado con "
         "fecha, objetivo/frase 4D, decisiones tomadas, pendientes); "
         "2) si hubo correcciones del usuario o errores cazados, consolida las "
@@ -155,10 +168,10 @@ def main() -> None:
         if pct >= threshold and not state.get("fired"):
             state["fired"] = True
             fire = True
-        display_pct = pct
+        display_value = pct
     else:
         tokens = value
-        interval = threshold / 100 * CONTEXT_LIMIT_TOKENS
+        interval = _checkpoint_interval_tokens()  # cadencia absoluta, no % de ventana
         last_seen = float(state.get("last_seen_tokens", 0))
         last_fired = float(state.get("last_fired_tokens", 0))
         # Migracion desde estado v0.2: el flag viejo sin ancla de tokens
@@ -173,14 +186,14 @@ def main() -> None:
         if tokens >= last_fired + interval:
             state["last_fired_tokens"] = tokens
             fire = True
-        display_pct = tokens / CONTEXT_LIMIT_TOKENS * 100
+        display_value = tokens
 
     if fire:
         state["disparos"] = int(state.get("disparos", 0)) + 1
     save_state(key, state)  # last_seen se persiste SIEMPRE, en ambos modos
 
     if fire:
-        output_context("PostToolUse", checkpoint_text(display_pct))
+        output_context("PostToolUse", checkpoint_text(display_value, es_nativo))
     else:
         output_empty()
 

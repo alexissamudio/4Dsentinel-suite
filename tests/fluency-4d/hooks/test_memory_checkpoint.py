@@ -31,18 +31,19 @@ def make_transcript(tmp_path, size_bytes):
 
 
 def test_fallback_intervalo_y_reset(run_hook, project, state_of, tmp_path):
-    t = make_transcript(tmp_path, 92_000)  # 23k tok < 100k
+    # Cadencia absoluta por defecto: 120k tokens (DEFAULT_CHECKPOINT_INTERVAL_TOKENS).
+    t = make_transcript(tmp_path, 92_000)  # 23k tok < 120k
     assert run_hook(HOOK, fb(project, t, "f1")) == ""
-    t = make_transcript(tmp_path, 420_000)  # 105k >= 100k -> dispara
+    t = make_transcript(tmp_path, 520_000)  # 130k >= 120k -> dispara
     assert "estado-sesion.md" in run_hook(HOOK, fb(project, t, "f1"))
-    t = make_transcript(tmp_path, 460_000)  # 115k < 205k -> vacio
+    t = make_transcript(tmp_path, 600_000)  # 150k < 250k -> vacio
     assert run_hook(HOOK, fb(project, t, "f1")) == ""
-    t = make_transcript(tmp_path, 840_000)  # 210k >= 205k -> re-dispara
+    t = make_transcript(tmp_path, 1_040_000)  # 260k >= 250k -> re-dispara
     assert "estado-sesion.md" in run_hook(HOOK, fb(project, t, "f1"))
     assert state_of("f1", "-ckpt")["disparos"] == 2
     t = make_transcript(tmp_path, 40_000)  # se achico: re-ancla
     assert run_hook(HOOK, fb(project, t, "f1")) == ""
-    t = make_transcript(tmp_path, 420_000)  # vuelve a crecer -> dispara
+    t = make_transcript(tmp_path, 520_000)  # vuelve a crecer -> dispara
     assert "estado-sesion.md" in run_hook(HOOK, fb(project, t, "f1"))
     assert state_of("f1", "-ckpt")["disparos"] == 3
 
@@ -72,7 +73,7 @@ def test_migracion_v02_no_duplica_disparo(run_hook, project, tmp_path, state_of)
 
 
 def test_guardas(run_hook, project, tmp_path, state_of):
-    t = make_transcript(tmp_path, 420_000)
+    t = make_transcript(tmp_path, 520_000)  # 130k tok >= 120k -> dispara (fallback)
     agent = fb(project, t, "g1")
     agent["agent_type"] = "Explore"
     assert run_hook(HOOK, agent) == ""
@@ -90,27 +91,29 @@ def test_guardas(run_hook, project, tmp_path, state_of):
 
 
 def test_env_basura_cae_a_50(run_hook, project, tmp_path):
-    t = make_transcript(tmp_path, 420_000)  # 105k tok = 52.5% > 50
+    # SAVE_PCT basura NO desactiva (cae a 50, > 0): en fallback igual dispara al
+    # cruzar la cadencia absoluta por defecto (120k tokens).
+    t = make_transcript(tmp_path, 520_000)  # 130k tok >= 120k
     out = run_hook(HOOK, fb(project, t, "g5"), env_extra={"FLUENCY_4D_SAVE_PCT": "abc"})
     assert "estado-sesion.md" in out
 
 
-def test_context_tokens_1m_agranda_intervalo(run_hook, project, tmp_path):
-    # IMPORTANT #1: con ventana de 1M el intervalo de fallback es 500k tokens
-    # (50% de 1M), no 100k. 105k tokens ya NO deben disparar.
-    env = {"FLUENCY_4D_CONTEXT_TOKENS": "1000000"}
-    t = make_transcript(tmp_path, 420_000)  # 105k tok < 500k -> NO dispara con 1M
+def test_intervalo_configurable(run_hook, project, tmp_path):
+    # FLUENCY_4D_CHECKPOINT_EVERY_TOKENS gobierna cuando dispara el fallback,
+    # INDEPENDIENTE de la ventana de contexto (que el host no expone al hook).
+    env = {"FLUENCY_4D_CHECKPOINT_EVERY_TOKENS": "500000"}
+    t = make_transcript(tmp_path, 420_000)  # 105k tok < 500k -> NO dispara
     assert run_hook(HOOK, fb(project, t, "c1"), env_extra=env) == ""
     t = make_transcript(tmp_path, 2_400_000)  # 600k tok >= 500k -> dispara
     assert "estado-sesion.md" in run_hook(HOOK, fb(project, t, "c1"), env_extra=env)
 
 
-def test_context_tokens_invalido_cae_a_200k(run_hook, project, tmp_path):
-    # Un valor no-entero o <= 0 usa el default 200k (intervalo 100k): 105k dispara.
-    t = make_transcript(tmp_path, 420_000)  # 105k tok >= 100k
+def test_intervalo_invalido_cae_a_default(run_hook, project, tmp_path):
+    # Un valor no-entero o <= 0 usa el default 120k: 130k dispara.
+    t = make_transcript(tmp_path, 520_000)  # 130k tok >= 120k
     assert "estado-sesion.md" in run_hook(
-        HOOK, fb(project, t, "c2"), env_extra={"FLUENCY_4D_CONTEXT_TOKENS": "mil"}
+        HOOK, fb(project, t, "c2"), env_extra={"FLUENCY_4D_CHECKPOINT_EVERY_TOKENS": "mil"}
     )
     assert "estado-sesion.md" in run_hook(
-        HOOK, fb(project, t, "c3"), env_extra={"FLUENCY_4D_CONTEXT_TOKENS": "0"}
+        HOOK, fb(project, t, "c3"), env_extra={"FLUENCY_4D_CHECKPOINT_EVERY_TOKENS": "0"}
     )
