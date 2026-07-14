@@ -3,11 +3,15 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""bump_version.py - Sincroniza la versión del plugin en los 3 lugares.
+"""bump_version.py - Sincroniza la version del plugin sentinel-agents.
 
-  1. .claude-plugin/marketplace.json  -> metadata.version
-  2. .claude-plugin/marketplace.json  -> plugins[0].version
-  3. plugins/sentinel-agents/.claude-plugin/plugin.json -> version
+La version de sentinel-agents vive en DOS lugares (ambos deben coincidir):
+  1. .claude-plugin/marketplace.json  -> plugins[name=="sentinel-agents"].version
+  2. plugins/sentinel-agents/.claude-plugin/plugin.json -> version
+
+`metadata.version` del marketplace es la version PARAGUAS de la suite (no la de
+sentinel-agents), por eso NO entra en este check por-plugin. El cross-check
+paraguas<->subtree lo hace scripts/check_suite_versions.py.
 
 Uso:
   uv run scripts/bump_version.py --check
@@ -25,15 +29,27 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MARKETPLACE = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 PLUGIN = REPO_ROOT / "plugins" / "sentinel-agents" / ".claude-plugin" / "plugin.json"
+PLUGIN_NAME = "sentinel-agents"
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def _market_entry(m: dict) -> dict:
+    """Devuelve la entrada del plugin en marketplace.json por `name` (no por indice)."""
+    for entry in m.get("plugins", []):
+        if entry.get("name") == PLUGIN_NAME:
+            return entry
+    print(
+        f"ERROR - no hay entrada name=='{PLUGIN_NAME}' en marketplace.json plugins[]",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
 
 
 def read_versions() -> dict[str, str]:
     m = json.loads(MARKETPLACE.read_text(encoding="utf-8"))
     p = json.loads(PLUGIN.read_text(encoding="utf-8"))
     return {
-        "marketplace.metadata.version": m["metadata"]["version"],
-        "marketplace.plugins[0].version": m["plugins"][0]["version"],
+        f"marketplace.plugins[{PLUGIN_NAME}].version": _market_entry(m)["version"],
         "plugin.json version": p["version"],
     }
 
@@ -56,7 +72,7 @@ def set_version(new: str) -> int:
     m = json.loads(MARKETPLACE.read_text(encoding="utf-8"))
     p = json.loads(PLUGIN.read_text(encoding="utf-8"))
     m["metadata"]["version"] = new
-    m["plugins"][0]["version"] = new
+    _market_entry(m)["version"] = new
     p["version"] = new
     MARKETPLACE.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     PLUGIN.write_text(json.dumps(p, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

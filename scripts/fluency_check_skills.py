@@ -15,7 +15,7 @@ Checks (todos deben pasar; cualquier fallo -> sys.exit(1)):
      (b) `description` presente y con la subcadena "Triggers on:".
      (c) un H1 (linea `# ...`) presente en el cuerpo.
   2. Registro DOBLE: toda skill en skills/ listada en AMBOS plugin.json (skills[])
-     y marketplace.json (plugins[0].skills[]) -- y sin huerfanos en ninguno.
+     y marketplace.json (plugins[name=="fluency-4d"].skills[]) -- sin huerfanos.
   3. Refs no huerfanas: toda `references/<x>.md` citada en un SKILL.md debe existir.
   4. Auto-contencion: ningun path de maquina (C:\\Users\\, /home/, /Users/) en los
      .md/.py del plugin.
@@ -36,6 +36,7 @@ PLUGIN_DIR = REPO_ROOT / "plugins" / "fluency-4d"
 SKILLS_DIR = PLUGIN_DIR / "skills"
 PLUGIN_JSON = PLUGIN_DIR / ".claude-plugin" / "plugin.json"
 MARKETPLACE_JSON = REPO_ROOT / ".claude-plugin" / "marketplace.json"
+MARKET_PLUGIN_NAME = "fluency-4d"
 
 FRONTMATTER = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 NAME_KEY = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
@@ -96,7 +97,20 @@ def check_universales(errors: list[str]) -> None:
 
 def _registered(path: Path) -> set[str]:
     data = json.loads(path.read_text(encoding="utf-8"))
-    entries = data["skills"] if "skills" in data else data["plugins"][0]["skills"]
+    if "skills" in data:
+        entries = data["skills"]
+    else:
+        market_entry = next(
+            (p for p in data.get("plugins", []) if p.get("name") == MARKET_PLUGIN_NAME),
+            None,
+        )
+        if market_entry is None:
+            print(
+                f"ERROR - no hay entrada name=='{MARKET_PLUGIN_NAME}' en {path.name} plugins[]",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        entries = market_entry["skills"]
     return {Path(entry).name for entry in entries}
 
 

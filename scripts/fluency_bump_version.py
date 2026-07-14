@@ -7,7 +7,7 @@
 
 Lugares (los tres DEBEN coincidir para que la instalación funcione):
   1. .claude-plugin/marketplace.json  -> metadata.version
-  2. .claude-plugin/marketplace.json  -> plugins[0].version
+  2. .claude-plugin/marketplace.json  -> plugins[name=="fluency-4d"].version
   3. plugins/fluency-4d/.claude-plugin/plugin.json -> version
 
 Uso:
@@ -26,8 +26,21 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MARKETPLACE = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 PLUGIN = REPO_ROOT / "plugins" / "fluency-4d" / ".claude-plugin" / "plugin.json"
+PLUGIN_NAME = "fluency-4d"
 
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def _market_entry(marketplace: dict) -> dict:
+    """Devuelve la entrada del plugin en marketplace.json por `name` (no por indice)."""
+    for entry in marketplace.get("plugins", []):
+        if entry.get("name") == PLUGIN_NAME:
+            return entry
+    print(
+        f"ERROR - no hay entrada name=='{PLUGIN_NAME}' en marketplace.json plugins[]",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
 
 
 def read_versions() -> dict[str, str]:
@@ -35,7 +48,7 @@ def read_versions() -> dict[str, str]:
     plugin = json.loads(PLUGIN.read_text(encoding="utf-8"))
     return {
         "marketplace.metadata.version": marketplace["metadata"]["version"],
-        "marketplace.plugins[0].version": marketplace["plugins"][0]["version"],
+        f"marketplace.plugins[{PLUGIN_NAME}].version": _market_entry(marketplace)["version"],
         "plugin.json version": plugin["version"],
     }
 
@@ -59,7 +72,7 @@ def set_version(new_version: str) -> int:
     marketplace = json.loads(MARKETPLACE.read_text(encoding="utf-8"))
     plugin = json.loads(PLUGIN.read_text(encoding="utf-8"))
     marketplace["metadata"]["version"] = new_version
-    marketplace["plugins"][0]["version"] = new_version
+    _market_entry(marketplace)["version"] = new_version
     plugin["version"] = new_version
     MARKETPLACE.write_text(
         json.dumps(marketplace, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
