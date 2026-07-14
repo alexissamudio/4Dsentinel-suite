@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Suite unificada: marco 4D de AI Fluency (fluency-4d) + agentes de auditoria (sentinel-agents) + memoria de codebase (codebase-memory-mcp) en un solo install",
-    "version": "0.1.0"
+    "version": "0.15.0"
   },
   "plugins": [
     {
       "name": "fluency-4d",
       "source": "./plugins/fluency-4d",
       "description": "Aplica el marco 4D de AI Fluency en tu flujo de trabajo (/4d) y genera un CLAUDE.md modular con puentes a docs por tema (/4d-init) con enrutamiento automatico via hook",
-      "version": "0.14.0",
+      "version": "0.15.0",
       "author": {
         "name": "Alexis Samudio"
       },
