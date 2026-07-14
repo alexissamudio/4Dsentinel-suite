@@ -30,6 +30,8 @@ from hook_utils import (
     output_empty,
     parse_hook_input,
     read_stdin_safe,
+    safe_doc_path,
+    sanitize_field,
     save_state,
     session_key,
 )
@@ -95,6 +97,9 @@ def main() -> None:
         rutas = entry.get("rutas")
         if not tema or not archivo or not isinstance(rutas, list) or not rutas:
             continue  # tema sin rutas: no se trackea
+        safe_archivo = safe_doc_path(archivo)
+        if safe_archivo is None:
+            continue  # `archivo` hostil: no se avisa por este tema
         if tema in avisados:
             continue
         if any(prefix_matches(rel_posix, r) for r in rutas if isinstance(r, str)):
@@ -103,9 +108,10 @@ def main() -> None:
             save_state(key, state)
             return output_context(
                 "PostToolUse",
-                f"Editaste archivos del tema '{tema}'. Cuando termines la tarea "
-                f"actual, revisa si `{archivo}` sigue vigente y actualizalo si el "
-                "cambio afecta lo documentado. (fluency-4d; una vez por tema por sesion)",
+                f"Editaste archivos del tema '{sanitize_field(tema)}'. Cuando "
+                f"termines la tarea actual, revisa si `{sanitize_field(safe_archivo)}` "
+                "sigue vigente y actualizalo si el cambio afecta lo documentado. "
+                "(fluency-4d; una vez por tema por sesion)",
             )
 
     output_empty()

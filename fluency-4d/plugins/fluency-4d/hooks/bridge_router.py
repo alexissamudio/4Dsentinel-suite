@@ -38,6 +38,8 @@ from hook_utils import (
     output_empty,
     parse_hook_input,
     read_stdin_safe,
+    safe_doc_path,
+    sanitize_field,
     save_state,
     session_key,
 )
@@ -134,7 +136,12 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
         keywords = entry.get("keywords")
         if not tema or not archivo or not isinstance(keywords, list):
             continue
-        entry_por_tema[tema] = entry
+        safe_archivo = safe_doc_path(archivo)
+        if safe_archivo is None:
+            # `archivo` hostil (absoluto / .. / ~ / con controles): NO se puentea
+            # este tema, ni como hit directo ni como destino de relacion.
+            continue
+        entry_por_tema[tema] = {**entry, "archivo": safe_archivo}
 
     injected = set(state.get("temas_inyectados", []))
     norm_prompt = normalize(prompt)
@@ -153,7 +160,7 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
     injected.update(tema for tema, _ in hits)
     state["temas_inyectados"] = sorted(injected)
     lineas_directas = [
-        f"Este proyecto documenta '{tema}' en `{archivo}`. "
+        f"Este proyecto documenta '{sanitize_field(tema)}' en `{sanitize_field(archivo)}`. "
         "LEE ese archivo ANTES de responder sobre este tema."
         for tema, archivo in hits
     ]
@@ -190,8 +197,9 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
             archivo_rt = entry_por_tema[rt]["archivo"]
             sugeridos.add(rt)
             lineas_sugerencia.append(
-                f"Tema relacionado: '{tema}' {frase} '{rt}' -- "
-                f"quizas quieras leer `{archivo_rt}`."
+                f"Tema relacionado: '{sanitize_field(tema)}' {frase} "
+                f"'{sanitize_field(rt)}' -- "
+                f"quizas quieras leer `{sanitize_field(archivo_rt)}`."
             )
 
     return lineas_directas + lineas_sugerencia

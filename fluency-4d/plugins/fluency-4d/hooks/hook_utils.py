@@ -22,14 +22,71 @@ import functools
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 import threading
 import time
+import unicodedata
 from pathlib import Path
 
 MAX_STDIN_BYTES = 1024 * 1024
 STATE_TTL_SECONDS = 4 * 60 * 60  # 4 horas
+
+
+# --- Sanitizacion de campos controlados por el proyecto (bridges.json) --------
+# bridges.json vive en el repo del usuario; en un repo de terceros HOSTIL lo
+# controla el atacante. Sus campos se interpolan en additionalContext (texto que
+# Claude lee como contexto). Sin sanitizar, un atacante puede meter newlines para
+# cerrar la plantilla e inyectar instrucciones falsas (prompt injection de 2do
+# orden), o poner un `archivo` fuera del proyecto (`~/.ssh/id_rsa`, `../secreto`,
+# `X:\...`) para que Claude lo lea.
+
+
+def sanitize_field(text: object, max_len: int = 120) -> str:
+    """Devuelve un string seguro para interpolar en additionalContext.
+
+    Colapsa saltos de linea, caracteres de control y separadores unicode a un
+    solo espacio, recorta y trunca a `max_len` (con elipsis). Un input benigno
+    corto (un `tema` como 'auth') vuelve intacto: sin regresion.
+    """
+    s = str(text)
+    cleaned = [
+        " " if (unicodedata.category(ch)[0] in ("C", "Z")) else ch for ch in s
+    ]
+    collapsed = " ".join("".join(cleaned).split())
+    if len(collapsed) > max_len:
+        collapsed = collapsed[: max(0, max_len - 1)].rstrip() + "…"
+    return collapsed
+
+
+def safe_doc_path(archivo: object) -> str | None:
+    """Valida que `archivo` sea una ruta RELATIVA dentro del proyecto.
+
+    Acepta solo rutas relativas (forma POSIX normalizada). Rechaza (-> None):
+    - no-strings, vacios o con caracteres de control (newline injection),
+    - rutas absolutas POSIX (`/...`) o con expansion de home (`~...`),
+    - unidades Windows (`X:\\...`, `X:/...`) y UNC (`\\\\host`),
+    - cualquier componente `..` (traversal).
+
+    None significa "ruta insegura": el llamador NO debe puentear ese tema.
+    """
+    if not isinstance(archivo, str):
+        return None
+    raw = archivo.strip()
+    if not raw:
+        return None
+    if any(unicodedata.category(ch)[0] == "C" for ch in raw):
+        return None  # controles/newlines: ruta invalida
+    unified = raw.replace("\\", "/")
+    if unified.startswith("/") or unified.startswith("~"):
+        return None  # absoluta POSIX o home-expansion
+    if re.match(r"^[A-Za-z]:", unified):
+        return None  # unidad Windows (X:)
+    parts = [p for p in unified.split("/") if p not in ("", ".")]
+    if not parts or any(p == ".." for p in parts):
+        return None  # vacia tras normalizar, o traversal
+    return "/".join(parts)
 
 
 def read_stdin_safe(timeout: float = 5.0) -> str:

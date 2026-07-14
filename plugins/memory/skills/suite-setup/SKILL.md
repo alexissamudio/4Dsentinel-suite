@@ -17,16 +17,31 @@ conecte es tener el **binario en el PATH**. Este skill lo instala de forma **min
 - Solo aporta valor en **codebases grandes** (su proposito es reducir tokens de exploracion).
 
 ## Pasos (Windows)
-1. Bajar el binario firmado del release mas reciente:
-   `https://github.com/DeusData/codebase-memory-mcp/releases/latest`
-   (archivo `codebase-memory-mcp-windows-amd64.zip`), NO correr el `install.ps1` completo.
-2. Verificar integridad: `gh attestation verify <exe> --repo DeusData/codebase-memory-mcp`
-   y/o el `checksums.txt` (SHA-256) del release.
-3. Colocar el ejecutable en un directorio del PATH (ej. `~/.local/bin`, que el instalador
-   oficial usa) de modo que `codebase-memory-mcp` resuelva. VERIFICAR: `codebase-memory-mcp --version`.
-   - Nota Windows: si el MCP no conecta con command `codebase-memory-mcp`, puede necesitar la
-     ruta absoluta al `.exe`; en ese caso ajustar `plugins/memory/.claude-plugin/plugin.json`
-     o registrar con `claude mcp add --scope user codebase-memory -- <ruta-absoluta>`.
+1. **Pinnear una version/tag concreta**, NO `latest`. Elegi un release fijo (ej.
+   `v1.4.0`) y anotalo; asi la verificacion es reproducible y no cambia bajo tus pies:
+   `https://github.com/DeusData/codebase-memory-mcp/releases/tag/<TAG>`
+   Baja de ESE tag el `codebase-memory-mcp-windows-amd64.zip` **y** su `checksums.txt`.
+   NO corras el `install.ps1` completo. Descomprimi a una carpeta temporal (todavia
+   NO lo pongas en el PATH: primero se verifica).
+2. **Verificacion OBLIGATORIA y SECUENCIAL** (ambas condiciones deben pasar, en orden;
+   NO es "y/o"):
+   1. **Atestacion de procedencia** — DEBE pasar:
+      `gh attestation verify <exe> --repo DeusData/codebase-memory-mcp`
+      (verifica la firma sigstore + SLSA contra ESE repo). Si falla -> **ABORTAR**.
+   2. **Checksum SHA-256** — DEBE coincidir con el de `checksums.txt` de ese tag:
+      `Get-FileHash -Algorithm SHA256 <exe>` y compara el hash (case-insensitive)
+      con la linea del `.exe`/`.zip` en `checksums.txt`. Si NO coincide -> **ABORTAR**.
+   - **Si cualquiera de las dos falla: ABORTAR. No coloques ni ejecutes el binario.**
+     No hay fallback ni excepcion; un binario que no atesta o no matchea el checksum
+     se descarta.
+3. **Solo si (1) Y (2) pasaron**, colocar el ejecutable verificado. Preferentemente
+   registralo con **ruta absoluta al `.exe` verificado**, no por resolucion via PATH
+   (evita PATH-hijack: que un `codebase-memory-mcp` malicioso mas arriba en el PATH se
+   ejecute en su lugar):
+   `claude mcp add --scope user codebase-memory -- <ruta-absoluta-al-exe-verificado>`
+   (o ajustar `plugins/memory/.claude-plugin/plugin.json` con esa ruta absoluta).
+   Solo si preferis resolucion por PATH, copialo a un dir del PATH (ej. `~/.local/bin`).
+   VERIFICAR: `codebase-memory-mcp --version` (o `& "<ruta-absoluta>" --version`).
 4. **Reiniciar Claude Code** (el MCP se conecta al arrancar) y confirmar con `/mcp` que
    `codebase-memory` aparece conectado.
 5. En cada repo grande: pedirle al MCP `Index this project` (tool `index_repository`).
