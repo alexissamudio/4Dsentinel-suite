@@ -38,6 +38,8 @@ from hook_utils import (
     output_empty,
     parse_hook_input,
     read_stdin_safe,
+    safe_doc_path,
+    sanitize_field,
     save_state,
     session_key,
 )
@@ -64,9 +66,19 @@ def normalize(text: str) -> str:
 
 def keyword_matches(keyword: str, norm_prompt: str) -> bool:
     kw = normalize(keyword.strip())
-    if len(kw) < MIN_KEYWORD_LEN:
+    if not kw:
         return False
-    return re.search(r"\b" + re.escape(kw) + r"\b", norm_prompt) is not None
+    # Piso de longitud: evita que una keyword alfanumerica demasiado corta
+    # genere falsos positivos. Una keyword con puntuacion (c++, .net, c#) es
+    # especifica por construccion y NO debe caer por longitud.
+    if kw.isalnum() and len(kw) < MIN_KEYWORD_LEN:
+        return False
+    # Lookarounds en vez de \b: \b nunca casa si la keyword empieza/termina en
+    # un caracter no-palabra (c++, .net, c#), por lo que ese puente jamas se
+    # inyectaba. (?<!\w)...(?!\w) exige solo que no haya un caracter de palabra
+    # ADYACENTE, asi 'c++' matchea en el prompt pero 'auth' sigue sin matchear
+    # como subcadena dentro de otra palabra.
+    return re.search(r"(?<!\w)" + re.escape(kw) + r"(?!\w)", norm_prompt) is not None
 
 
 def arranque_lines(cwd: Path, state: dict) -> list[str]:
@@ -134,7 +146,12 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
         keywords = entry.get("keywords")
         if not tema or not archivo or not isinstance(keywords, list):
             continue
-        entry_por_tema[tema] = entry
+        safe_archivo = safe_doc_path(archivo)
+        if safe_archivo is None:
+            # `archivo` hostil (absoluto / .. / ~ / con controles): NO se puentea
+            # este tema, ni como hit directo ni como destino de relacion.
+            continue
+        entry_por_tema[tema] = {**entry, "archivo": safe_archivo}
 
     injected = set(state.get("temas_inyectados", []))
     norm_prompt = normalize(prompt)
@@ -153,7 +170,7 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
     injected.update(tema for tema, _ in hits)
     state["temas_inyectados"] = sorted(injected)
     lineas_directas = [
-        f"Este proyecto documenta '{tema}' en `{archivo}`. "
+        f"Este proyecto documenta '{sanitize_field(tema)}' en `{sanitize_field(archivo)}`. "
         "LEE ese archivo ANTES de responder sobre este tema."
         for tema, archivo in hits
     ]
@@ -190,8 +207,9 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
             archivo_rt = entry_por_tema[rt]["archivo"]
             sugeridos.add(rt)
             lineas_sugerencia.append(
-                f"Tema relacionado: '{tema}' {frase} '{rt}' -- "
-                f"quizas quieras leer `{archivo_rt}`."
+                f"Tema relacionado: '{sanitize_field(tema)}' {frase} "
+                f"'{sanitize_field(rt)}' -- "
+                f"quizas quieras leer `{sanitize_field(archivo_rt)}`."
             )
 
     return lineas_directas + lineas_sugerencia

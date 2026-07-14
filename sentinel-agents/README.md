@@ -2,8 +2,8 @@
 
 [![validate](https://github.com/alexissamudio/sentinel-agents/actions/workflows/validate.yml/badge.svg)](https://github.com/alexissamudio/sentinel-agents/actions/workflows/validate.yml)
 
-Suite de **agentes** para Claude Code, más rigurosos que un suite genérico:
-**8 auditores read-only + 2 ejecutores** (validator y debugger). Todos hablan el mismo contrato.
+Suite de **11 agentes** para Claude Code, más rigurosos que un suite genérico:
+**9 auditores read-only + 2 ejecutores** (validator y debugger). Todos hablan el mismo contrato.
 
 | Agente | Qué hace |
 |--------|----------|
@@ -14,6 +14,7 @@ Suite de **agentes** para Claude Code, más rigurosos que un suite genérico:
 | **`code-reviewer`** | Review de código con verdict global escalar (CLEAN/CONCERNS/BLOCKED) + severidad. |
 | **`risk-assessor`** | Riesgo del cambio con rúbrica 1-10 calibrada. |
 | **`bug-hunter`** | Caza bugs de correctitud (lógica, off-by-one, null deref, races, edge cases) con razonamiento entrada→efecto. Read-only; no seguridad ni estilo. |
+| **`auditor-de-redaccion`** | Audita la CALIDAD DE LA REDACCIÓN de un texto (spec, doc, política, hallazgo): completitud, claridad, consistencia, medibilidad y cobertura, con verdict escalar. |
 | **`librarian`** | Lectura/resumen eficiente, solo-archivos, anti-alucinación. |
 | **`validator`** | Ejecutor: corre type/lint/test/build vía Bash (nunca edita), con timeouts. |
 | **`debugger`** | Ejecutor: reproduce una falla determinísticamente, localiza la causa raíz y recomienda el fix vía Bash (nunca edita ni parchea), con timeouts. |
@@ -75,8 +76,11 @@ informe cuando el relay ocurrió.
 
 - **0.1.0:** compliance-auditor + security-auditor.
 - **0.2.0:** los 6 agentes de revisión — 7 read-only + 1 ejecutor.
-- **0.3.0 (esta):** skill `/sentinel-audit` (handoff orquestado) + dueños/dedup +
+- **0.3.0:** skill `/sentinel-audit` (handoff orquestado) + dueños/dedup +
   mejoras a los agentes (scope-check, verificación de evidencia, stack-awareness).
+- **0.5.0 (esta):** `debugger` (2º ejecutor) + `auditor-de-redaccion` (9º read-only)
+  = **11 agentes** (9 read-only + 2 ejecutores); regla de Bash por allowlist cerrada
+  del CI y detección de stack/timeouts compartida en el §8 del contrato.
 
 ## Licencias
 

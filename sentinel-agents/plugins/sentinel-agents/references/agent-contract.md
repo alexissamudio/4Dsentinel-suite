@@ -4,9 +4,9 @@ Contrato COMPARTIDO por todos los agentes de este plugin. Cada agente lo cumple
 al pie. Existe para que la salida sea consistente, parseable y verificable —
 las 5 debilidades que este suite corrige respecto de suites genéricos.
 
-**Modelo de permisos:** 8 agentes read-only (security-auditor, compliance-auditor,
-advisor, critic, code-reviewer, risk-assessor, librarian, bug-hunter:
-`tools: Read, Grep, Glob`) + **2 ejecutores**: `validator` (corre checks) y
+**Modelo de permisos:** 9 agentes read-only (security-auditor, compliance-auditor,
+advisor, critic, code-reviewer, risk-assessor, librarian, bug-hunter,
+auditor-de-redaccion: `tools: Read, Grep, Glob`) + **2 ejecutores**: `validator` (corre checks) y
 `debugger` (reproduce/diagnostica fallas), que ejecutan vía Bash pero NUNCA editan.
 Bash es la única excepción al read-only, restringida a validator y debugger por
 allowlist cerrada en el CI.
@@ -60,6 +60,15 @@ El scope-check completo (corriendo git) lo hace el orquestador.
   - `7-8` alto — datos, seguridad, migraciones, o rollback difícil.
   - `9-10` crítico — irreversible, o toca producción/dinero/datos sensibles.
   El `verdict:` global es la recomendación `PROCEED|PROCEED_WITH_CAUTION|DEFER`.
+- **Calidad de redacción (auditor-de-redaccion):** severidad por hallazgo, anclada
+  al COSTO de actuar sobre el texto tal como está escrito (no al comportamiento del
+  sistema, que es de code-reviewer/validator):
+  - `Critical` — la prosa haría construir o decidir lo incorrecto: un requisito
+    ambiguo, contradictorio o con un `[Gap]` que induce a implementar algo errado.
+  - `Important` — `[Gap]`/`[Ambiguedad]`/`[Conflicto]` real que costaría retrabajo
+    o una ronda de aclaración, pero no orienta a lo incorrecto de entrada.
+  - `Minor` — pulido: naming, redundancia, estilo, un `[Supuesto]` inocuo; no cambia
+    lo que se construiría.
 
 ## 3. Auto-verificación adversarial (segunda pasada obligatoria)
 
@@ -93,6 +102,7 @@ Cada agente cierra con UN bloque de verdict parseable (ver §6). Todos admiten
 - **validator:** `PASS` | `FAIL` | `INCONCLUSIVE`
 - **risk-assessor:** `PROCEED` | `PROCEED_WITH_CAUTION` | `DEFER` (+ banda 1-10 por finding)
 - **librarian:** `OK` | `NOT_FOUND` | `OUT_OF_SCOPE` (no es un gate; usa el mismo campo `verdict:`)
+- **auditor-de-redaccion:** `BIEN_ESCRITO` | `NECESITA_REVISION` | `DEFICIENTE`
 - **INCOMPLETE** es obligatorio si cortaste por `maxTurns` a mitad de trabajo:
   reportá lo parcial marcado INCOMPLETE — NUNCA un verdict limpio truncado.
 
@@ -125,7 +135,7 @@ Terminá SIEMPRE con un bloque cercado así (tokens exactos, un hallazgo por ít
 
 ```
 === SENTINEL-REPORT ===
-agent: <security-auditor|compliance-auditor|advisor|critic|code-reviewer|bug-hunter|debugger|validator|risk-assessor|librarian>
+agent: <security-auditor|compliance-auditor|advisor|critic|code-reviewer|bug-hunter|debugger|validator|risk-assessor|librarian|auditor-de-redaccion>
 verdict: <ENUM de §4>
 findings:
 - id: <control-ID o CWE-ref>
@@ -142,6 +152,15 @@ uncertainty:
 Antes del bloque va la explicación en prosa (en español). El bloque es el
 contrato máquina-legible; la prosa es para el humano.
 
+**`id:` de hallazgos de prosa (auditor-de-redaccion).** El esquema del finding es
+fijo (`id/severity/status/evidence/summary`): NO hay un campo `marcador` suelto.
+Un hallazgo de calidad de redacción compone su marcador dentro del `id:` con la
+forma `<marcador>@<ubicación>`, donde `<marcador>` es uno de
+`Gap|Ambiguedad|Conflicto|Supuesto` y `<ubicación>` es la sección o `archivo:línea`
+del texto auditado. Ejemplos: `Gap@agent-contract§1`, `Ambiguedad@SPEC.md:3`,
+`Conflicto@SPEC.md:11`. Así el marcador queda parseable sin ampliar el esquema, y
+el `evidence:` sigue llevando el `archivo:línea`/sección re-leído.
+
 ## 7. Ubicación de la base ISO (para compliance-auditor)
 
 `${CLAUDE_PLUGIN_ROOT}` NO está disponible para agentes (verificado). La KB se
@@ -152,3 +171,24 @@ ubica así, en orden:
    carpeta como raíz del KB.
 3. Si no la encontrás, reportá `INCOMPLETE` explicando que no pudiste ubicar el KB
    (no inventes controles de memoria).
+
+## 8. Ejecutores (validator y debugger) — detección de stack y timeouts
+
+`validator` y `debugger` son los ÚNICOS agentes con Bash (allowlist cerrada del CI,
+§Modelo de permisos). Ambos comparten estas dos reglas ANTES y DURANTE cada
+ejecución; sus fichas las citan en vez de repetirlas.
+
+**Detección de stack (antes de correr nada).** Detectá el stack REAL del proyecto
+desde los marcadores presentes (`package.json`, `pyproject.toml`, `Makefile`,
+`go.mod`, `Cargo.toml`, `pom.xml`, `composer.json`, ...): gestor de paquetes y
+runner de tests. **Usá las herramientas que YA existen en el proyecto; NO
+introduzcas herramientas nuevas.** Si no encontrás configuración de una etapa
+(p. ej. no hay type-checker), NO la inventes: decilo y no afirmes su resultado.
+
+**Timeout en CADA ejecución.** `maxTurns` cuenta turnos, no wall-clock — un comando
+colgado bloquea igual. Envolvé con `timeout <N>` (GNU coreutils) si está; si no, usá
+el flag de timeout de la propia herramienta (p. ej. `pytest-timeout`,
+`--test-timeout`) o `perl -e 'alarm(N); exec @ARGV' -- <cmd>`. En Windows/macOS
+`timeout` puede no existir: no asumas que está. NUNCA ejecutés sin timeout. Ejecutar
+tests/probes SÍ puede dejar side-effects legítimos (artefactos, caches): eso NO es
+editar.

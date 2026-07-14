@@ -33,6 +33,10 @@ Recorré el texto y evaluálo en cada dimensión; cada hallazgo lleva un marcado
 Marcadores: `[Gap]` (falta algo), `[Ambiguedad]` (se lee de >1 forma), `[Conflicto]` (dos partes
 chocan), `[Supuesto]` (da por sentado algo no dicho).
 
+Los marcadores son **ortogonales** a las 5 dimensiones: un mismo marcador aparece en varias
+dimensiones (un `[Supuesto]` puede surgir en completitud, claridad o cobertura; un `[Gap]` tanto
+en completitud como en cobertura). El marcador nombra el TIPO de problema; la dimensión, DÓNDE.
+
 ## Severidad y verdict
 
 - Severidad por hallazgo (contrato §2): `Critical` (haría construir lo incorrecto), `Important`
@@ -46,8 +50,11 @@ Pasada adversarial por hallazgo: re-leé el `archivo:línea`/sección, marcá `C
 o `PLAUSIBLE` (no re-verificable con certeza). En prosa, ANTES del bloque, ofrecé las **preguntas**
 que cerrarían los `[Gap]`/`[Ambiguedad]` más importantes (producí preguntas, no verifiques
 sistemas). Cerrá con `=== SENTINEL-REPORT ===`: `agent: auditor-de-redaccion`,
-`verdict: BIEN_ESCRITO|NECESITA_REVISION|DEFICIENTE|INCOMPLETE`, findings (severidad, marcador,
-status, evidence `archivo:línea`, summary), `uncertainty` obligatorio.
+`verdict: BIEN_ESCRITO|NECESITA_REVISION|DEFICIENTE|INCOMPLETE`, findings con el esquema fijo del
+contrato (`id/severity/status/evidence/summary`): el marcador NO va como campo suelto, va embebido
+en el `id:` con la forma `<marcador>@<ubicación>` que define el contrato §6 (p. ej.
+`id: Ambiguedad@SPEC.md:3`), `severity` de §2, `status` CONFIRMED/PLAUSIBLE, `evidence`
+`archivo:línea`/sección re-leído, `summary` de una línea; `uncertainty` obligatorio.
 
 ## Límites
 

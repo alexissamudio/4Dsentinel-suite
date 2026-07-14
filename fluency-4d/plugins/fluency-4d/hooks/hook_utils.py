@@ -22,14 +22,71 @@ import functools
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 import threading
 import time
+import unicodedata
 from pathlib import Path
 
 MAX_STDIN_BYTES = 1024 * 1024
 STATE_TTL_SECONDS = 4 * 60 * 60  # 4 horas
+
+
+# --- Sanitizacion de campos controlados por el proyecto (bridges.json) --------
+# bridges.json vive en el repo del usuario; en un repo de terceros HOSTIL lo
+# controla el atacante. Sus campos se interpolan en additionalContext (texto que
+# Claude lee como contexto). Sin sanitizar, un atacante puede meter newlines para
+# cerrar la plantilla e inyectar instrucciones falsas (prompt injection de 2do
+# orden), o poner un `archivo` fuera del proyecto (`~/.ssh/id_rsa`, `../secreto`,
+# `X:\...`) para que Claude lo lea.
+
+
+def sanitize_field(text: object, max_len: int = 120) -> str:
+    """Devuelve un string seguro para interpolar en additionalContext.
+
+    Colapsa saltos de linea, caracteres de control y separadores unicode a un
+    solo espacio, recorta y trunca a `max_len` (con elipsis). Un input benigno
+    corto (un `tema` como 'auth') vuelve intacto: sin regresion.
+    """
+    s = str(text)
+    cleaned = [
+        " " if (unicodedata.category(ch)[0] in ("C", "Z")) else ch for ch in s
+    ]
+    collapsed = " ".join("".join(cleaned).split())
+    if len(collapsed) > max_len:
+        collapsed = collapsed[: max(0, max_len - 1)].rstrip() + "…"
+    return collapsed
+
+
+def safe_doc_path(archivo: object) -> str | None:
+    """Valida que `archivo` sea una ruta RELATIVA dentro del proyecto.
+
+    Acepta solo rutas relativas (forma POSIX normalizada). Rechaza (-> None):
+    - no-strings, vacios o con caracteres de control (newline injection),
+    - rutas absolutas POSIX (`/...`) o con expansion de home (`~...`),
+    - unidades Windows (`X:\\...`, `X:/...`) y UNC (`\\\\host`),
+    - cualquier componente `..` (traversal).
+
+    None significa "ruta insegura": el llamador NO debe puentear ese tema.
+    """
+    if not isinstance(archivo, str):
+        return None
+    raw = archivo.strip()
+    if not raw:
+        return None
+    if any(unicodedata.category(ch)[0] == "C" for ch in raw):
+        return None  # controles/newlines: ruta invalida
+    unified = raw.replace("\\", "/")
+    if unified.startswith("/") or unified.startswith("~"):
+        return None  # absoluta POSIX o home-expansion
+    if re.match(r"^[A-Za-z]:", unified):
+        return None  # unidad Windows (X:)
+    parts = [p for p in unified.split("/") if p not in ("", ".")]
+    if not parts or any(p == ".." for p in parts):
+        return None  # vacia tras normalizar, o traversal
+    return "/".join(parts)
 
 
 def read_stdin_safe(timeout: float = 5.0) -> str:
@@ -192,9 +249,29 @@ def bump_stats(cwd: str, temas_nuevos: list[str], nueva_sesion: bool) -> None:
 
 def save_state(key: str, state: dict) -> None:
     state["_ts"] = time.time()
+    path = _state_path(key)
+    payload = json.dumps(state, ensure_ascii=True)
     try:
-        _state_path(key).write_text(
-            json.dumps(state, ensure_ascii=True), encoding="utf-8"
+        # Escritura ATOMICA: se escribe a un temporal en el MISMO directorio y
+        # luego os.replace(tmp, dst) (atomico en Windows y POSIX). Asi un
+        # load_state concurrente (memory_checkpoint y doc_drift disparan en
+        # PostToolUse casi a la vez) nunca ve un JSON a medio escribir -> no hay
+        # torn-write ni JSONDecodeError espurio que devuelva {} y pierda el
+        # dedup. El lost-update residual (dos writes solapados, gana el ultimo)
+        # es benigno y equivalente al ya aceptado en bump_stats: el estado es
+        # senal de dedup best-effort, no contabilidad.
+        fd, tmp = tempfile.mkstemp(
+            dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
         )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(payload)
+            os.replace(tmp, path)
+        except OSError:
+            try:
+                os.unlink(tmp)  # limpieza best-effort si el replace fallo
+            except OSError:
+                pass
+            raise
     except OSError as exc:
         log_debug(f"no se pudo guardar estado: {exc}")

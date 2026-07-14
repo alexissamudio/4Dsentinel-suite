@@ -228,6 +228,39 @@ def test_bridges_reales_integridad_referencial():
             )
 
 
+# --- C2: keywords con puntuacion al borde (c++, .net, c#) --------------------
+
+
+def _bridges_kw(tema, archivo, *keywords):
+    return {"version": 1, "temas": [{"tema": tema, "archivo": archivo, "keywords": list(keywords)}]}
+
+
+def test_keyword_cpp_matchea(run_hook, project):
+    write_bridges(project, data=_bridges_kw("cpp", ".claude/docs/cpp.md", "c++"))
+    out = run_hook(HOOK, payload(project, "kp1", "estoy programando en c++ hoy"))
+    assert "cpp.md" in out  # \\b nunca casaba c++; los lookarounds si
+
+
+def test_keyword_dotnet_matchea(run_hook, project):
+    write_bridges(project, data=_bridges_kw("dotnet", ".claude/docs/dotnet.md", ".net"))
+    out = run_hook(HOOK, payload(project, "kp2", "migramos el backend a .net core"))
+    assert "dotnet.md" in out
+
+
+def test_keyword_csharp_matchea(run_hook, project):
+    # c# tiene 2 chars: el piso de longitud NO aplica a keywords con puntuacion.
+    write_bridges(project, data=_bridges_kw("csharp", ".claude/docs/csharp.md", "c#"))
+    out = run_hook(HOOK, payload(project, "kp3", "prefiero c# antes que java"))
+    assert "csharp.md" in out
+
+
+def test_keyword_no_matchea_como_subcadena(run_hook, project):
+    # 'auth' NO debe dispararse dentro de 'authenticate' (lookaround = borde).
+    write_bridges(project)  # BRIDGES_AUTH: keyword 'auth'
+    out = run_hook(HOOK, payload(project, "kp4", "please authenticate the request"))
+    assert out == ""  # ninguna keyword de auth aparece como palabra completa
+
+
 # --- Metricas (v0.4) ---------------------------------------------------------
 
 

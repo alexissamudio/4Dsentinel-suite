@@ -5,7 +5,7 @@ Monorepo que unifica en **un solo install** el ecosistema propio de Claude Code:
 | Plugin | Qué trae |
 |--------|----------|
 | **fluency-4d** | Marco 4D de AI Fluency (`/4d`, `/4d-init`, `/4d-status`, `/4d-quiz`) + CLAUDE.md modular con puentes + hooks (incl. `plan_calibrator`) |
-| **sentinel-agents** | 10 agentes de auditoría (security, compliance ISO 27000, advisor, critic, code-reviewer, risk-assessor, bug-hunter, debugger, librarian, validator) + `/sentinel-audit` |
+| **sentinel-agents** | 11 agentes de auditoría (security, compliance ISO 27000, advisor, critic, code-reviewer, risk-assessor, bug-hunter, debugger, librarian, validator, y `auditor-de-redaccion` —calidad de redacción de specs/docs, domain-agnostic, read-only—) + `/sentinel-audit` |
 | **4dsentinel-memory** | Cablea `codebase-memory-mcp` (grafo de codebase, ~99% menos tokens en repos grandes) vía `mcpServers`; `/suite-setup` instala el binario |
 
 `fluency-4d/` y `sentinel-agents/` se traen por `git subtree` (historia preservada); sus repos
