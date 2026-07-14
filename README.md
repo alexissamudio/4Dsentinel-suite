@@ -240,7 +240,9 @@ claude plugin install sentinel-agents@4Dsentinel-suite
 claude plugin install 4dsentinel-memory@4Dsentinel-suite
 ```
 
-Después: reiniciá Claude Code, corré **`/suite-setup`** y reiniciá otra vez.
+Después: reiniciá Claude Code, corré **`/suite-setup`** (instala el binario del grafo **y registra
+el MCP** con `claude mcp add` + ruta absoluta — el plugin **ya no lo declara**, por seguridad) y
+reiniciá otra vez.
 **Verificar:** `/mcp` muestra `codebase-memory` conectado y aparecen los agentes `sentinel-agents:*`.
 *(No hay batch install: un `marketplace add` + un `install` por plugin.)*
 
@@ -249,7 +251,8 @@ Después: reiniciá Claude Code, corré **`/suite-setup`** y reiniciá otra vez.
 El camino mínimo para ver la suite funcionando desde cero:
 
 1. **Reiniciá** Claude Code — los plugins cargan al arrancar.
-2. **Activá la memoria (una sola vez):** corré **`/suite-setup`** (instala el binario del grafo) y
+2. **Activá la memoria (una sola vez):** corré **`/suite-setup`** — instala el binario del grafo
+   **y registra el MCP** (con ruta absoluta; el plugin ya no lo declara, por CWE-427) — y
    **reiniciá** de nuevo. Confirmá con **`/mcp`** que `codebase-memory` figura *conectado*.
 3. **Probá el marco 4D:** **`/4d "una tarea tuya"`** — te guía por Delegación → Descripción →
    Discernimiento → Diligencia. O **`/4d-status`** para ver el estado 4D en un proyecto.
