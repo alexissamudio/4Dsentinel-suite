@@ -1,11 +1,11 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "claude-suite",
+  "name": "4Dsentinel-suite",
   "owner": {
     "name": "Alexis Samudio"
   },
   "metadata": {
-    "description": "Suite unificada: marco 4D de AI Fluency (fluency-4d) + agentes de auditoria (sentinel-agents) en un solo install",
+    "description": "Suite unificada: marco 4D de AI Fluency (fluency-4d) + agentes de auditoria (sentinel-agents) + memoria de codebase (codebase-memory-mcp) en un solo install",
     "version": "0.1.0"
   },
   "plugins": [
@@ -60,6 +60,23 @@
         "agents"
       ],
       "category": "security"
+    },
+    {
+      "name": "4dsentinel-memory",
+      "source": "./plugins/memory",
+      "description": "Cablea codebase-memory-mcp (grafo de codebase, ~99% menos tokens en repos grandes) para la sesion main; el skill /suite-setup instala el binario firmado",
+      "version": "0.1.0",
+      "author": {
+        "name": "Alexis Samudio"
+      },
+      "license": "MIT",
+      "keywords": [
+        "mcp",
+        "codebase-memory",
+        "knowledge-graph",
+        "tokens"
+      ],
+      "category": "productivity"
     }
   ]
 }
