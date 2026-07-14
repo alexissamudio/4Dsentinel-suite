@@ -144,12 +144,21 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
         tema = entry.get("tema")
         archivo = entry.get("archivo")
         keywords = entry.get("keywords")
+        # `tema` se usa como clave de dict; un valor no-hasheable (lista/dict)
+        # lanzaria TypeError y degradaria TODO el puenteo en silencio. Exigir str
+        # tanto en tema como en archivo cierra esa via.
+        if not isinstance(tema, str) or not isinstance(archivo, str):
+            continue
         if not tema or not archivo or not isinstance(keywords, list):
             continue
         safe_archivo = safe_doc_path(archivo)
         if safe_archivo is None:
             # `archivo` hostil (absoluto / .. / ~ / con controles): NO se puentea
             # este tema, ni como hit directo ni como destino de relacion.
+            continue
+        if tema in entry_por_tema:
+            # Tema duplicado: quedarse con el PRIMERO (no last-wins silencioso).
+            log_debug(f"tema duplicado en bridges.json, se ignora la repeticion: {tema!r}")
             continue
         entry_por_tema[tema] = {**entry, "archivo": safe_archivo}
 
@@ -229,7 +238,9 @@ def main() -> None:
         return output_empty()
     cwd = Path(cwd_raw)
 
-    key = session_key(data)
+    # Sufijo -bridge: aisla el estado del router del resto de los hooks
+    # (-ckpt/-drift/-calib/-playbook/-gate) que comparten el mismo session_key.
+    key = session_key(data) + "-bridge"
     state = load_state(key)
     state_before = json.dumps(state, sort_keys=True, ensure_ascii=True)
     arranque_previo = bool(state.get("arranque_inyectado"))

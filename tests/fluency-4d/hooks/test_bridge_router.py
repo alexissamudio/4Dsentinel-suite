@@ -20,7 +20,7 @@ def test_arranque_lecciones_sin_bridges(run_hook, project, state_of):
     (project / ".claude" / "docs" / "lecciones.md").write_text("# L", encoding="utf-8")
     out = run_hook(HOOK, payload(project, "s1"))
     assert "lecciones.md" in out
-    assert state_of("s1")["arranque_inyectado"] is True
+    assert state_of("s1", "-bridge")["arranque_inyectado"] is True
 
 
 def test_arranque_con_bridges_sin_keyword(run_hook, project):
@@ -53,7 +53,7 @@ def test_estado_sesion_viejo_avisa_edad(run_hook, project):
 def test_sin_archivos_vacio_pero_marca_estado(run_hook, project, state_of):
     out = run_hook(HOOK, payload(project, "s5"))
     assert out == ""
-    assert state_of("s5")["arranque_inyectado"] is True
+    assert state_of("s5", "-bridge")["arranque_inyectado"] is True
 
 
 def test_keyword_con_acentos_normaliza(run_hook, project):
@@ -68,7 +68,7 @@ def test_subagente_no_inyecta(run_hook, project, state_of):
     data = payload(project, "s7", "login")
     data["agent_type"] = "Explore"
     assert run_hook(HOOK, data) == ""
-    assert state_of("s7") is None
+    assert state_of("s7", "-bridge") is None
 
 
 def test_arranque_y_tema_combinados_trailer_una_vez(run_hook, project):
@@ -125,7 +125,7 @@ def test_relacion_sugiere_destino_con_archivo(run_hook, project):
 def test_relacion_no_marca_destino_como_inyectado(run_hook, project, state_of):
     write_bridges(project, data=BRIDGES_REL)
     run_hook(HOOK, payload(project, "r2", "corramos pytest"))
-    inyectados = state_of("r2")["temas_inyectados"]
+    inyectados = state_of("r2", "-bridge")["temas_inyectados"]
     assert "testing" in inyectados
     assert "release" not in inyectados  # la sugerencia no consume el cap ni el state
 
@@ -295,6 +295,48 @@ def test_stats_ilegible_no_rompe_la_inyeccion(run_hook, project, tmp_path):
     write_bridges(project)
     out = run_hook(HOOK, payload(project, "m4", "login"))
     assert "auth.md" in out  # la inyeccion sale igual
+
+
+# --- Fragilidad: tema no-hasheable, duplicados y sufijo de estado ------------
+
+
+def test_tema_no_hasheable_no_rompe_el_resto(run_hook, project):
+    # MINOR #3: un `tema` array (no-hasheable) usado como clave de dict tiraba
+    # TypeError y degradaba TODO el puenteo. Ahora se saltea y el resto puentea.
+    data = {
+        "version": 1,
+        "temas": [
+            {"tema": ["no", "hasheable"], "archivo": ".claude/docs/x.md", "keywords": ["x"]},
+            {"tema": "auth", "archivo": ".claude/docs/auth.md", "keywords": ["login"]},
+        ],
+    }
+    write_bridges(project, data=data)
+    out = run_hook(HOOK, payload(project, "nh1", "el login de la app"))
+    assert "auth.md" in out  # el tema valido sigue puenteando
+
+
+def test_tema_duplicado_gana_el_primero(run_hook, project):
+    # MINOR #5: dos entries con el mismo `tema` -> gana el PRIMERO, no last-wins.
+    data = {
+        "version": 1,
+        "temas": [
+            {"tema": "auth", "archivo": ".claude/docs/primero.md", "keywords": ["login"]},
+            {"tema": "auth", "archivo": ".claude/docs/segundo.md", "keywords": ["login"]},
+        ],
+    }
+    write_bridges(project, data=data)
+    out = run_hook(HOOK, payload(project, "dup1", "el login de la app"))
+    assert "primero.md" in out
+    assert "segundo.md" not in out
+
+
+def test_estado_usa_sufijo_bridge(run_hook, project, state_of):
+    # MINOR #4: el router escribe su estado con sufijo -bridge, aislado de la
+    # key pelada que usaban otros hooks.
+    (project / ".claude" / "docs" / "lecciones.md").write_text("# L", encoding="utf-8")
+    run_hook(HOOK, payload(project, "sf1"))
+    assert state_of("sf1", "-bridge") is not None
+    assert state_of("sf1") is None  # nada en la key pelada
 
 
 def test_stats_poda_entradas_viejas(run_hook, project, tmp_path):

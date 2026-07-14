@@ -53,6 +53,16 @@ def main() -> int:
             print(f"ERROR - {name}: el marketplace no declara 'source'", file=sys.stderr)
             fallas += 1
             continue
+        if not isinstance(source, str):
+            # source objeto (p.ej. {"source":"github",...}), forma valida del
+            # marketplace: no es una ruta local, no se puede cruzar contra un
+            # plugin.json de subtree. REPO_ROOT / dict lanzaria TypeError.
+            print(
+                f"ERROR - {name}: source no es una ruta local (str)",
+                file=sys.stderr,
+            )
+            fallas += 1
+            continue
 
         plugin_json = (REPO_ROOT / source / ".claude-plugin" / "plugin.json").resolve()
         if not plugin_json.is_file():

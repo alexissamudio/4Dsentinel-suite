@@ -93,3 +93,24 @@ def test_env_basura_cae_a_50(run_hook, project, tmp_path):
     t = make_transcript(tmp_path, 420_000)  # 105k tok = 52.5% > 50
     out = run_hook(HOOK, fb(project, t, "g5"), env_extra={"FLUENCY_4D_SAVE_PCT": "abc"})
     assert "estado-sesion.md" in out
+
+
+def test_context_tokens_1m_agranda_intervalo(run_hook, project, tmp_path):
+    # IMPORTANT #1: con ventana de 1M el intervalo de fallback es 500k tokens
+    # (50% de 1M), no 100k. 105k tokens ya NO deben disparar.
+    env = {"FLUENCY_4D_CONTEXT_TOKENS": "1000000"}
+    t = make_transcript(tmp_path, 420_000)  # 105k tok < 500k -> NO dispara con 1M
+    assert run_hook(HOOK, fb(project, t, "c1"), env_extra=env) == ""
+    t = make_transcript(tmp_path, 2_400_000)  # 600k tok >= 500k -> dispara
+    assert "estado-sesion.md" in run_hook(HOOK, fb(project, t, "c1"), env_extra=env)
+
+
+def test_context_tokens_invalido_cae_a_200k(run_hook, project, tmp_path):
+    # Un valor no-entero o <= 0 usa el default 200k (intervalo 100k): 105k dispara.
+    t = make_transcript(tmp_path, 420_000)  # 105k tok >= 100k
+    assert "estado-sesion.md" in run_hook(
+        HOOK, fb(project, t, "c2"), env_extra={"FLUENCY_4D_CONTEXT_TOKENS": "mil"}
+    )
+    assert "estado-sesion.md" in run_hook(
+        HOOK, fb(project, t, "c3"), env_extra={"FLUENCY_4D_CONTEXT_TOKENS": "0"}
+    )

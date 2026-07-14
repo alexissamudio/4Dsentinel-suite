@@ -53,7 +53,9 @@ def main() -> None:
     if data.get("agent_type"):
         return output_empty()
 
-    key = session_key(data)
+    # Sufijo -gate: aisla el estado de este gate del resto de los hooks
+    # (-ckpt/-drift/-calib/-playbook/-bridge) que comparten el mismo session_key.
+    key = session_key(data) + "-gate"
     state = load_state(key)
     if state.get("gate_bloqueado"):
         return output_empty()

@@ -45,8 +45,30 @@ from hook_utils import (
 )
 
 DEFAULT_THRESHOLD = 50
-CONTEXT_LIMIT_TOKENS = 200_000
+DEFAULT_CONTEXT_LIMIT_TOKENS = 200_000
 NATIVE_DROP_POINTS = 20  # caida de % que interpretamos como compactacion
+
+
+def _context_limit_tokens() -> int:
+    """Ventana de contexto (tokens) para el modo fallback (estimacion por
+    transcript). Configurable via env FLUENCY_4D_CONTEXT_TOKENS: con ventana de
+    1M, anclar a 200k dispara el checkpoint ~5x temprano y repetido. Un valor
+    no-entero o <= 0 cae al default de 200k (jamas desactiva ni rompe el hook)."""
+    default = DEFAULT_CONTEXT_LIMIT_TOKENS
+    raw = os.environ.get("FLUENCY_4D_CONTEXT_TOKENS")
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = 0
+    if value <= 0:
+        log_debug(f"FLUENCY_4D_CONTEXT_TOKENS invalido ({raw!r}); usando {default}")
+        return default
+    return value
+
+
+CONTEXT_LIMIT_TOKENS = _context_limit_tokens()
 
 
 def usage_value(data: dict) -> tuple[float, bool] | None:
