@@ -20,6 +20,7 @@ El plugin vive en `plugins/fluency-4d/`; este repo es su fuente de desarrollo.
 | Testing | pytest, conftest, aislamiento, cómo correr | .claude/docs/testing.md |
 | Release | versión en 3 lugares, caché, CI antes de tag | .claude/docs/release.md |
 | Filosofía | qué es / qué no es el plugin, criterio de decisión para features/ports | .claude/docs/filosofia.md |
+| Persistencia | qué pasa con planes/estado-sesion/puentes/memoria al cambiar requisitos (flow-back/forward/living) | .claude/docs/persistencia.md |
 
 Si la pregunta o tarea toca un tema de la tabla, LEÉ ese archivo ANTES de responder.
 Al escribir código, respetá `.claude/docs/convenciones.md`.
