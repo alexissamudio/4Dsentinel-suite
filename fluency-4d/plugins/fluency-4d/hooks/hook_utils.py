@@ -249,9 +249,29 @@ def bump_stats(cwd: str, temas_nuevos: list[str], nueva_sesion: bool) -> None:
 
 def save_state(key: str, state: dict) -> None:
     state["_ts"] = time.time()
+    path = _state_path(key)
+    payload = json.dumps(state, ensure_ascii=True)
     try:
-        _state_path(key).write_text(
-            json.dumps(state, ensure_ascii=True), encoding="utf-8"
+        # Escritura ATOMICA: se escribe a un temporal en el MISMO directorio y
+        # luego os.replace(tmp, dst) (atomico en Windows y POSIX). Asi un
+        # load_state concurrente (memory_checkpoint y doc_drift disparan en
+        # PostToolUse casi a la vez) nunca ve un JSON a medio escribir -> no hay
+        # torn-write ni JSONDecodeError espurio que devuelva {} y pierda el
+        # dedup. El lost-update residual (dos writes solapados, gana el ultimo)
+        # es benigno y equivalente al ya aceptado en bump_stats: el estado es
+        # senal de dedup best-effort, no contabilidad.
+        fd, tmp = tempfile.mkstemp(
+            dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
         )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(payload)
+            os.replace(tmp, path)
+        except OSError:
+            try:
+                os.unlink(tmp)  # limpieza best-effort si el replace fallo
+            except OSError:
+                pass
+            raise
     except OSError as exc:
         log_debug(f"no se pudo guardar estado: {exc}")

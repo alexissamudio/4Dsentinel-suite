@@ -66,9 +66,19 @@ def normalize(text: str) -> str:
 
 def keyword_matches(keyword: str, norm_prompt: str) -> bool:
     kw = normalize(keyword.strip())
-    if len(kw) < MIN_KEYWORD_LEN:
+    if not kw:
         return False
-    return re.search(r"\b" + re.escape(kw) + r"\b", norm_prompt) is not None
+    # Piso de longitud: evita que una keyword alfanumerica demasiado corta
+    # genere falsos positivos. Una keyword con puntuacion (c++, .net, c#) es
+    # especifica por construccion y NO debe caer por longitud.
+    if kw.isalnum() and len(kw) < MIN_KEYWORD_LEN:
+        return False
+    # Lookarounds en vez de \b: \b nunca casa si la keyword empieza/termina en
+    # un caracter no-palabra (c++, .net, c#), por lo que ese puente jamas se
+    # inyectaba. (?<!\w)...(?!\w) exige solo que no haya un caracter de palabra
+    # ADYACENTE, asi 'c++' matchea en el prompt pero 'auth' sigue sin matchear
+    # como subcadena dentro de otra palabra.
+    return re.search(r"(?<!\w)" + re.escape(kw) + r"(?!\w)", norm_prompt) is not None
 
 
 def arranque_lines(cwd: Path, state: dict) -> list[str]:
