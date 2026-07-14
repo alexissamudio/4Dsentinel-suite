@@ -70,3 +70,19 @@ def test_tema_sin_rutas_no_trackea(run_hook, project):
     write_bridges(project)
     out = run_hook(HOOK, payload(project, "d7", file_path=win(project, "api/endpoints.py")))
     assert out == ""
+
+
+def test_tema_no_str_no_rompe(run_hook, project):
+    # Un `tema` array/no-str hacia `tema in avisados` (set) tirar TypeError ANTES
+    # del match de rutas -> hook_main lo tragaba -> doc-drift muerto toda la
+    # sesion. Ahora la entry invalida se saltea y el tema valido sigue avisando.
+    data = {
+        "version": 1,
+        "temas": [
+            {"tema": ["no", "str"], "archivo": ".claude/docs/x.md", "rutas": ["src/x/"]},
+            {"tema": "auth", "archivo": ".claude/docs/auth.md", "rutas": ["src/auth/"]},
+        ],
+    }
+    write_bridges(project, data=data)
+    out = run_hook(HOOK, payload(project, "dns1", file_path=win(project, "src/auth/login.py")))
+    assert "auth" in out and "auth.md" in out

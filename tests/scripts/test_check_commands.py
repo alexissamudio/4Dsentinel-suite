@@ -57,3 +57,25 @@ def test_command_absoluto_ok(tmp_path):
 def test_sin_mcpservers_ok(tmp_path):
     path = _write_plugin_json(tmp_path, {"name": "memory"})
     assert cc.check_plugin_json(path) == []
+
+
+def test_command_drive_relative_falla(tmp_path):
+    # C:foo (sin barra) es DRIVE-RELATIVE en Windows: resuelve contra el cwd de la
+    # unidad, hijackeable. El regex viejo lo aceptaba como "absoluto Windows".
+    path = _write_plugin_json(
+        tmp_path, {"mcpServers": {"cbm": {"command": "C:foo\\bar"}}}
+    )
+    errs = cc.check_plugin_json(path)
+    assert any("CWE-427" in e or "PATH" in e for e in errs), errs
+
+
+def test_command_windows_absoluto_ok(tmp_path):
+    for cmd in ("C:\\bin\\cbm.exe", "C:/bin/cbm.exe"):
+        path = _write_plugin_json(tmp_path, {"mcpServers": {"cbm": {"command": cmd}}})
+        assert cc.check_plugin_json(path) == [], cmd
+
+
+def test_cubre_los_tres_plugins():
+    # El guardrail anti-CWE-427 debe recorrer los 3 plugins, no solo memory.
+    nombres = {p.parent.parent.name for p in cc._plugin_jsons()}
+    assert {"fluency-4d", "sentinel-agents", "memory"} <= nombres, nombres

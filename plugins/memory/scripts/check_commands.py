@@ -26,7 +26,15 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent  # plugins/memory
 COMMANDS_DIR = REPO_ROOT / "commands"
 SKILLS_DIR = REPO_ROOT / "skills"
-PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
+SUITE_ROOT = REPO_ROOT.parent.parent  # raiz de 4Dsentinel-suite
+
+
+def _plugin_jsons() -> list[Path]:
+    """Todos los plugins/*/.claude-plugin/plugin.json de la suite. La regla
+    anti-CWE-427 aplica a los TRES plugins, no solo a memory: una regresion
+    futura que declare mcpServers PATH-resuelto en cualquiera debe frenar CI.
+    Un plugin sin plugin.json simplemente no aparece (no es error)."""
+    return sorted(SUITE_ROOT.glob("plugins/*/.claude-plugin/plugin.json"))
 
 
 def frontmatter(text: str) -> dict[str, str]:
@@ -58,12 +66,14 @@ def check_skill(path: Path) -> list[str]:
 def _command_is_safe(command: str) -> bool:
     """True si el command NO es secuestrable por cwd/PATH-hijack (CWE-427).
 
-    Seguro = ruta absoluta POSIX (/...), ruta absoluta Windows (X:...) o
+    Seguro = ruta absoluta POSIX (/...), ruta absoluta Windows (X:\\ o X:/) o
     variable expandida por Claude Code (${...}). Un command pelado
     (resuelto por PATH) NO es seguro: en Windows el cwd precede al PATH,
-    asi que un exe hostil plantado en el repo se auto-ejecutaria.
+    asi que un exe hostil plantado en el repo se auto-ejecutaria. Se exige
+    separador tras la unidad: `C:foo` (sin barra) es DRIVE-RELATIVE en Windows
+    (resuelve contra el cwd de la unidad, hijackeable), no absoluto.
     """
-    return bool(re.match(r"^(/|[A-Za-z]:|\$\{)", command))
+    return bool(re.match(r"^(/|[A-Za-z]:[\\/]|\$\{)", command))
 
 
 def check_plugin_json(path: Path) -> list[str]:
@@ -122,14 +132,16 @@ def main() -> int:
         else:
             print(f"OK - {rel}")
 
-    plugin_errs = check_plugin_json(PLUGIN_JSON)
-    if plugin_errs:
-        fallas += 1
-        print("ERROR - .claude-plugin/plugin.json:", file=sys.stderr)
-        for e in plugin_errs:
-            print(f"  - {e}", file=sys.stderr)
-    else:
-        print("OK - .claude-plugin/plugin.json (sin mcpServers PATH-resueltos)")
+    for pj in _plugin_jsons():
+        rel = f"{pj.parent.parent.name}/.claude-plugin/plugin.json"
+        plugin_errs = check_plugin_json(pj)
+        if plugin_errs:
+            fallas += 1
+            print(f"ERROR - {rel}:", file=sys.stderr)
+            for e in plugin_errs:
+                print(f"  - {e}", file=sys.stderr)
+        else:
+            print(f"OK - {rel} (sin mcpServers PATH-resueltos)")
 
     return 1 if fallas else 0
 

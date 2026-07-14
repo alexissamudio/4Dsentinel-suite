@@ -204,7 +204,7 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
                 continue
             rt = rel.get("tema")
             verbo = rel.get("verbo")
-            if not rt:
+            if not rt or not isinstance(rt, str):
                 continue
             if rt in injected:  # G2: ya inyectado (previo o hit de este prompt)
                 continue
@@ -212,7 +212,11 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
                 continue
             if rt not in entry_por_tema:  # G1: destino dangling
                 continue
-            frase = VERBOS.get(verbo, "se relaciona con")
+            frase = (
+                VERBOS.get(verbo, "se relaciona con")
+                if isinstance(verbo, str)
+                else "se relaciona con"
+            )
             archivo_rt = entry_por_tema[rt]["archivo"]
             sugeridos.add(rt)
             lineas_sugerencia.append(

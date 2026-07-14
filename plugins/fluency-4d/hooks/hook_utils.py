@@ -58,6 +58,12 @@ def sanitize_field(text: object, max_len: int = 80) -> str:
     comillas, corchetes y llaves (ver `_UNSAFE_DISPLAY_CHARS`). Recorta y trunca
     a `max_len` (marcador ASCII '...'). Deterministica. Un input benigno corto
     (un `tema` como 'auth') vuelve intacto: sin regresion.
+
+    Residuo aceptado (SEC-004): neutraliza la ESTRUCTURA (template-escape), no la
+    SEMANTICA -- deja pasar <=max_len chars de texto plano instructivo. Es
+    inherente al feature (inyectar contexto del repo). Mitigacion: cap de 80
+    chars por campo, requiere match de keyword para inyectarse, y Claude lo ve
+    entrecomillado como dato del repo, no como instruccion.
     """
     s = str(text)
     cleaned = [
@@ -213,6 +219,12 @@ def _state_path(key: str) -> Path:
     if os.name == "posix":
         if directory.is_symlink():
             raise OSError("directorio de estado es un symlink: " + str(directory))
+        # exist_ok reusa un dir pre-plantado por un atacante en /tmp compartido:
+        # si no es nuestro (uid distinto) fallamos cerrado en vez de operar sobre
+        # estado ajeno. hook_main traga el OSError -> passthrough (igual que el
+        # caso symlink de arriba): fail-safe, no fail-open peligroso.
+        if directory.stat().st_uid != os.getuid():
+            raise OSError("directorio de estado no es propiedad del usuario: " + str(directory))
         try:
             os.chmod(directory, 0o700)
         except OSError:

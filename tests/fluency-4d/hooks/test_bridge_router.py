@@ -214,6 +214,48 @@ def test_relacion_malformada_no_rompe_inyeccion(run_hook, project):
     assert "Tema relacionado" not in out
 
 
+def test_relacion_rt_no_hasheable_no_rompe(run_hook, project):
+    # `rt` array (no-hasheable) hacia `rt in injected` (set) tirar TypeError,
+    # perdiendo TODA la inyeccion del prompt (contra lo que promete el comentario
+    # de la pasada de relaciones). Ahora se saltea y la inyeccion directa vive.
+    data = {
+        "version": 1,
+        "temas": [
+            {
+                "tema": "testing",
+                "archivo": ".claude/docs/testing.md",
+                "keywords": ["pytest"],
+                "relaciones": [{"verbo": "alimenta_a", "tema": ["no", "hasheable"]}],
+            },
+            {"tema": "release", "archivo": ".claude/docs/release.md", "keywords": ["release"]},
+        ],
+    }
+    write_bridges(project, data=data)
+    out = run_hook(HOOK, payload(project, "rn1", "corramos pytest"))
+    assert "Este proyecto documenta 'testing'" in out
+    assert "Tema relacionado" not in out  # rt invalido -> skip, sin crash
+
+
+def test_relacion_verbo_no_str_frase_neutra(run_hook, project):
+    # `verbo` no-str hacia `VERBOS.get(verbo, ...)` tirar TypeError. Ahora cae a
+    # la frase neutra y el destino valido igual se sugiere.
+    data = {
+        "version": 1,
+        "temas": [
+            {
+                "tema": "testing",
+                "archivo": ".claude/docs/testing.md",
+                "keywords": ["pytest"],
+                "relaciones": [{"verbo": ["no", "str"], "tema": "release"}],
+            },
+            {"tema": "release", "archivo": ".claude/docs/release.md", "keywords": ["release"]},
+        ],
+    }
+    write_bridges(project, data=data)
+    out = run_hook(HOOK, payload(project, "rv1", "corramos pytest"))
+    assert "Tema relacionado: 'testing' se relaciona con 'release'" in out
+
+
 def test_bridges_reales_integridad_referencial():
     from conftest import REPO_ROOT
 

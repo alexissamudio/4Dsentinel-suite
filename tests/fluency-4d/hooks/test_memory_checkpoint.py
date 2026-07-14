@@ -98,6 +98,19 @@ def test_env_basura_cae_a_50(run_hook, project, tmp_path):
     assert "estado-sesion.md" in out
 
 
+def test_save_pct_inf_cae_a_default(run_hook, project, tmp_path):
+    # OverflowError: float("inf") tiene exito pero int(inf) revienta. Antes escapaba
+    # el except (TypeError, ValueError) -> subia a hook_main -> pass-through cada
+    # corrida -> checkpoint DESACTIVADO. Ahora cae a DEFAULT (50, > 0) y en fallback
+    # dispara al cruzar la cadencia por defecto (120k tok).
+    t = make_transcript(tmp_path, 520_000)  # 130k tok >= 120k
+    for i, val in enumerate(("inf", "1e999", "-inf")):
+        out = run_hook(
+            HOOK, fb(project, t, f"inf{i}"), env_extra={"FLUENCY_4D_SAVE_PCT": val}
+        )
+        assert "estado-sesion.md" in out, val
+
+
 def test_intervalo_configurable(run_hook, project, tmp_path):
     # FLUENCY_4D_CHECKPOINT_EVERY_TOKENS gobierna cuando dispara el fallback,
     # INDEPENDIENTE de la ventana de contexto (que el host no expone al hook).

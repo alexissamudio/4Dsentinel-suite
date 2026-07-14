@@ -12,8 +12,12 @@ Importa hook_utils directamente (no por subprocess) para inspeccionar el helper.
 from __future__ import annotations
 
 import io
+import os
 import sys
+import tempfile
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 HOOKS_DIR = REPO_ROOT / "plugins" / "fluency-4d" / "hooks"
@@ -123,3 +127,26 @@ def test_log_debug_silencioso_si_flag_apagado(monkeypatch):
     monkeypatch.setattr(sys, "stderr", fake)
     hook_utils.log_debug("no deberia escribir nada")
     assert fake.buffer.getvalue() == b""
+
+
+# --- SEC-001 (CWE-377): ownership del temp dir en POSIX -----------------------
+
+
+@pytest.mark.skipif(os.name != "posix", reason="ownership de temp dir solo aplica en POSIX")
+def test_state_path_rechaza_dir_de_otro_dueno(monkeypatch, tmp_path):
+    # mkdir(exist_ok) reusa un /tmp/fluency4d pre-plantado por un atacante. Si el
+    # dir no es nuestro (uid distinto), _state_path falla cerrado en vez de operar
+    # sobre estado ajeno. Fingimos ser otro uid: el dir recien creado tiene el uid
+    # real, getuid() mockeado no coincide -> OSError.
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(os, "getuid", lambda: os.stat(tmp_path).st_uid + 1)
+    with pytest.raises(OSError):
+        hook_utils._state_path("sid-deadbeef-ckpt")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="ownership de temp dir solo aplica en POSIX")
+def test_state_path_acepta_dir_propio(monkeypatch, tmp_path):
+    # Sanity: con el uid correcto no lanza y devuelve la ruta esperada.
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+    p = hook_utils._state_path("sid-cafe-ckpt")
+    assert p.name == "sid-cafe-ckpt.json"

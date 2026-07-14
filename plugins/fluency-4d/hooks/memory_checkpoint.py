@@ -103,8 +103,9 @@ def parse_threshold() -> int:
     raw = os.environ.get("FLUENCY_4D_SAVE_PCT", str(DEFAULT_THRESHOLD))
     try:
         return int(float(raw))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         # Un valor basura no debe desactivar el hook para siempre via hook_main.
+        # OverflowError cubre "inf"/"1e999": float() los acepta pero int(inf) revienta.
         log_debug(f"FLUENCY_4D_SAVE_PCT invalido ({raw!r}), usando {DEFAULT_THRESHOLD}")
         return DEFAULT_THRESHOLD
 

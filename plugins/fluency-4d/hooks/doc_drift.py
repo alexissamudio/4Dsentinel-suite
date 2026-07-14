@@ -95,8 +95,14 @@ def main() -> None:
         tema = entry.get("tema")
         archivo = entry.get("archivo")
         rutas = entry.get("rutas")
-        if not tema or not archivo or not isinstance(rutas, list) or not rutas:
-            continue  # tema sin rutas: no se trackea
+        if (
+            not tema
+            or not isinstance(tema, str)
+            or not archivo
+            or not isinstance(rutas, list)
+            or not rutas
+        ):
+            continue  # tema invalido/no-str o sin rutas: no se trackea
         safe_archivo = safe_doc_path(archivo)
         if safe_archivo is None:
             continue  # `archivo` hostil: no se avisa por este tema
