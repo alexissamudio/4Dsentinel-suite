@@ -84,6 +84,13 @@ no vienen de un mal prompt, sino de un mal **reparto***. Las cuatro dimensiones:
 - **`memory_checkpoint`** — al llenarse el contexto, te recuerda guardar el estado de la sesión.
 - **`doc_drift`** — si editaste código de un tema, te avisa por si su doc quedó desactualizado.
 
+**Configuración (variables de entorno, opcionales):**
+- `FLUENCY_4D_SAVE_PCT` — umbral del checkpoint (default `50`; `0` lo desactiva). En modo nativo
+  (cuando el harness expone el % real de contexto) dispara a ese porcentaje.
+- `FLUENCY_4D_CHECKPOINT_EVERY_TOKENS` — cadencia del checkpoint en modo fallback (default `120000`).
+  Como Claude Code no expone la ventana de contexto al hook, el fallback dispara cada N tokens de
+  transcript **independiente del modelo** (no hay que ajustar nada por-modelo).
+
 ---
 
 ## 🛡️ sentinel-agents — los auditores

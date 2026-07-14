@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Suite unificada: marco 4D de AI Fluency (fluency-4d) + agentes de auditoria (sentinel-agents) + memoria de codebase (codebase-memory-mcp) en un solo install",
-    "version": "0.15.0"
+    "version": "1.0.0"
   },
   "plugins": [
     {
