@@ -114,6 +114,73 @@ brief (mismo patrón de handoff que sentinel).
 
 ---
 
+## Ejemplos reales de salida
+
+**Auditoría de redacción** — `sentinel-agents:auditor-de-redaccion` sobre un doc:
+
+```
+=== SENTINEL-REPORT ===
+agent: auditor-de-redaccion
+verdict: NECESITA_REVISION
+findings:
+- id: Gap@README.md:16
+  severity: Important
+  status: CONFIRMED
+  evidence: README.md:16-22 (seccion "Instalar")
+  summary: No hay requisitos previos; el lector externo no sabe que necesita antes de instalar.
+- id: Ambiguedad@README.md:27
+  severity: Important
+  status: CONFIRMED
+  evidence: README.md:27 ("el conductor consulta el grafo y relaya al resto")
+  summary: Jerga sin definir ("conductor", "relaya"); un usuario externo no puede interpretarla.
+uncertainty: desconozco si hay un doc de instalacion separado al que se delegue intencionalmente.
+=== END ===
+```
+
+**Mapa de arquitectura** — `/arquitectura` sobre un full-stack real (~6.500 archivos):
+
+```
+Stack:    Python (Django + DRF) 116 archivos · JavaScript (React) 24
+Rutas:    /api/auth/login · /api/inventario/{productos,compras,maquinaria} · ...
+Hotspots: OrdenViewSet.create (fan-in 106) · Orden.save (54) · DashboardResumenView.get (45)
+Clusters: frontend (160 nodos, cohesion 0.84) · backend-ordenes · backend-caja · ...
+```
+
+**Impacto de una función** — `/rastrear parseNumberInput` (dónde repercute un cambio):
+
+```
+54 llamadores en 2 saltos: StockView, ExpensesView, CashHistoryView, NewOrderView,
+AccountsReceivableView, DashboardView, StatsView, AgendaView, lib/utils, lib/ticketPrint...
+```
+
+## Recetas
+
+**Entender un repo nuevo (sin leerlo entero):**
+```
+/indexar               # construye el grafo del repo
+/arquitectura          # stack, rutas, hotspots, clusters
+/buscar autenticacion  # encontra el codigo de auth en el grafo
+```
+
+**Auditar antes de mergear:**
+```
+/impacto               # que simbolos toca tu diff (git)
+# pedile al conductor: "revisa el diff con code-reviewer y corre validator"
+```
+
+**Aplicar el 4D a una feature:**
+```
+/4d "agregar exportacion a PDF de los reportes"
+# recorre Delegacion -> Descripcion -> Discernimiento -> Diligencia,
+# ofreciendo (opt-in) delegar el gap-analysis en sentinel-agents:advisor
+```
+
+**Calificar un spec/doc antes de actuar sobre el:**
+```
+# pedile: "audita la redaccion de docs/spec-feature.md con auditor-de-redaccion"
+# devuelve verdict + [Gap]/[Ambiguedad] + las preguntas que los cierran
+```
+
 ## Requisitos previos
 
 - **Claude Code** (CLI o app de escritorio).
@@ -147,11 +214,25 @@ flowchart LR
     M -.->|relay: el conductor pasa<br/>resultados del grafo| S
 ```
 
+## Problemas comunes (FAQ)
+
+- **El MCP `codebase-memory` no aparece en `/mcp`.** Corré **`/suite-setup`** (instala el binario
+  firmado) y **reiniciá** Claude Code — el MCP se conecta al arrancar.
+- **No aparecen los agentes `sentinel-agents:*`.** Chequeá `claude plugin list`: si el plugin está
+  `disabled`, corré `claude plugin enable sentinel-agents@4Dsentinel-suite` y reiniciá.
+- **Cambié/actualicé algo y no se refleja.** Los plugins cargan **al arrancar**: tras un
+  `plugin update` o `marketplace update`, reiniciá.
+- **¿Cómo verifico una instalación exitosa?** `/mcp` muestra `codebase-memory` conectado, los
+  agentes `sentinel-agents:*` aparecen en la lista, y `/4d-status` responde.
+- **Desinstalar:** `claude plugin uninstall <plugin>@4Dsentinel-suite` (y opcional
+  `claude plugin marketplace remove 4Dsentinel-suite`).
+
 ## Para contribuir
 
 Monorepo **plano**: cada plugin en `plugins/<nombre>/`, sus tests en `tests/<nombre>/`, los
 scripts de desarrollo (con prefijo por plugin) en `scripts/`. Docs por plugin en
-[`docs/fluency-4d.md`](docs/fluency-4d.md) y [`docs/sentinel-agents.md`](docs/sentinel-agents.md).
+[`docs/fluency-4d.md`](docs/fluency-4d.md), [`docs/sentinel-agents.md`](docs/sentinel-agents.md) y
+[`docs/4dsentinel-memory.md`](docs/4dsentinel-memory.md).
 El CI (`validate.yml`) corre por plugin: JSON válido, versiones sincronizadas, `ruff`, `pytest`, y
 los validadores de contrato (`check_agents.py`, `*_check_skills.py`, `check_kb_blank.py`,
 `check_commands.py`). Regla: **tag/release solo tras CI verde**.
