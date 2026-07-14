@@ -6,7 +6,7 @@ validación tiene dos capas.
 ## 1. Estructural (determinista, CI)
 
 `.github/workflows/validate.yml`:
-- JSON de manifests válido + versión sincronizada (`bump_version.py --check`).
+- JSON de manifests válido + versión sincronizada (`sentinel_bump_version.py --check`).
 - Cada `agents/*.md` tiene frontmatter requerido (`name`, `description`, `tools`
   sin Write/Edit/Bash, `maxTurns`, `model: inherit`) y referencia el contrato.
 - `check_kb_blank.py`: la KB bajo `references/iso-27000/` coincide con

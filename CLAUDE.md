@@ -9,7 +9,7 @@ El plugin vive en `plugins/fluency-4d/`; este repo es su fuente de desarrollo.
 - SIEMPRE ASCII en los `.py`; NUNCA acentos en strings de hooks (cp1252 en Windows).
 - Los hooks NUNCA escriben dentro del proyecto: solo temp o `~/.claude/fluency4d/`.
 - Commits convencionales: subject ≤50 chars; NUNCA atribución de IA.
-- Versión sincronizada en los 3 lugares vía `bump_version.py`; NUNCA a mano.
+- Versión sincronizada en los 3 lugares vía `fluency_bump_version.py`; NUNCA a mano.
 - Tag/release SOLO tras CI verde.
 
 ## Puentes de documentación

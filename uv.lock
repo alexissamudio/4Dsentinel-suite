@@ -3,6 +3,6 @@ revision = 3
 requires-python = ">=3.11"
 
 [[package]]
-name = "ai-fluency-4d-dev"
+name = "4dsentinel-suite-dev"
 version = "0.0.0"
 source = { virtual = "." }

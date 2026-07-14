@@ -79,7 +79,7 @@ Los plugins se copian a la caché de Claude Code: tras cada cambio, corré
 Para releases, sincronizá la versión en los 3 lugares con:
 
 ```
-uv run scripts/bump_version.py --set X.Y.Z
+uv run scripts/fluency_bump_version.py --set X.Y.Z
 ```
 
 ## Créditos

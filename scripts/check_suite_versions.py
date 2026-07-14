@@ -56,7 +56,10 @@ def main() -> int:
 
         plugin_json = (REPO_ROOT / source / ".claude-plugin" / "plugin.json").resolve()
         if not plugin_json.is_file():
-            print(f"ERROR - {name}: no existe el plugin.json de subtree ({plugin_json})", file=sys.stderr)
+            print(
+                f"ERROR - {name}: no existe el plugin.json de subtree ({plugin_json})",
+                file=sys.stderr,
+            )
             fallas += 1
             continue
 
