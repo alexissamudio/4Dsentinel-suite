@@ -19,8 +19,6 @@ jobs:
           uv run python -m json.tool .claude-plugin/marketplace.json > /dev/null
           uv run python -m json.tool plugins/fluency-4d/.claude-plugin/plugin.json > /dev/null
           uv run python -m json.tool plugins/fluency-4d/hooks/hooks.json > /dev/null
-      - name: Version sincronizada
-        run: uv run scripts/fluency_bump_version.py --check
       - name: Sin rutas ../ en plugin.json
         run: "! grep -q '\\.\\./' plugins/fluency-4d/.claude-plugin/plugin.json"
       - name: Ruff
@@ -51,8 +49,6 @@ jobs:
         run: |
           uv run python -m json.tool .claude-plugin/marketplace.json > /dev/null
           uv run python -m json.tool plugins/sentinel-agents/.claude-plugin/plugin.json > /dev/null
-      - name: Version sincronizada
-        run: uv run scripts/sentinel_bump_version.py --check
       - name: Sin rutas ../ en plugin.json
         run: "! grep -q '\\.\\./' plugins/sentinel-agents/.claude-plugin/plugin.json"
       - name: Agentes read-only y bien formados

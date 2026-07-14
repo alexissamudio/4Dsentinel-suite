@@ -203,6 +203,26 @@ Después: reiniciá Claude Code, corré **`/suite-setup`** y reiniciá otra vez.
 **Verificar:** `/mcp` muestra `codebase-memory` conectado y aparecen los agentes `sentinel-agents:*`.
 *(No hay batch install: un `marketplace add` + un `install` por plugin.)*
 
+## Primeros pasos (recién instalado)
+
+El camino mínimo para ver la suite funcionando desde cero:
+
+1. **Reiniciá** Claude Code — los plugins cargan al arrancar.
+2. **Activá la memoria (una sola vez):** corré **`/suite-setup`** (instala el binario del grafo) y
+   **reiniciá** de nuevo. Confirmá con **`/mcp`** que `codebase-memory` figura *conectado*.
+3. **Probá el marco 4D:** **`/4d "una tarea tuya"`** — te guía por Delegación → Descripción →
+   Discernimiento → Diligencia. O **`/4d-status`** para ver el estado 4D en un proyecto.
+4. **Indexá un repo (ideal uno grande):** abrí Claude Code en ese repo y corré **`/indexar`**. Después:
+   - **`/arquitectura`** — el mapa del sistema (stack, rutas, hotspots).
+   - **`/buscar <algo>`** — encontrá código en el grafo (ej. `/buscar login`).
+   - **`/rastrear <función>`** — quién la llama e impacto de un cambio.
+5. **Pedí una auditoría:** *"revisá este diff con `code-reviewer`"*, *"auditá `auth.py` con
+   `security-auditor`"*, o *"auditá la redacción de este spec con `auditor-de-redaccion`"*.
+
+> **Cómo se invoca cada cosa:** los **`/comandos`** son de fluency-4d y de memory (los tipeás).
+> Los **auditores** (`code-reviewer`, `security-auditor`, `auditor-de-redaccion`…) se los pedís al
+> conductor en lenguaje natural — no llevan `/`.
+
 ## Cómo se conectan
 
 ```mermaid
