@@ -102,7 +102,8 @@ código con tree-sitter → funciones, clases, llamadas, rutas HTTP, imports) y 
 **estructuralmente**, en vez de `grep`/leer archivo por archivo. Ideal en repos grandes, donde
 "¿quién llama a esta función?" o "¿qué toca este diff?" con grep es lento y ruidoso.
 
-**Flujo:** `/suite-setup` (una vez, instala el binario firmado) → `/indexar` un repo → consultás.
+**Flujo:** `/suite-setup` (una vez, instala el binario firmado y **registra el MCP** con ruta
+absoluta verificada) → `/indexar` un repo → consultás.
 
 | Comando | Qué hace | Ejemplo |
 |---|---|---|
@@ -242,7 +243,8 @@ flowchart LR
 ## Problemas comunes (FAQ)
 
 - **El MCP `codebase-memory` no aparece en `/mcp`.** Corré **`/suite-setup`** (instala el binario
-  firmado) y **reiniciá** Claude Code — el MCP se conecta al arrancar.
+  firmado y **registra el MCP** con `claude mcp add`, ruta absoluta verificada) y **reiniciá**
+  Claude Code — el MCP se conecta al arrancar.
 - **No aparecen los agentes `sentinel-agents:*`.** Chequeá `claude plugin list`: si el plugin está
   `disabled`, corré `claude plugin enable sentinel-agents@4Dsentinel-suite` y reiniciá.
 - **Cambié/actualicé algo y no se refleja.** Los plugins cargan **al arrancar**: tras un

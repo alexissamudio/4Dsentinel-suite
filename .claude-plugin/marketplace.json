@@ -64,8 +64,8 @@
     {
       "name": "4dsentinel-memory",
       "source": "./plugins/memory",
-      "description": "Cablea codebase-memory-mcp (grafo de codebase, ~99% menos tokens en repos grandes) + comandos en espanol (/indexar, /arquitectura, /buscar, /rastrear, /impacto, /proyectos); el skill /suite-setup instala el binario firmado",
-      "version": "0.3.0",
+      "description": "Cablea codebase-memory-mcp (grafo de codebase, ~99% menos tokens en repos grandes) + comandos en espanol (/indexar, /arquitectura, /buscar, /rastrear, /impacto, /proyectos); el skill /suite-setup instala el binario firmado y registra el MCP con ruta absoluta",
+      "version": "0.4.0",
       "author": {
         "name": "Alexis Samudio"
       },

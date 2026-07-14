@@ -18,6 +18,7 @@ scalar, exit codes, mensajes OK/ERROR).
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -25,6 +26,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent  # plugins/memory
 COMMANDS_DIR = REPO_ROOT / "commands"
 SKILLS_DIR = REPO_ROOT / "skills"
+PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
 
 
 def frontmatter(text: str) -> dict[str, str]:
@@ -51,6 +53,45 @@ def check_command(path: Path) -> list[str]:
 def check_skill(path: Path) -> list[str]:
     fm = frontmatter(path.read_text(encoding="utf-8"))
     return [] if "description" in fm else ["falta frontmatter 'description'"]
+
+
+def _command_is_safe(command: str) -> bool:
+    """True si el command NO es secuestrable por cwd/PATH-hijack (CWE-427).
+
+    Seguro = ruta absoluta POSIX (/...), ruta absoluta Windows (X:...) o
+    variable expandida por Claude Code (${...}). Un command pelado
+    (resuelto por PATH) NO es seguro: en Windows el cwd precede al PATH,
+    asi que un exe hostil plantado en el repo se auto-ejecutaria.
+    """
+    return bool(re.match(r"^(/|[A-Za-z]:|\$\{)", command))
+
+
+def check_plugin_json(path: Path) -> list[str]:
+    """El plugin.json de memory NO debe declarar un mcpServers con command
+    resuelto por PATH. Regla anti-regresion del fix CWE-427: el registro del
+    MCP lo hace /suite-setup con `claude mcp add` y ruta absoluta verificada."""
+    if not path.exists():
+        return [f"no existe {path.name}"]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        return [f"JSON invalido: {e}"]
+
+    servers = data.get("mcpServers")
+    if not servers:
+        return []  # sin mcpServers = el registro es via /suite-setup (correcto)
+
+    errs = []
+    for name, cfg in servers.items():
+        command = (cfg or {}).get("command", "")
+        if not _command_is_safe(command):
+            errs.append(
+                f"mcpServers['{name}'].command = {command!r} es resoluble por PATH "
+                f"(cwd/PATH-hijack, CWE-427). Sacalo del plugin.json: el MCP se "
+                f"registra en /suite-setup con `claude mcp add` y ruta absoluta. "
+                f"Si tiene que quedar, usa ruta absoluta (/... o X:...) o ${{...}}."
+            )
+    return errs
 
 
 def main() -> int:
@@ -80,6 +121,15 @@ def main() -> int:
                 print(f"  - {e}", file=sys.stderr)
         else:
             print(f"OK - {rel}")
+
+    plugin_errs = check_plugin_json(PLUGIN_JSON)
+    if plugin_errs:
+        fallas += 1
+        print("ERROR - .claude-plugin/plugin.json:", file=sys.stderr)
+        for e in plugin_errs:
+            print(f"  - {e}", file=sys.stderr)
+    else:
+        print("OK - .claude-plugin/plugin.json (sin mcpServers PATH-resueltos)")
 
     return 1 if fallas else 0
 

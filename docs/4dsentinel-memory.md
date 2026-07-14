@@ -1,14 +1,18 @@
 # 4dsentinel-memory
 
-Plugin que **cablea el MCP `codebase-memory`** (grafo de conocimiento del codebase) para la
-sesión, más comandos en español que lo envuelven. No vendoriza el binario: lo declara vía
-`mcpServers` y `/suite-setup` lo instala firmado.
+Plugin que aporta el MCP **`codebase-memory`** (grafo de conocimiento del codebase) para la
+sesión, más comandos en español que lo envuelven. No vendoriza el binario ni lo declara en
+`plugin.json`: **`/suite-setup` instala el binario firmado y registra el MCP** con `claude mcp add`
+(ruta absoluta verificada). El plugin **no declara `mcpServers`** a propósito: un command pelado
+resuelto por PATH permitiría un cwd/PATH-hijack en Windows (CWE-427).
 
 ## Cómo funciona
 
 1. **`/suite-setup`** instala el binario externo [`codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp)
-   (C, MIT) de forma verificada (ver "Seguridad" abajo) y lo deja en el PATH. El `plugin.json`
-   ya declara el MCP server (`command: codebase-memory-mcp`), así que al reiniciar conecta solo.
+   (C, MIT) de forma verificada (ver "Seguridad" abajo) y **registra el MCP** con
+   `claude mcp add --scope user codebase-memory -- <ruta-absoluta-verificada>`. El `plugin.json`
+   **no** declara el MCP (evita el cwd/PATH-hijack de un command resuelto por PATH); tras
+   reiniciar, el MCP registrado conecta.
 2. **`/indexar`** parsea el repo con tree-sitter → un **grafo**: nodos (funciones, clases, rutas,
    archivos) y aristas (`CALLS`, `IMPORTS`, `HTTP_CALLS`, `DEFINES`…). Persiste el artefacto en
    `.codebase-memory/graph.db.zst` **dentro del repo** (compartible con el equipo).
@@ -32,7 +36,7 @@ El MCP expone 14 tools en total (incluyendo `query_graph` tipo Cypher, `get_code
 
 - El **conductor** (agente principal) consulta el grafo y razona sobre los resultados, en vez de
   hacer *fan-out* de subagentes que leen archivos.
-- Los **agentes de plugin NO ven `mcpServers`** (limitación de Claude Code): por eso sentinel
+- Los **agentes de plugin NO ven el MCP** (limitación de Claude Code): por eso sentinel
   usa el grafo **por relay** — el conductor le pasa los resultados en el brief (mismo patrón que
   el handoff `SENTINEL-REPORT`).
 - Cargá las tools del MCP de forma **diferida** (se resuelven bajo demanda) para no inflar el
@@ -48,7 +52,8 @@ deben pasar, en orden, antes de colocarlo:
    (firma sigstore + SLSA L3). Si falla → **abortar**.
 2. **Checksum SHA-256** contra el `checksums.txt` del tag pinneado. Si no coincide → **abortar**.
 
-Se pinnea un **tag concreto** (no `latest`) para que la verificación sea reproducible. Preferir
-registrar el MCP con **ruta absoluta** al `.exe` verificado (evita PATH-hijack). No se corre el
+Se pinnea un **tag concreto** (no `latest`) para que la verificación sea reproducible. El MCP se
+registra **siempre con ruta absoluta** al `.exe` verificado (nunca por resolución PATH; evita el
+cwd/PATH-hijack, CWE-427). No se corre el
 `install.ps1` completo (que agregaría hooks no deseados). Detalle en
 `plugins/memory/skills/suite-setup/SKILL.md`.

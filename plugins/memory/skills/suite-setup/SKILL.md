@@ -1,14 +1,17 @@
 ---
 name: suite-setup
-description: Instala el binario de codebase-memory-mcp (grafo de codebase) que este plugin cablea via mcpServers. Triggers on '/suite-setup', 'instalar codebase-memory', 'setup de la suite'.
+description: Instala el binario de codebase-memory-mcp (grafo de codebase) y REGISTRA el MCP con ruta absoluta verificada (claude mcp add --scope user). El plugin ya NO declara el MCP. Triggers on '/suite-setup', 'instalar codebase-memory', 'setup de la suite'.
 ---
 
-# /suite-setup — instalar el binario de codebase-memory-mcp
+# /suite-setup — instalar y registrar codebase-memory-mcp
 
-Este plugin (`4dsentinel-memory`) YA declara el MCP server `codebase-memory` en su
-`plugin.json` (`mcpServers`, command `codebase-memory-mcp`). Lo unico que falta para que
-conecte es tener el **binario en el PATH**. Este skill lo instala de forma **minima y limpia**
-(sin los auto-hooks del install.ps1 oficial, que inyectan en cada grep/glob).
+Este plugin (`4dsentinel-memory`) **YA NO declara el MCP server** en su `plugin.json`
+(no hay `mcpServers`): declararlo con un command pelado (`codebase-memory-mcp`) resuelto por
+PATH permite un **cwd/PATH-hijack** en Windows (el cwd precede al PATH -> un exe hostil plantado
+en el repo se auto-ejecuta al arrancar el MCP; CWE-427). Por eso el registro del MCP es
+**OBLIGATORIO y manual**, con `claude mcp add` y **ruta absoluta** al exe verificado (ver paso 3).
+Este skill instala el binario de forma **minima y limpia** (sin los auto-hooks del install.ps1
+oficial, que inyectan en cada grep/glob) y luego registra el MCP.
 
 ## Antes de instalar
 - Es un binario externo (DeusData/codebase-memory-mcp, MIT, C). Postura de seguridad buena:
@@ -34,14 +37,15 @@ conecte es tener el **binario en el PATH**. Este skill lo instala de forma **min
    - **Si cualquiera de las dos falla: ABORTAR. No coloques ni ejecutes el binario.**
      No hay fallback ni excepcion; un binario que no atesta o no matchea el checksum
      se descarta.
-3. **Solo si (1) Y (2) pasaron**, colocar el ejecutable verificado. Preferentemente
-   registralo con **ruta absoluta al `.exe` verificado**, no por resolucion via PATH
-   (evita PATH-hijack: que un `codebase-memory-mcp` malicioso mas arriba en el PATH se
-   ejecute en su lugar):
+3. **Solo si (1) Y (2) pasaron**, colocar el ejecutable verificado en algun dir del usuario
+   (ej. `~/.local/bin` o `%LOCALAPPDATA%`; NO hace falta que este en el PATH). Ahora
+   **REGISTRA el MCP** — este paso es **OBLIGATORIO**: el plugin ya NO declara `mcpServers`,
+   asi que sin este `claude mcp add` el MCP no existe. El registro va con **ruta ABSOLUTA**
+   al `.exe` verificado, **NUNCA** por resolucion via PATH (una ruta absoluta no puede ser
+   secuestrada por un `codebase-memory-mcp` hostil plantado en el cwd o mas arriba en el PATH
+   — CWE-427):
    `claude mcp add --scope user codebase-memory -- <ruta-absoluta-al-exe-verificado>`
-   (o ajustar `plugins/memory/.claude-plugin/plugin.json` con esa ruta absoluta).
-   Solo si preferis resolucion por PATH, copialo a un dir del PATH (ej. `~/.local/bin`).
-   VERIFICAR: `codebase-memory-mcp --version` (o `& "<ruta-absoluta>" --version`).
+   VERIFICAR: `& "<ruta-absoluta>" --version`.
 4. **Reiniciar Claude Code** (el MCP se conecta al arrancar) y confirmar con `/mcp` que
    `codebase-memory` aparece conectado.
 5. En cada repo grande: pedirle al MCP `Index this project` (tool `index_repository`).
@@ -49,6 +53,6 @@ conecte es tener el **binario en el PATH**. Este skill lo instala de forma **min
 ## Uso (patron de la suite, domain-agnostic)
 - El **conductor (main)** consulta el grafo: `search_graph`, `trace_path` (call-graph),
   `detect_changes` (git diff -> simbolos), en vez de fan-out de Explore que lee archivos.
-- Los **agentes sentinel** NO ven mcpServers (los agentes de plugin los ignoran) -> el conductor
+- Los **agentes sentinel** NO ven el MCP (los agentes de plugin no acceden a servidores MCP) -> el conductor
   les **relaya** los resultados del grafo en el brief (mismo patron que el handoff SENTINEL-REPORT).
 - Cargar las tools del MCP de forma **diferida** (ToolSearch) para no inflar el contexto con 14 schemas.
