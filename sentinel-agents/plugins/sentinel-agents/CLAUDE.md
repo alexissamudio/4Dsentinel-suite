@@ -16,7 +16,7 @@ calibrada, auto-verificación adversarial y evidencia dura. **9 auditores read-o
 - **`validator`** — corre checks (type/lint/test/build) con timeouts; ejecutor con Bash.
 - **`debugger`** — reproduce y diagnostica una falla vía Bash (con timeouts); nunca edita.
 
-Ambos cumplen `references/agent-contract.md`. Al invocar `compliance-auditor`,
+Todos cumplen `references/agent-contract.md`. Al invocar `compliance-auditor`,
 pasale la ruta absoluta de `references/iso-27000/` si la conocés (ver §7 del
 contrato); si no, el agente la ubica por Glob.
 
