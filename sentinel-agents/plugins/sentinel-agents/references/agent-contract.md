@@ -171,3 +171,24 @@ ubica así, en orden:
    carpeta como raíz del KB.
 3. Si no la encontrás, reportá `INCOMPLETE` explicando que no pudiste ubicar el KB
    (no inventes controles de memoria).
+
+## 8. Ejecutores (validator y debugger) — detección de stack y timeouts
+
+`validator` y `debugger` son los ÚNICOS agentes con Bash (allowlist cerrada del CI,
+§Modelo de permisos). Ambos comparten estas dos reglas ANTES y DURANTE cada
+ejecución; sus fichas las citan en vez de repetirlas.
+
+**Detección de stack (antes de correr nada).** Detectá el stack REAL del proyecto
+desde los marcadores presentes (`package.json`, `pyproject.toml`, `Makefile`,
+`go.mod`, `Cargo.toml`, `pom.xml`, `composer.json`, ...): gestor de paquetes y
+runner de tests. **Usá las herramientas que YA existen en el proyecto; NO
+introduzcas herramientas nuevas.** Si no encontrás configuración de una etapa
+(p. ej. no hay type-checker), NO la inventes: decilo y no afirmes su resultado.
+
+**Timeout en CADA ejecución.** `maxTurns` cuenta turnos, no wall-clock — un comando
+colgado bloquea igual. Envolvé con `timeout <N>` (GNU coreutils) si está; si no, usá
+el flag de timeout de la propia herramienta (p. ej. `pytest-timeout`,
+`--test-timeout`) o `perl -e 'alarm(N); exec @ARGV' -- <cmd>`. En Windows/macOS
+`timeout` puede no existir: no asumas que está. NUNCA ejecutés sin timeout. Ejecutar
+tests/probes SÍ puede dejar side-effects legítimos (artefactos, caches): eso NO es
+editar.

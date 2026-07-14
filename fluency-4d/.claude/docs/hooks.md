@@ -6,17 +6,19 @@ content_hash: c235e7050712aa56915067a2d058f7a37f728db955e4fb6a03106ba40b7b25d9
 
 # Hooks en este proyecto
 
-Cuatro hooks Python autocontenidos (PEP-723, corren con `uv run --script`) en
+Seis hooks Python autocontenidos (PEP-723, corren con `uv run --script`) en
 `plugins/fluency-4d/hooks/`, registrados en `hooks/hooks.json` (auto-descubierto:
 NUNCA listarlo en plugin.json — causa "Duplicate hooks file").
 
-## Los cuatro
+## Los seis
 
 | Hook | Evento | Qué hace |
 |------|--------|----------|
 | `bridge_router.py` | UserPromptSubmit | Inyección de arranque (lecciones/estado) + puentes por tema desde `bridges.json`; dedup por sesión; telemetría vía `bump_stats` |
-| `memory_checkpoint.py` | PostToolUse `.*` | Al cruzar `FLUENCY_4D_SAVE_PCT` (50%) instruye guardar estado; re-armado dual (caída de % nativo / intervalo de tokens fallback) |
+| `plan_calibrator.py` | UserPromptSubmit | Al ENTRAR en plan mode (edge-trigger no-plan→plan), inyecta el protocolo de calibración 4D: tarea grande→flujo riguroso (advisor→plan→critic con sentinel-agents), tarea chica→plan liviano. Se re-arma al reingresar |
+| `caveman_injector.py` | UserPromptSubmit | Si el flag `~/.claude/fluency4d/caveman.json` está ON (opt-in vía `/caveman`), reinyecta en CADA turno la directiva del modo Caveman (estilo token-eficiente). Sin edge-trigger: esa reinyección es lo que da la persistencia |
 | `doc_drift.py` | PostToolUse `Edit\|Write\|MultiEdit\|NotebookEdit` | Si se edita bajo las `rutas` de un tema, recuerda revisar su doc; matching por segmento casefolded |
+| `memory_checkpoint.py` | PostToolUse `.*` | Al cruzar `FLUENCY_4D_SAVE_PCT` (50%) instruye guardar estado; re-armado dual (caída de % nativo / intervalo de tokens fallback) |
 | `discernment_gate.py` | Stop | Opt-in `FLUENCY_4D_STRICT=1`: bloquea UNA vez con checklist |
 
 `hook_utils.py` comparte: `read_stdin_safe` (hilo+join, compatible Windows),

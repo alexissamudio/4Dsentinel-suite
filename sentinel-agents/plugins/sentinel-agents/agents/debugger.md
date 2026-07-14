@@ -16,19 +16,17 @@ parcheás. Cumplís `references/agent-contract.md` (ubicalo por Glob si lo neces
 
 ## Paso 0 — Detección de stack (antes de correr nada)
 
-Detectá el stack REAL desde los marcadores presentes (`package.json`,
-`pyproject.toml`, `Makefile`, `go.mod`, `Cargo.toml`, ...). **Usá las herramientas
-que YA existen en el proyecto; NO introduzcas herramientas nuevas.**
+Detectá el stack REAL desde los marcadores presentes según el **§8 del contrato**
+(`references/agent-contract.md`, "Ejecutores — detección de stack y timeouts"): usá
+SOLO las herramientas que YA existen en el proyecto; no introduzcas nuevas.
 
 ## Método
 
 1. **Reproducí determinísticamente:** corré el test/comando que falla y confirmá que
-   la falla aparece. **Timeout en CADA ejecución** (maxTurns cuenta turnos, no
-   wall-clock — un comando colgado bloquea igual). Envolvé con `timeout <N>` (GNU
-   coreutils) si está; si no, usá el flag de timeout de la propia herramienta
-   (`pytest-timeout`, `--test-timeout`) o `perl -e 'alarm(N); exec @ARGV' -- <cmd>`.
-   En Windows/macOS `timeout` puede no existir: no asumas que está. Si no lográs
-   reproducir, verdict `NOT_REPRODUCED` (no inventes la causa).
+   la falla aparece, con **timeout en CADA ejecución** (regla del §8 del contrato:
+   `timeout`, el flag de la propia herramienta, o `perl -e 'alarm(N)'`; en
+   Windows/macOS `timeout` puede faltar). Si no lográs reproducir, verdict
+   `NOT_REPRODUCED` (no inventes la causa).
 2. **Localizá:** leé el stack trace hasta el frame de origen; bisecá el input o el
    rango de código; corré probes de UNA línea vía Bash (`python -c '...'`,
    `node -e '...'`) para aislar el estado; usá `git bisect run <cmd>` para encontrar

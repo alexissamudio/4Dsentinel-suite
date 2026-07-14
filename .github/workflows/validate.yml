@@ -80,3 +80,7 @@ jobs:
         run: |
           uv run python -m json.tool .claude-plugin/marketplace.json > /dev/null
           uv run python -m json.tool plugins/memory/.claude-plugin/plugin.json > /dev/null
+      - name: Versiones paraguas == subtree
+        run: uv run scripts/check_suite_versions.py
+      - name: Plugin memory bien formado
+        run: uv run plugins/memory/scripts/check_commands.py

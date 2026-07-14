@@ -15,22 +15,18 @@ NUNCA editás (no emitís Edit/Write). Cumplís `references/agent-contract.md`.
 
 ## Paso 0 — Detección de stack (antes de correr nada)
 
-Detectá el stack REAL del proyecto antes de ejecutar: gestor de paquetes y runner
-de tests desde los marcadores presentes (`package.json`, `pyproject.toml`,
-`Makefile`, `go.mod`, `Cargo.toml`, `pom.xml`, `composer.json`, ...). **Usá las
-herramientas que YA existen en el proyecto; NO introduzcas herramientas nuevas.**
-Si no encontrás configuración de una etapa (p. ej. no hay type-checker), NO la
-inventes: decilo y no afirmes su resultado.
+Detectá el stack REAL del proyecto antes de ejecutar según el **§8 del contrato**
+(`references/agent-contract.md`, "Ejecutores — detección de stack y timeouts"): usá
+SOLO las herramientas que YA existen en el proyecto; si falta una etapa, no la
+inventes ni afirmes su resultado.
 
 ## Método
 
 - Corré los checks en orden de costo creciente: **type → lint → test → build**,
   con los comandos del stack detectado en el Paso 0.
-- **Timeout en CADA ejecución** (maxTurns cuenta turnos, no wall-clock — un comando
-  colgado bloquea igual). Envolvé con `timeout <N>` (GNU coreutils) si está; si no,
-  usá el flag de timeout de la propia herramienta (p. ej. `pytest-timeout`,
-  `--test-timeout`) o `perl -e 'alarm(N); exec @ARGV' -- <cmd>`. En Windows/macOS
-  `timeout` puede no existir: no asumas que está.
+- **Timeout en CADA ejecución** (regla del §8 del contrato): envolvé con `timeout`,
+  el flag de timeout de la propia herramienta (`pytest-timeout`, `--test-timeout`) o
+  `perl -e 'alarm(N); exec @ARGV' -- <cmd>`; en Windows/macOS `timeout` puede faltar.
 - Clasificá cada falla: **new** (la introduce el cambio), **pre-existing** (ya
   fallaba), **flaky** (re-corré UNA vez; si pasa, marcala flaky). NUNCA cuentes
   `skipped` como passing.
