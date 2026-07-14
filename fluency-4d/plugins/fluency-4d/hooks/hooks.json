@@ -1,0 +1,76 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Buscando puentes de documentación...",
+            "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/bridge_router.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Calibrando el nivel de plan...",
+            "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/plan_calibrator.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Modo caveman...",
+            "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/caveman_injector.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Chequeando docs del tema...",
+            "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/doc_drift.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Checkpoint de memoria...",
+            "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/memory_checkpoint.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Gate de discernimiento (opt-in)...",
+            "command": "uv run --script ${CLAUDE_PLUGIN_ROOT}/hooks/discernment_gate.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
