@@ -1,0 +1,82 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  fluency-4d:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fluency-4d
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: JSON de manifests validos
+        run: |
+          uv run python -m json.tool .claude-plugin/marketplace.json > /dev/null
+          uv run python -m json.tool plugins/fluency-4d/.claude-plugin/plugin.json > /dev/null
+          uv run python -m json.tool plugins/fluency-4d/hooks/hooks.json > /dev/null
+      - name: Version sincronizada
+        run: uv run scripts/bump_version.py --check
+      - name: Sin rutas ../ en plugin.json
+        run: "! grep -q '\\.\\./' plugins/fluency-4d/.claude-plugin/plugin.json"
+      - name: Ruff
+        run: uvx ruff check plugins/fluency-4d/hooks/ scripts/ tests/
+      - name: Pytest
+        run: uv run --with pytest pytest tests/ -q
+
+  fluency-4d-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: fluency-4d
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Pytest (Windows)
+        run: uv run --with pytest pytest tests/ -q
+
+  sentinel-agents:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sentinel-agents
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: JSON de manifests validos
+        run: |
+          uv run python -m json.tool .claude-plugin/marketplace.json > /dev/null
+          uv run python -m json.tool plugins/sentinel-agents/.claude-plugin/plugin.json > /dev/null
+      - name: Version sincronizada
+        run: uv run scripts/bump_version.py --check
+      - name: Sin rutas ../ en plugin.json
+        run: "! grep -q '\\.\\./' plugins/sentinel-agents/.claude-plugin/plugin.json"
+      - name: Agentes read-only y bien formados
+        run: uv run scripts/check_agents.py
+      - name: Skills bien formados
+        run: uv run scripts/check_skills.py
+      - name: KB en blanco (guarda anti-write-back)
+        run: uv run scripts/check_kb_blank.py
+
+  suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: JSON del marketplace paraguas + plugin memory
+        run: |
+          uv run python -m json.tool .claude-plugin/marketplace.json > /dev/null
+          uv run python -m json.tool plugins/memory/.claude-plugin/plugin.json > /dev/null
