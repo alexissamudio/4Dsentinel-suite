@@ -1,0 +1,30 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: JSON de manifests válidos
+        run: |
+          uv run python -m json.tool .claude-plugin/marketplace.json > /dev/null
+          uv run python -m json.tool plugins/sentinel-agents/.claude-plugin/plugin.json > /dev/null
+      - name: Versión sincronizada
+        run: uv run scripts/bump_version.py --check
+      - name: Sin rutas ../ en plugin.json
+        run: "! grep -q '\\.\\./' plugins/sentinel-agents/.claude-plugin/plugin.json"
+      - name: Agentes read-only y bien formados
+        run: uv run scripts/check_agents.py
+      - name: Skills bien formados
+        run: uv run scripts/check_skills.py
+      - name: KB en blanco (guarda anti-write-back)
+        run: uv run scripts/check_kb_blank.py
