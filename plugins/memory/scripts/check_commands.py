@@ -66,14 +66,15 @@ def check_skill(path: Path) -> list[str]:
 def _command_is_safe(command: str) -> bool:
     """True si el command NO es secuestrable por cwd/PATH-hijack (CWE-427).
 
-    Seguro = ruta absoluta POSIX (/...), ruta absoluta Windows (X:\\ o X:/) o
-    variable expandida por Claude Code (${...}). Un command pelado
-    (resuelto por PATH) NO es seguro: en Windows el cwd precede al PATH,
-    asi que un exe hostil plantado en el repo se auto-ejecutaria. Se exige
-    separador tras la unidad: `C:foo` (sin barra) es DRIVE-RELATIVE en Windows
-    (resuelve contra el cwd de la unidad, hijackeable), no absoluto.
+    Seguro = ruta absoluta POSIX (/...), ruta absoluta Windows (X:\\ o X:/),
+    UNC (\\\\host\\share) o variable expandida por Claude Code (${...}). Un
+    command pelado (resuelto por PATH) NO es seguro: en Windows el cwd precede
+    al PATH, asi que un exe hostil plantado en el repo se auto-ejecutaria. Se
+    exige separador tras la unidad: `C:foo` (sin barra) es DRIVE-RELATIVE en
+    Windows (resuelve contra el cwd de la unidad, hijackeable), no absoluto; un
+    solo backslash (`\\foo`, raiz-relativo de la unidad actual) tampoco es seguro.
     """
-    return bool(re.match(r"^(/|[A-Za-z]:[\\/]|\$\{)", command))
+    return bool(re.match(r"^(/|\\\\|[A-Za-z]:[\\/]|\$\{)", command))
 
 
 def check_plugin_json(path: Path) -> list[str]:
@@ -93,7 +94,13 @@ def check_plugin_json(path: Path) -> list[str]:
 
     errs = []
     for name, cfg in servers.items():
-        command = (cfg or {}).get("command", "")
+        if not isinstance(cfg, dict):
+            errs.append(f"mcpServers['{name}'] no es un objeto")
+            continue
+        command = cfg.get("command", "")
+        if not isinstance(command, str):
+            errs.append(f"mcpServers['{name}'].command no es un string")
+            continue
         if not _command_is_safe(command):
             errs.append(
                 f"mcpServers['{name}'].command = {command!r} es resoluble por PATH "

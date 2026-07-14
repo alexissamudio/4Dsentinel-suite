@@ -16,6 +16,10 @@ Ofrecé (no indexes ni consultes por tu cuenta cuando implica escribir); el huma
 Dos aclaraciones operativas:
 
 - Los agentes de plugin (sentinel-agents, subagentes) **NO ven el MCP**: el
-  conductor consulta el grafo y **relaya** el resultado al resto.
+  conductor consulta el grafo (`search_graph`/`trace_path`/`get_architecture`)
+  UNA vez y **relaya un brief conciso** al resto. Esto AHORRA TOKENS: sin el
+  brief, cada agente re-explora los mismos archivos a mano (fan-out caro); con
+  el brief, trabajan sobre el resultado del grafo. Consultá una vez, relayá a
+  todos.
 - Indexar **escribe `.codebase-memory/` en el repo** (toca el disco del usuario):
   **ofrecé, no indexes sin confirmar.** Declinar no debe tener fricción.

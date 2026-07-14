@@ -79,3 +79,38 @@ def test_cubre_los_tres_plugins():
     # El guardrail anti-CWE-427 debe recorrer los 3 plugins, no solo memory.
     nombres = {p.parent.parent.name for p in cc._plugin_jsons()}
     assert {"fluency-4d", "sentinel-agents", "memory"} <= nombres, nombres
+
+
+def test_command_mal_tipado_no_crashea(tmp_path):
+    # BH-01: un mcpServers con command no-str o cfg no-dict NO debe tirar
+    # TypeError/AttributeError (solo se atrapaba JSONDecodeError) -> el script
+    # entero reventaba. Ahora falla cerrado con mensaje limpio.
+    casos = [
+        {"mcpServers": {"cbm": {"command": None}}},
+        {"mcpServers": {"cbm": {"command": ["a", "b"]}}},
+        {"mcpServers": {"cbm": {"command": 123}}},
+        {"mcpServers": {"cbm": "no soy un objeto"}},
+    ]
+    for data in casos:
+        path = _write_plugin_json(tmp_path, data)
+        errs = cc.check_plugin_json(path)  # no debe lanzar
+        assert errs, data  # reporta el problema, no crashea
+
+
+def test_command_unc_absoluto_ok(tmp_path):
+    # BH-02: una ruta UNC absoluta (\\host\share\x.exe) es absoluta y no
+    # hijackeable -> debe aceptarse (antes se rechazaba: falso positivo).
+    path = _write_plugin_json(
+        tmp_path, {"mcpServers": {"cbm": {"command": "\\\\host\\share\\cbm.exe"}}}
+    )
+    assert cc.check_plugin_json(path) == []
+
+
+def test_command_un_solo_backslash_falla(tmp_path):
+    # Un solo backslash (\foo) es raiz-relativo de la unidad actual (hijackeable)
+    # -> sigue rechazado; el fix UNC solo abre `\\` (dos).
+    path = _write_plugin_json(
+        tmp_path, {"mcpServers": {"cbm": {"command": "\\foo\\cbm.exe"}}}
+    )
+    errs = cc.check_plugin_json(path)
+    assert any("CWE-427" in e or "PATH" in e for e in errs), errs
