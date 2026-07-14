@@ -41,7 +41,8 @@ El MCP expone 14 tools en total (incluyendo `query_graph` tipo Cypher, `get_code
   el handoff `SENTINEL-REPORT`).
 - Cargá las tools del MCP de forma **diferida** (se resuelven bajo demanda) para no inflar el
   contexto con los 14 schemas.
-- Aporta valor real en **codebases grandes**; en repos chicos, `grep`/`Explore` alcanzan.
+- Aporta valor real en **codebases grandes** — como orientación, del orden de **cientos de
+  archivos / miles de símbolos** para arriba; en repos chicos, `grep`/`Explore` alcanzan.
 
 ## Seguridad del binario (`/suite-setup`)
 
@@ -49,7 +50,8 @@ El binario es externo, así que la instalación es **verificada y secuencial** �
 deben pasar, en orden, antes de colocarlo:
 
 1. **Atestación de procedencia:** `gh attestation verify <exe> --repo DeusData/codebase-memory-mcp`
-   (firma sigstore + SLSA L3). Si falla → **abortar**.
+   (firma sigstore + SLSA L3). Requiere **`gh` autenticado** (`gh auth login`): el comando
+   consulta la API de GitHub y falla sin sesión. Si la verificación falla → **abortar**.
 2. **Checksum SHA-256** contra el `checksums.txt` del tag pinneado. Si no coincide → **abortar**.
 
 Se pinnea un **tag concreto** (no `latest`) para que la verificación sea reproducible. El MCP se

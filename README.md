@@ -35,6 +35,26 @@ delega la auditoría en agentes especializados; consulta el grafo. Vos conservá
 > confirmás. Los `/comandos` quedan para cuando preferís invocarlos directo. *Ofrece + confirma,
 > nunca actúa solo.*
 
+**Glosario (dos términos que se repiten):**
+- **Conductor** — la **sesión principal de Claude Code**, el agente que orquesta: planifica,
+  delega en agentes/auditores y verifica. Es *quien* tipeás vos y *quien* consulta el grafo.
+- **Relayar** — pasar el resultado de un agente a otro **dentro del brief**. Como los auditores
+  no ven el MCP (ni el output de otros agentes), el conductor les **relaya** los datos que
+  necesitan (p. ej. el mapa del grafo o un `SENTINEL-REPORT` previo) escribiéndolos en el pedido.
+
+## Contenido
+
+- [¿Qué es? ¿Para quién?](#qué-es-para-quién)
+- [fluency-4d — el marco 4D](#-fluency-4d--el-marco-4d)
+- [sentinel-agents — los auditores](#-sentinel-agents--los-auditores)
+- [4dsentinel-memory — el grafo del codebase](#-4dsentinel-memory--el-grafo-del-codebase)
+- [**Requisitos previos**](#requisitos-previos) · [**Instalar**](#instalar) · [Primeros pasos](#primeros-pasos-recién-instalado)
+- [Ejemplos reales de salida](#ejemplos-reales-de-salida) · [Recetas](#recetas)
+- [Cómo se conectan](#cómo-se-conectan) · [Problemas comunes (FAQ)](#problemas-comunes-faq) · [Para contribuir](#para-contribuir)
+
+> **Tip:** si es tu primera vez, saltá directo a **[Requisitos previos](#requisitos-previos)** e
+> **[Instalar](#instalar)** antes de mirar los ejemplos.
+
 ---
 
 ## 🧭 fluency-4d — el marco 4D
@@ -99,8 +119,10 @@ compliance → code-review → validate), relayando el reporte de uno como evide
 
 Cablea el MCP **`codebase-memory`**: indexa tu repo en un **grafo de conocimiento** (parsea el
 código con tree-sitter → funciones, clases, llamadas, rutas HTTP, imports) y lo consultás
-**estructuralmente**, en vez de `grep`/leer archivo por archivo. Ideal en repos grandes, donde
-"¿quién llama a esta función?" o "¿qué toca este diff?" con grep es lento y ruidoso.
+**estructuralmente**, en vez de `grep`/leer archivo por archivo. Ideal en **repos grandes** —
+como orientación, del orden de **cientos de archivos / miles de símbolos** para arriba — donde
+"¿quién llama a esta función?" o "¿qué toca este diff?" con grep es lento y ruidoso. En repos
+chicos `grep`/`Explore` ya alcanzan y no vale la pena indexar.
 
 **Flujo:** `/suite-setup` (una vez, instala el binario firmado y **registra el MCP** con ruta
 absoluta verificada) → `/indexar` un repo → consultás.
@@ -113,6 +135,10 @@ absoluta verificada) → `/indexar` un repo → consultás.
 | **`/rastrear`** `<función>` | Llamadores/llamados e **impacto** de una función (dónde repercute un cambio) | `/rastrear parseNumberInput` |
 | **`/impacto`** `[rango git]` | Mapea un `git diff` a los **símbolos afectados** (útil pre-review/release) | `/impacto` |
 | **`/proyectos`** | Lista los proyectos indexados y su estado | `/proyectos` |
+
+**`/indexar` y "Index this project" son lo mismo:** `/indexar` es solo el comando en español que
+**envuelve la tool `index_repository`** del MCP. Pedirle al conductor *"Index this project"* (o
+invocar la tool directo) hace exactamente lo mismo — una única capa, dos formas de llamarla.
 
 **Nota de arquitectura:** los agentes de plugin **no ven** servidores MCP, así que el grafo lo
 consulta el **conductor** (el agente principal) y **relaya** los resultados a los auditores en el
@@ -191,6 +217,8 @@ AccountsReceivableView, DashboardView, StatsView, AgendaView, lib/utils, lib/tic
 
 - **Claude Code** (CLI o app de escritorio).
 - **git** + **gh** (GitHub CLI) para instalar desde GitHub y verificar firmas.
+- **`gh` autenticado** (`gh auth login`) **antes** de correr `/suite-setup`: la verificación de
+  la atestación (`gh attestation verify`) consulta la API de GitHub y **falla sin sesión**.
 - Para el grafo: `/suite-setup` baja el binario **firmado** (sigstore + SLSA L3, con checksum) de
   [`codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) — no se vendoriza.
 - Para desarrollar la suite: **[uv](https://docs.astral.sh/uv/)** (Python).
