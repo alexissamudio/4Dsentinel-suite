@@ -31,15 +31,24 @@ comando de hash). `gh release download`, `gh attestation verify` y `claude mcp a
 igual en Windows, macOS y Linux.
 
 1. **Pinnear una version/tag concreta**, NO `latest`. Elegi un release fijo (ej.
-   `v1.4.0`) y anotalo; asi la verificacion es reproducible y no cambia bajo tus pies.
+   `v0.9.0`) y anotalo; asi la verificacion es reproducible y no cambia bajo tus pies.
    **Lista los assets de ESE tag** (no hardcodees nombres) con:
    `gh release view <TAG> --repo DeusData/codebase-memory-mcp`
-   y baja el asset de **tu plataforma** mas su `checksums.txt`:
-   `gh release download <TAG> --repo DeusData/codebase-memory-mcp --pattern "<asset-de-tu-OS>" --pattern "checksums.txt"`
-   - **Windows** (por-OS): asset `*-windows-amd64.zip`.
-   - **macOS / Linux** (por-OS): elegi el asset de tu plataforma **de la lista que devolvio
-     `gh release view`** (ej. `*-darwin-arm64.*`, `*-darwin-amd64.*`, `*-linux-amd64.*`).
-     El nombre exacto lo dicta `gh release view`; no lo adivines.
+   y baja el asset de **tu plataforma** mas su `checksums.txt`.
+   - **OJO con la variante `-ui-`**: el repo publica DOS familias de assets por plataforma:
+     el **MCP server** (`codebase-memory-mcp-<os>-<arch>`, el que necesitas) y una **GUI**
+     (`codebase-memory-mcp-ui-<os>-<arch>`, ~37 MB, que NO es el MCP). El asset correcto
+     **nunca** lleva el infijo `-ui-`. Un `--pattern` con comodines de borde (`*-windows-amd64.zip`)
+     agarra las DOS; ancla el prefijo del binario base para excluir la UI.
+   - **Windows** (por-OS): `--pattern "codebase-memory-mcp-windows-amd64.zip" --pattern "checksums.txt"`
+     (o `-windows-arm64.zip` en ARM). El prefijo anclado `codebase-memory-mcp-windows` excluye
+     `codebase-memory-mcp-ui-windows`.
+   - **macOS / Linux** (por-OS): mismo criterio, anclando el prefijo base **sin `-ui-`**, con el
+     nombre EXACTO que devolvio `gh release view` (ej. `codebase-memory-mcp-darwin-arm64.tar.gz`,
+     `codebase-memory-mcp-linux-amd64.tar.gz`). No adivines arch/ext: lo dicta `gh release view`.
+   - Comando general:
+     `gh release download <TAG> --repo DeusData/codebase-memory-mcp --pattern "<asset-base-de-tu-OS>" --pattern "checksums.txt"`
+     Tras bajar, confirma que en la carpeta quedo UN solo binario (sin el `.zip`/`.tar.gz` de la UI).
    NO corras el `install.ps1` completo. Descomprimi a una carpeta temporal (todavia
    NO lo pongas en el PATH: primero se verifica).
 2. **Verificacion OBLIGATORIA y SECUENCIAL** (ambas condiciones deben pasar, en orden;
