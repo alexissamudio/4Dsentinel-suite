@@ -1,0 +1,21 @@
+[project]
+name = "4dsentinel-suite-dev"
+version = "0.0.0"
+description = "Entorno de desarrollo del monorepo 4Dsentinel-suite (tests y lint; los plugins viven en plugins/)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+# Solo fluency-4d tiene suite pytest. tests/sentinel-agents/ son FIXTURES
+# (target-vulnerable con un test que falla a proposito para el validator):
+# se excluyen para que `pytest tests/` recolecte unicamente los 75 de fluency.
+testpaths = ["tests/fluency-4d"]
+addopts = "--ignore=tests/sentinel-agents"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# No lintear los fixtures deliberadamente vulnerables de sentinel-agents.
+extend-exclude = ["tests/sentinel-agents/fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]

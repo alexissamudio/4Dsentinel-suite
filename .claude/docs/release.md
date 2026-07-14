@@ -12,7 +12,7 @@ content_hash: 5a96a81ac79fd05f7581b399ee45b470df2facf262d8f60dba2b388bb37c5293
 2. `.claude-plugin/marketplace.json` → `plugins[0].version`
 3. `plugins/fluency-4d/.claude-plugin/plugin.json` → `version`
 
-Nunca editarlos a mano: `uv run scripts/bump_version.py --set X.Y.Z`
+Nunca editarlos a mano: `uv run scripts/fluency_bump_version.py --set X.Y.Z`
 (y `--check` para verificar). El CI falla si divergen.
 
 ## Ciclo de desarrollo local
@@ -25,7 +25,7 @@ cambios NO se ven en el lugar.
 
 ## Orden de release (NO alterarlo)
 
-1. `bump_version.py --set X.Y.Z` + commits convencionales (subject ≤ 50 chars,
+1. `fluency_bump_version.py --set X.Y.Z` + commits convencionales (subject ≤ 50 chars,
    sin atribución de IA — el hook de oh-my-claude los rechaza).
 2. `claude plugin marketplace update` + `plugin update`; verificar que la caché
    nueva contiene el código nuevo (grep de un string distintivo).

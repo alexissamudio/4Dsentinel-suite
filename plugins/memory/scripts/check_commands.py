@@ -12,7 +12,7 @@ Por cada plugins/memory/commands/*.md:
 Y ademas el skill:
 - plugins/memory/skills/suite-setup/SKILL.md con frontmatter `description`.
 
-Sigue el patron de sentinel-agents/scripts/check_skills.py (parser de frontmatter
+Sigue el patron de scripts/sentinel_check_skills.py (parser de frontmatter
 scalar, exit codes, mensajes OK/ERROR).
 """
 

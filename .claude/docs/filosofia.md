@@ -81,7 +81,7 @@ Corriendo el criterio sobre la propuesta de mining (ver `estado-sesion.md`):
 
 | Patrón | Veredicto | Por qué |
 |---|---|---|
-| #1 `check_skills.py` en CI | ✅ Pasa | Es **Diligencia aplicada al propio plugin** (verificación automática). No toca el método 4D. |
+| #1 `fluency_check_skills.py` en CI | ✅ Pasa | Es **Diligencia aplicada al propio plugin** (verificación automática). No toca el método 4D. |
 | #2 mapa de ownership de conceptos | ✅ Pasa | Higiene interna (DRY de docs). Neutral a la cosmovisión. |
 | #3 verbos de relación en puentes | ✅ Pasa | Enriquece el push con semántica de grafo; sigue siendo push automático. |
 | #4 mini SKILL-CONTRACT propio | ✅ Pasa | Consistencia interna, **por arquetipo propio** (no la plantilla ajena). |

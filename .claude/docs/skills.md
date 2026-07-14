@@ -40,9 +40,9 @@ marketplace.
   Claude siguiendo las fases; los hooks solo enrutan.
 - Reglas duras al final de cada SKILL.md (sección "Reglas"): son el contrato.
 
-## Contrato (reglas duras validadas por check_skills.py)
+## Contrato (reglas duras validadas por fluency_check_skills.py)
 
-`uv run scripts/check_skills.py` es el validador determinístico del contrato (corre
+`uv run scripts/fluency_check_skills.py` es el validador determinístico del contrato (corre
 en CI). Es convención PROPIA de fluency-4d, no la plantilla ajena de otros plugins:
 acá el cuerpo NO tiene que "referenciar el contrato", y NO se exige sección `##
 Reglas` ni un límite de líneas duro (el límite de 150 es guía, a lo sumo warning).

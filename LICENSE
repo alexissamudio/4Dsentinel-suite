@@ -22,5 +22,10 @@ SOFTWARE.
 
 ---
 
-El patrón de utilidades de hooks (hooks/hook_utils.py) está basado en el de
-oh-my-claude (https://github.com/TechDufus/oh-my-claude), también bajo licencia MIT.
+El patrón de utilidades de hooks (plugins/fluency-4d/hooks/hook_utils.py) está
+basado en el de oh-my-claude (https://github.com/TechDufus/oh-my-claude), también
+bajo licencia MIT.
+
+La base de conocimiento ISO bajo
+`plugins/sentinel-agents/references/iso-27000/` tiene su propia licencia — ver
+`plugins/sentinel-agents/references/iso-27000/LICENSE` (CC-BY-4.0).

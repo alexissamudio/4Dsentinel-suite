@@ -9,9 +9,6 @@ on:
 jobs:
   fluency-4d:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: fluency-4d
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -23,19 +20,18 @@ jobs:
           uv run python -m json.tool plugins/fluency-4d/.claude-plugin/plugin.json > /dev/null
           uv run python -m json.tool plugins/fluency-4d/hooks/hooks.json > /dev/null
       - name: Version sincronizada
-        run: uv run scripts/bump_version.py --check
+        run: uv run scripts/fluency_bump_version.py --check
       - name: Sin rutas ../ en plugin.json
         run: "! grep -q '\\.\\./' plugins/fluency-4d/.claude-plugin/plugin.json"
       - name: Ruff
         run: uvx ruff check plugins/fluency-4d/hooks/ scripts/ tests/
       - name: Pytest
         run: uv run --with pytest pytest tests/ -q
+      - name: Skills bien formados (contrato fluency)
+        run: uv run scripts/fluency_check_skills.py
 
   fluency-4d-windows:
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: fluency-4d
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -46,9 +42,6 @@ jobs:
 
   sentinel-agents:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sentinel-agents
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -59,13 +52,13 @@ jobs:
           uv run python -m json.tool .claude-plugin/marketplace.json > /dev/null
           uv run python -m json.tool plugins/sentinel-agents/.claude-plugin/plugin.json > /dev/null
       - name: Version sincronizada
-        run: uv run scripts/bump_version.py --check
+        run: uv run scripts/sentinel_bump_version.py --check
       - name: Sin rutas ../ en plugin.json
         run: "! grep -q '\\.\\./' plugins/sentinel-agents/.claude-plugin/plugin.json"
       - name: Agentes read-only y bien formados
         run: uv run scripts/check_agents.py
       - name: Skills bien formados
-        run: uv run scripts/check_skills.py
+        run: uv run scripts/sentinel_check_skills.py
       - name: KB en blanco (guarda anti-write-back)
         run: uv run scripts/check_kb_blank.py
 
