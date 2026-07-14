@@ -1,6 +1,6 @@
 {
   "name": "4dsentinel-memory",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Cablea codebase-memory-mcp (grafo de codebase) + comandos en espanol (/indexar, /arquitectura, /buscar, /rastrear, /impacto, /proyectos). El binario se instala con /suite-setup; aca se declara el MCP server.",
   "author": {
     "name": "Alexis Samudio"

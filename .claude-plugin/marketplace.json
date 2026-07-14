@@ -13,7 +13,7 @@
       "name": "fluency-4d",
       "source": "./plugins/fluency-4d",
       "description": "Aplica el marco 4D de AI Fluency en tu flujo de trabajo (/4d) y genera un CLAUDE.md modular con puentes a docs por tema (/4d-init) con enrutamiento automatico via hook",
-      "version": "0.13.0",
+      "version": "0.14.0",
       "author": {
         "name": "Alexis Samudio"
       },
@@ -44,7 +44,7 @@
       "name": "sentinel-agents",
       "source": "./plugins/sentinel-agents",
       "description": "Agentes de auditoria: compliance (ISO 27000), seguridad (OWASP/CWE/CVSS), code-review, riesgo, bug-hunt, y calidad de redaccion; read-only con evidencia dura",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "author": {
         "name": "Alexis Samudio"
       },
@@ -65,7 +65,7 @@
       "name": "4dsentinel-memory",
       "source": "./plugins/memory",
       "description": "Cablea codebase-memory-mcp (grafo de codebase, ~99% menos tokens en repos grandes) + comandos en espanol (/indexar, /arquitectura, /buscar, /rastrear, /impacto, /proyectos); el skill /suite-setup instala el binario firmado",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "author": {
         "name": "Alexis Samudio"
       },

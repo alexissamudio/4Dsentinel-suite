@@ -30,6 +30,11 @@ Si trabajás con **Claude Code**, esta suite te da tres capacidades que se poten
 El hilo conductor es el patrón **conductor**: el agente principal **planifica, delega y verifica**;
 delega la auditoría en agentes especializados; consulta el grafo. Vos conservás el criterio.
 
+> **No necesitás memorizar los comandos.** El conductor te **ofrece** indexar o auditar en el
+> momento justo (cuando describís que querés entender un repo, o que vas a mergear) — vos solo
+> confirmás. Los `/comandos` quedan para cuando preferís invocarlos directo. *Ofrece + confirma,
+> nunca actúa solo.*
+
 ---
 
 ## 🧭 fluency-4d — el marco 4D
