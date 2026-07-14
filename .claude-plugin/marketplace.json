@@ -1,0 +1,65 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-suite",
+  "owner": {
+    "name": "Alexis Samudio"
+  },
+  "metadata": {
+    "description": "Suite unificada: marco 4D de AI Fluency (fluency-4d) + agentes de auditoria (sentinel-agents) en un solo install",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "fluency-4d",
+      "source": "./fluency-4d/plugins/fluency-4d",
+      "description": "Aplica el marco 4D de AI Fluency en tu flujo de trabajo (/4d) y genera un CLAUDE.md modular con puentes a docs por tema (/4d-init) con enrutamiento automatico via hook",
+      "version": "0.12.0",
+      "author": {
+        "name": "Alexis Samudio"
+      },
+      "homepage": "https://github.com/alexissamudio/ai-fluency-4d",
+      "repository": "https://github.com/alexissamudio/ai-fluency-4d",
+      "license": "MIT",
+      "keywords": [
+        "ai-fluency",
+        "4d",
+        "delegacion",
+        "descripcion",
+        "discernimiento",
+        "diligencia",
+        "claude-md",
+        "progressive-disclosure",
+        "espanol"
+      ],
+      "category": "productivity",
+      "skills": [
+        "./skills/4d",
+        "./skills/4d-init",
+        "./skills/4d-status",
+        "./skills/4d-quiz",
+        "./skills/caveman"
+      ]
+    },
+    {
+      "name": "sentinel-agents",
+      "source": "./sentinel-agents/plugins/sentinel-agents",
+      "description": "Agentes de auditoria de compliance (ISO 27000) y seguridad (OWASP/CWE/CVSS), read-only con evidencia dura",
+      "version": "0.4.0",
+      "author": {
+        "name": "Alexis Samudio"
+      },
+      "homepage": "https://github.com/alexissamudio/sentinel-agents",
+      "repository": "https://github.com/alexissamudio/sentinel-agents",
+      "license": "MIT",
+      "keywords": [
+        "security",
+        "compliance",
+        "iso-27001",
+        "sgsi",
+        "audit",
+        "agents"
+      ],
+      "category": "security"
+    }
+  ]
+}
