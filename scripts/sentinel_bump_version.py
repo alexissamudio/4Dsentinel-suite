@@ -71,12 +71,12 @@ def set_version(new: str) -> int:
         return 1
     m = json.loads(MARKETPLACE.read_text(encoding="utf-8"))
     p = json.loads(PLUGIN.read_text(encoding="utf-8"))
-    m["metadata"]["version"] = new
+    # NO se toca m["metadata"]["version"] (version paraguas de la suite).
     _market_entry(m)["version"] = new
     p["version"] = new
     MARKETPLACE.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     PLUGIN.write_text(json.dumps(p, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"OK - version {new} escrita en los 3 lugares")
+    print(f"OK - version {new} escrita en los 2 lugares")
     return check()
 
 

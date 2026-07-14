@@ -33,6 +33,12 @@ from pathlib import Path
 MAX_STDIN_BYTES = 1024 * 1024
 STATE_TTL_SECONDS = 4 * 60 * 60  # 4 horas
 
+# Chars que, si vienen de un bridges.json hostil, podrian romper/confundir la
+# plantilla de display o el markdown del additionalContext: backticks (delimitan
+# codigo), comillas (cierran el campo citado), corchetes y llaves. Se neutralizan
+# a espacio en sanitize_field junto con los controles/separadores unicode.
+_UNSAFE_DISPLAY_CHARS = frozenset("`'\"[]{}")
+
 
 # --- Sanitizacion de campos controlados por el proyecto (bridges.json) --------
 # bridges.json vive en el repo del usuario; en un repo de terceros HOSTIL lo
@@ -43,20 +49,26 @@ STATE_TTL_SECONDS = 4 * 60 * 60  # 4 horas
 # `X:\...`) para que Claude lo lea.
 
 
-def sanitize_field(text: object, max_len: int = 120) -> str:
+def sanitize_field(text: object, max_len: int = 80) -> str:
     """Devuelve un string seguro para interpolar en additionalContext.
 
     Colapsa saltos de linea, caracteres de control y separadores unicode a un
-    solo espacio, recorta y trunca a `max_len` (con elipsis). Un input benigno
-    corto (un `tema` como 'auth') vuelve intacto: sin regresion.
+    solo espacio, y neutraliza (tambien a espacio) los chars que podrian romper
+    o confundir la plantilla de display / el markdown del contexto: backticks,
+    comillas, corchetes y llaves (ver `_UNSAFE_DISPLAY_CHARS`). Recorta y trunca
+    a `max_len` (marcador ASCII '...'). Deterministica. Un input benigno corto
+    (un `tema` como 'auth') vuelve intacto: sin regresion.
     """
     s = str(text)
     cleaned = [
-        " " if (unicodedata.category(ch)[0] in ("C", "Z")) else ch for ch in s
+        " "
+        if (ch in _UNSAFE_DISPLAY_CHARS or unicodedata.category(ch)[0] in ("C", "Z"))
+        else ch
+        for ch in s
     ]
     collapsed = " ".join("".join(cleaned).split())
     if len(collapsed) > max_len:
-        collapsed = collapsed[: max(0, max_len - 1)].rstrip() + "…"
+        collapsed = collapsed[: max(0, max_len - 3)].rstrip() + "..."
     return collapsed
 
 
@@ -134,8 +146,31 @@ def output_stop_block(reason: str) -> None:
 
 
 def log_debug(message: str) -> None:
-    if os.environ.get("HOOK_DEBUG") == "1":
-        print(f"[fluency-4d] {message}", file=sys.stderr)
+    """Log de debug a stderr, a prueba de encoding y que NUNCA lanza.
+
+    Se invoca dentro del `except` de hook_main; si un `print` normal reventara
+    (p.ej. stderr cp1252 en Windows y un mensaje con un char no representable),
+    la excepcion propagaria y el hook moriria con traceback en vez de degradar a
+    pass-through. Por eso se escribe a `sys.stderr.buffer` en UTF-8 con
+    `errors='replace'` y todo va envuelto en un try/except que traga cualquier
+    fallo: el logging jamas rompe el contrato "el hook nunca crashea".
+    """
+    if os.environ.get("HOOK_DEBUG") != "1":
+        return
+    line = f"[fluency-4d] {message}\n"
+    try:
+        buffer = getattr(sys.stderr, "buffer", None)
+        if buffer is not None:
+            buffer.write(line.encode("utf-8", "replace"))
+            buffer.flush()
+        else:
+            # stderr sin buffer (p.ej. capturado en tests): degrada representando
+            # los chars no soportados por su encoding en vez de lanzar.
+            enc = getattr(sys.stderr, "encoding", None) or "utf-8"
+            sys.stderr.write(line.encode(enc, "replace").decode(enc, "replace"))
+            sys.stderr.flush()
+    except Exception:  # noqa: BLE001 - el log jamas rompe el hook
+        pass
 
 
 def hook_main(event: str):
@@ -169,7 +204,19 @@ def session_key(data: dict) -> str:
 
 def _state_path(key: str) -> Path:
     directory = Path(tempfile.gettempdir()) / "fluency4d"
-    directory.mkdir(parents=True, exist_ok=True)
+    # CWE-377: en un /tmp compartido (POSIX) el subdir de estado no debe ser
+    # world-accesible ni un symlink pre-creado por un atacante. Se crea con
+    # modo 0o700; en POSIX se rechaza el symlink y se fuerzan los permisos
+    # (mkdir con exist_ok reusa un dir laxo y el umask puede recortar el modo).
+    # En Windows %TEMP% ya es per-user y chmod(0o700) no aplica -> se omite.
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name == "posix":
+        if directory.is_symlink():
+            raise OSError("directorio de estado es un symlink: " + str(directory))
+        try:
+            os.chmod(directory, 0o700)
+        except OSError:
+            pass
     return directory / f"{key}.json"
 
 

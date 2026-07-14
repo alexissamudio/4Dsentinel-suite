@@ -82,7 +82,7 @@ def test_router_tema_largo_malicioso_se_trunca(run_hook, project):
     write_bridges(project, data=data)
     ctx = ctx_of(run_hook(ROUTER, r_payload(project, "seca2", "login")))
     assert "MARCADOR_INYECTADO_FINAL" not in ctx  # truncado por max_len
-    assert "…" in ctx  # elipsis de truncado
+    assert "..." in ctx  # marcador de truncado (ASCII)
     assert "LEE ese archivo ANTES de responder" in ctx
 
 

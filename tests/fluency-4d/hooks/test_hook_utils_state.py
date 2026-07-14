@@ -78,3 +78,28 @@ def test_save_state_error_no_rompe(state_dir, monkeypatch):
 
     monkeypatch.setattr(hook_utils.tempfile, "mkstemp", boom)
     hook_utils.save_state("k4", {"x": 1})  # no debe lanzar
+
+
+# --- MINOR 4 (CWE-377): dir de estado endurecido en POSIX ---------------------
+
+
+@pytest.mark.skipif(os.name != "posix", reason="permisos POSIX no aplican en Windows")
+def test_state_dir_permisos_restringidos(state_dir):
+    """El subdir fluency4d se crea 0o700 (no world/group-accesible) en /tmp."""
+    hook_utils._state_path("kperm")
+    mode = state_dir.stat().st_mode & 0o777
+    assert mode == 0o700
+
+
+@pytest.mark.skipif(os.name != "posix", reason="symlink hardening solo en POSIX")
+def test_state_dir_symlink_rechazado(tmp_path, monkeypatch):
+    """Si un atacante pre-crea fluency4d como symlink en /tmp compartido,
+    _state_path lo rechaza (OSError) en vez de seguir el enlace."""
+    base = tmp_path / "base"
+    base.mkdir()
+    target = tmp_path / "target"
+    target.mkdir()
+    (base / "fluency4d").symlink_to(target, target_is_directory=True)
+    monkeypatch.setattr(hook_utils.tempfile, "tempdir", str(base))
+    with pytest.raises(OSError):
+        hook_utils._state_path("k")

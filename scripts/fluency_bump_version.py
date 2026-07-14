@@ -3,16 +3,19 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""bump_version.py - Sincroniza la versión del plugin en los 3 lugares obligatorios.
+"""bump_version.py - Sincroniza la version del plugin fluency-4d.
 
-Lugares (los tres DEBEN coincidir para que la instalación funcione):
-  1. .claude-plugin/marketplace.json  -> metadata.version
-  2. .claude-plugin/marketplace.json  -> plugins[name=="fluency-4d"].version
-  3. plugins/fluency-4d/.claude-plugin/plugin.json -> version
+La version de fluency-4d vive en DOS lugares (ambos deben coincidir):
+  1. .claude-plugin/marketplace.json  -> plugins[name=="fluency-4d"].version
+  2. plugins/fluency-4d/.claude-plugin/plugin.json -> version
+
+`metadata.version` del marketplace es la version PARAGUAS de la suite (no la de
+fluency-4d), por eso NO entra en este check por-plugin y este script NO la toca.
+El cross-check paraguas<->subtree lo hace scripts/check_suite_versions.py.
 
 Uso:
-  uv run scripts/bump_version.py --check        # verifica que las 3 coincidan
-  uv run scripts/bump_version.py --set 0.2.0    # escribe la nueva versión en las 3
+  uv run scripts/bump_version.py --check        # verifica que las 2 coincidan
+  uv run scripts/bump_version.py --set 0.2.0    # escribe la nueva version en las 2
 """
 
 from __future__ import annotations
@@ -47,7 +50,6 @@ def read_versions() -> dict[str, str]:
     marketplace = json.loads(MARKETPLACE.read_text(encoding="utf-8"))
     plugin = json.loads(PLUGIN.read_text(encoding="utf-8"))
     return {
-        "marketplace.metadata.version": marketplace["metadata"]["version"],
         f"marketplace.plugins[{PLUGIN_NAME}].version": _market_entry(marketplace)["version"],
         "plugin.json version": plugin["version"],
     }
@@ -71,7 +73,7 @@ def set_version(new_version: str) -> int:
         return 1
     marketplace = json.loads(MARKETPLACE.read_text(encoding="utf-8"))
     plugin = json.loads(PLUGIN.read_text(encoding="utf-8"))
-    marketplace["metadata"]["version"] = new_version
+    # NO se toca marketplace["metadata"]["version"] (version paraguas de la suite).
     _market_entry(marketplace)["version"] = new_version
     plugin["version"] = new_version
     MARKETPLACE.write_text(
@@ -80,7 +82,7 @@ def set_version(new_version: str) -> int:
     PLUGIN.write_text(
         json.dumps(plugin, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    print(f"OK - version {new_version} escrita en los 3 lugares")
+    print(f"OK - version {new_version} escrita en los 2 lugares")
     return check()
 
 
