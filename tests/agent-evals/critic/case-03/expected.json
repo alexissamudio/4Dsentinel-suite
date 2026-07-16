@@ -1,0 +1,13 @@
+{
+  "agent": "critic",
+  "notes": "plan de precarga de cache contra repo/cache.py + repo/tasks.py: usa un retorno inexistente de warm(), verifica truthy sobre un sentinel None, malinterpreta flush() (borra todo) y cierra con un criterio no verificable; 1 decoy (modificar cache.get, ejecutable).",
+  "must_catch": [
+    { "id": "RETVAL", "where": "plan.md:4", "why": "inejecutable: el Paso 1 usa el entero 'n_loaded' que devuelve cache.warm(), pero warm() no tiene return -> devuelve None (repo/cache.py:16); no hay contador que loguear. Important" },
+    { "id": "SENTINEL-NONE", "where": "plan.md:8", "why": "verificacion invalida: warm() guarda None como valor (repo/cache.py:20), y cache.get(k) devuelve None tanto para clave ausente como precargada; el chequeo 'truthy' falla siempre y no distingue precargado de faltante. Important" },
+    { "id": "FLUSHALL", "where": "plan.md:16", "why": "supuesto de side-effect falso + orden destructivo: tasks.flush() hace _store.clear(), borra TODAS las claves (repo/tasks.py:16), no 'unicamente las nulas'; corrido despues del Paso 3 destruye los ids recien indexados en vez de conservarlos. Critical" },
+    { "id": "UNVERIFIABLE", "where": "plan.md:23", "why": "criterio de aceptacion no verificable: 'mas rapido' y 'suficientemente caliente' no tienen metrica ni umbral; no se puede decidir objetivamente si el plan cumplio. Minor" }
+  ],
+  "decoys": [
+    { "where": "plan.md:20", "why": "modificar cache.get() para registrar hit/miss es ejecutable: la funcion get() SI existe en repo/cache.py:6; parece riesgoso tocar el core del cache pero el paso es valido, no un gap" }
+  ]
+}

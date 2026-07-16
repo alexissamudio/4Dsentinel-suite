@@ -1,0 +1,14 @@
+{
+  "agent": "bug-hunter",
+  "notes": "4 bugs de correctitud sutiles (aliasing de atributo de clase, igualdad de floats, off-by-one en paginacion, race check-then-act); 2 decoys (check-then-act bajo lock, slice de ultima pagina).",
+  "must_catch": [
+    { "id": "ALIAS", "where": "metrics_svc.py:11", "why": "aliasing: 'samples' es atributo de CLASE (lista mutable) compartido por todas las instancias de MetricBucket; add() en una contamina el total de las demas. Important" },
+    { "id": "FLOATEQ", "where": "metrics_svc.py:28", "why": "precision float: '==' contra threshold; con 0.1+0.2 el resultado es 0.30000000000000004 != 0.3, el cruce exacto nunca matchea y toma la rama equivocada. Important" },
+    { "id": "OFFBYONE", "where": "metrics_svc.py:38", "why": "off-by-one enmascarado: end = start + per_page + 1 incluye un item de mas (el primero de la pagina siguiente); los bordes entre paginas se solapan. Important" },
+    { "id": "RACE", "where": "metrics_svc.py:50", "why": "race check-then-act: el 'not in _seen' y el _seen.add() no estan sincronizados (el lock existe pero no se usa aca); dos threads pueden llamar sink(key) dos veces. Critical" }
+  ],
+  "decoys": [
+    { "where": "metrics_svc.py:60", "why": "register_locked parece el mismo check-then-act sobre _seen, pero todo el check-and-act corre dentro de 'with _seen_lock' -> es atomico, no hay race" },
+    { "where": "metrics_svc.py:72", "why": "last_page_items parece off-by-one, pero el guard rem==0 usa items[-per_page:] y si no items[-rem:]; el slice devuelve exactamente el resto final, es correcto" }
+  ]
+}
