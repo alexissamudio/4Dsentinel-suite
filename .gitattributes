@@ -5,3 +5,6 @@ plugins/sentinel-agents/references/iso-27000/** text eol=lf
 *.py text eol=lf
 *.md text eol=lf
 *.json text eol=lf
+
+# Los workflows .js deben quedar LF (el permission handler rechaza CRLF)
+.claude/workflows/*.js text eol=lf
