@@ -1,8 +1,10 @@
 # Auditoría 4D de la suite — 2026-07-15
 
 > **Estado de remediación:** los **P0 quick-wins** (F1, F2, F3, F7, F10) fueron
-> ejecutados en la branch `fix/audit-p0-quickwins` (con tests para F1 y F2). P1/P2
-> pendientes de decisión.
+> ejecutados en la branch `fix/audit-p0-quickwins` (con tests para F1 y F2). El **P1
+> completo** (F8, F9, F6, F14, F15 + defensa de clase F3/F1) se mergeó el 2026-07-16
+> vía PR #6 (branch `fix/audit-p1-structural`, 11 commits, CI verde, code-review CLEAN
+> sobre #6). **P2 pendiente** (F16, F11, F4/F5/F12, F17-F19).
 
 Auditoría completa (marco 4D, loop-until-dry) del monorepo 4Dsentinel-suite.
 **Delegación:** fan-out de 5 agentes read-only (bug-hunter, security-auditor,

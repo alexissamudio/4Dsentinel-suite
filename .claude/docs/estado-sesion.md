@@ -1,10 +1,10 @@
-# Estado de sesión — 2026-07-16 — REMEDIACIÓN P1 COMPLETA (sin push/PR)
+# Estado de sesión — 2026-07-16 — REMEDIACIÓN P1 MERGEADA A MAIN
 
 ## Objetivo / frase 4D
 Diligencia: ejecutar el P1 de la auditoría 2026-07-15 (estructural, alto ROI).
-Branch: **`fix/audit-p1-structural`** (desde main 5ef2c62). **10 commits, todo P1
-cerrado, verificado local (173 passed/4 skipped, ruff+mypy+9 checks verdes).**
-FALTA: push + abrir PR (esperar confirmación del usuario).
+**HECHO Y MERGEADO:** PR #6 (`fix/audit-p1-structural`, 11 commits) → `main`
+(merge `b4a074c`), CI verde, branch borrada. 173 passed/4 skipped, ruff+mypy+9
+checks verdes, code-review CLEAN sobre #6. Warning conocido en CI: Node 20 (= F18, P2).
 
 ## P1 — TODO HECHO (commits, en orden)
 - `67acd7f` #6a F8 · `bbdcff8` #6b F9 · `3892aaa` hardening review #6 (verdict CLEAN)
@@ -15,12 +15,11 @@ FALTA: push + abrir PR (esperar confirmación del usuario).
 - Docs actualizadas: release.md (bump_suite, check-tag, supply-chain), testing.md
   (mypy_path, nuevos checks, conteo 177).
 
-## Próximo paso
-1. `git push origin fix/audit-p1-structural` + `gh pr create` (o merge a main si el
-   usuario prefiere). Esperar CI verde (ahora con jobs nuevos: ASCII, trailer).
-2. Actualizar el banner de remediación en `auditoria-2026-07-15.md` (P1 hecho).
-3. Pendiente P2 (ver abajo): F16 coverage hooks + mutmut; F11 .sentinel/ gitignore;
-   F4/F5/F12 menores; F17/F18/F19 disciplina.
+## Próximo paso — P2 (sesión nueva)
+F16 coverage hooks + mutmut nightly; F11 `.sentinel/` en gitignore; F4/F5/F12 menores
+(F4 anclas fallback al flag `fired`; F5 parsers `^---\s*\n` — ya hecho en produccion vía
+frontmatter_utils, falta fluency_check_skills si se unifica; F12 content_hash muerto,
+docstrings, DRY checks CI, rotulo README); F17/F18/F19 disciplina (bump, Node 24, ADR).
 
 ## Objetivo / frase 4D (auditoría previa, cerrada)
 
