@@ -34,9 +34,7 @@ def test_backslash_absoluto_case_insensitive(run_hook, project, state_of):
 
 def test_segmento_parcial_no_matchea(run_hook, project):
     write_bridges(project)
-    out = run_hook(
-        HOOK, payload(project, "d2", file_path=win(project, "src/authentication/x.py"))
-    )
+    out = run_hook(HOOK, payload(project, "d2", file_path=win(project, "src/authentication/x.py")))
     assert out == ""
 
 

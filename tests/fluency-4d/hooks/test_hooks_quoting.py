@@ -6,13 +6,11 @@ y `uv run --script` recibe medio path -> todos los hooks fallan. El fix es envol
 path del script en comillas dobles. Este test lo vuelve un contrato: pasa con el fix,
 falla sin el.
 """
+
 import json
 from pathlib import Path
 
-HOOKS_JSON = (
-    Path(__file__).resolve().parents[3]
-    / "plugins" / "fluency-4d" / "hooks" / "hooks.json"
-)
+HOOKS_JSON = Path(__file__).resolve().parents[3] / "plugins" / "fluency-4d" / "hooks" / "hooks.json"
 
 
 def _iter_commands(data):
@@ -33,8 +31,7 @@ def test_plugin_root_esta_quoteado():
     malos = [
         c
         for c in cmds
-        if "${CLAUDE_PLUGIN_ROOT}" in c
-        and not ('"${CLAUDE_PLUGIN_ROOT}' in c and '.py"' in c)
+        if "${CLAUDE_PLUGIN_ROOT}" in c and not ('"${CLAUDE_PLUGIN_ROOT}' in c and '.py"' in c)
     ]
     assert not malos, (
         "Comandos con ${CLAUDE_PLUGIN_ROOT} sin comillas (rompen en Windows con espacio "

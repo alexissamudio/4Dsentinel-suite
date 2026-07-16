@@ -5,9 +5,10 @@ description = "Entorno de desarrollo del monorepo 4Dsentinel-suite (tests y lint
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
-# Solo fluency-4d tiene suite pytest. tests/sentinel-agents/ son FIXTURES
-# (target-vulnerable con un test que falla a proposito para el validator):
-# se excluyen para que `pytest tests/` recolecte unicamente los 75 de fluency.
+# tests/sentinel-agents/ son FIXTURES (target-vulnerable con un test que falla a
+# proposito para el validator), NO suite pytest: se excluyen. Sin args, pytest usa
+# testpaths (~107 de fluency-4d); el CI corre `pytest tests/` explicito, que ademas
+# recolecta tests/scripts/ (~25 mas) porque el arg posicional ignora testpaths.
 testpaths = ["tests/fluency-4d"]
 addopts = "--ignore=tests/sentinel-agents"
 
@@ -19,3 +20,13 @@ extend-exclude = ["tests/sentinel-agents/fixtures"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
+
+[tool.mypy]
+python_version = "3.11"
+# Arranque LENIENT: sin --strict. Los hooks usan sys.path.insert + imports entre
+# hermanos (bridge_router/hook_utils) que mypy no resuelve estaticamente; degradan a
+# Any en vez de fallar. Se sube rigor en una iteracion posterior.
+ignore_missing_imports = true
+# Los hooks comparten basenames? No (glob confirmado), pero por las dudas:
+explicit_package_bases = true
+exclude = ["tests/sentinel-agents/fixtures"]

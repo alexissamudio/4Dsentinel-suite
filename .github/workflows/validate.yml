@@ -21,10 +21,14 @@ jobs:
           uv run python -m json.tool plugins/fluency-4d/hooks/hooks.json > /dev/null
       - name: Sin rutas ../ en plugin.json
         run: "! grep -q '\\.\\./' plugins/fluency-4d/.claude-plugin/plugin.json"
-      - name: Ruff
-        run: uvx ruff check plugins/fluency-4d/hooks/ scripts/ tests/
+      - name: Ruff (lint + format check, todo el Python)
+        run: |
+          uvx ruff check plugins/fluency-4d/hooks/ scripts/ tests/ plugins/memory/scripts/
+          uvx ruff format --check plugins/fluency-4d/hooks/ scripts/ tests/ plugins/memory/scripts/
+      - name: Mypy (lenient, todo el Python)
+        run: uvx mypy plugins/fluency-4d/hooks/ scripts/ plugins/memory/scripts/
       - name: Pytest
-        run: uv run --with pytest pytest tests/ -q
+        run: uv run --with pytest --with pytest-randomly pytest tests/ -q
       - name: Skills bien formados (contrato fluency)
         run: uv run scripts/fluency_check_skills.py
 
@@ -36,7 +40,7 @@ jobs:
         with:
           enable-cache: true
       - name: Pytest (Windows)
-        run: uv run --with pytest pytest tests/ -q
+        run: uv run --with pytest --with pytest-randomly pytest tests/ -q
 
   sentinel-agents:
     runs-on: ubuntu-latest

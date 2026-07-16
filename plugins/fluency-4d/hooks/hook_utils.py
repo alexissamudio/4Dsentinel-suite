@@ -67,9 +67,7 @@ def sanitize_field(text: object, max_len: int = 80) -> str:
     """
     s = str(text)
     cleaned = [
-        " "
-        if (ch in _UNSAFE_DISPLAY_CHARS or unicodedata.category(ch)[0] in ("C", "Z"))
-        else ch
+        " " if (ch in _UNSAFE_DISPLAY_CHARS or unicodedata.category(ch)[0] in ("C", "Z")) else ch
         for ch in s
     ]
     collapsed = " ".join("".join(cleaned).split())
@@ -223,7 +221,7 @@ def _state_path(key: str) -> Path:
         # si no es nuestro (uid distinto) fallamos cerrado en vez de operar sobre
         # estado ajeno. hook_main traga el OSError -> passthrough (igual que el
         # caso symlink de arriba): fail-safe, no fail-open peligroso.
-        if directory.stat().st_uid != os.getuid():
+        if directory.stat().st_uid != os.getuid():  # type: ignore[attr-defined]
             raise OSError("directorio de estado no es propiedad del usuario: " + str(directory))
         try:
             os.chmod(directory, 0o700)
@@ -319,9 +317,7 @@ def save_state(key: str, state: dict) -> None:
         # dedup. El lost-update residual (dos writes solapados, gana el ultimo)
         # es benigno y equivalente al ya aceptado en bump_stats: el estado es
         # senal de dedup best-effort, no contabilidad.
-        fd, tmp = tempfile.mkstemp(
-            dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
-        )
+        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 fh.write(payload)
