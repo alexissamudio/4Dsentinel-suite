@@ -1,7 +1,6 @@
 ---
 generated: 2026-07-14
 source: 4d-init
-content_hash: 9a255cd7af81bd00354bf2d2dc269ec7015d162bc0b170b430db50a1f06955a1
 ---
 
 # Release y versionado en este proyecto (monorepo 4Dsentinel-suite)
@@ -88,3 +87,19 @@ el combine no falle por mismatch de schema. Es **report-only** (sin `fail_under`
 **pineado 2.x** (muta in-place → el subprocess `uv run --script` lee la mutación; mutmut 3.x aísla
 en `mutants/` y NO serviría) sobre hooks + guardas de seguridad; surface = step summary + artifact,
 permisos `contents: read`. Sobrevivientes ahí son informativos, no rompen nada.
+
+**Manifests DRY (F12):** la validación de JSON de manifests + la guarda anti-`../` viven en un
+único `scripts/check_manifests.py` (descubre los manifests por glob), invocado una sola vez en el
+job `suite`. Antes se repetían inline en 3 jobs.
+
+## Deuda de proceso pendiente (auditoría F17/F18/F19)
+
+- **F17 — bump como precondición de release (no implementado):** hoy es disciplina manual
+  (`CLAUDE.md:12-13` + este doc). Falta un gate de CI que exija bump cuando cambian archivos
+  **no-doc** de un plugin, para que no se shippee código stale sin señal. Pendiente.
+- **F18 (parcial):** los pins de actions ya están en **Node 24** (`checkout` v7, `setup-uv` v8 —
+  hecho). Falta la **matriz Python 3.12/3.13** en el CI para adelantarse al EOL de 3.11. Pendiente.
+- **F19 — ADR como archivos fuente versionados (no implementado):** las decisiones que hoy solo
+  viven en el grafo `.codebase-memory/graph.db.zst` (caché reconstruible por `index_repository`)
+  se perderían al re-indexar. Pendiente materializar un `docs/adr/` versionado, con el grafo como
+  caché. Ver `persistencia.md`.

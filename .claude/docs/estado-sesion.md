@@ -1,4 +1,26 @@
-# Estado de sesion — 2026-07-16 — P1 + /handoff mergeados; F11+F5 mergeados (PR #8); F16 en branch
+# Estado de sesion — 2026-07-16 — P1+/handoff+F11/F5(#8)+F16(#9) MERGEADOS; F4/F12/F18 en branch
+
+## EN CURSO — branch `feat/audit-p2-f4-f12-f18` (desde main 4c38420)
+Decision usuario: F18 ahora + doc F17/F19; F4+F12 igual. HECHO hasta ahora:
+- **F12d:** README.md:279 "11 auditores" -> "11 agentes".
+- **F12e:** 4d-init/SKILL.md:77 min-keyword "4" -> "3" (alinea con MIN_KEYWORD_LEN=3).
+- **F12a:** borrado content_hash (muerto) de 5 frontmatters (.claude/docs/{hooks,convenciones,
+  release,skills,testing}.md) + template y logica de re-ejecucion de 4d-init/SKILL.md (ahora
+  "siempre preguntar antes de regenerar", sin hash).
+- **F12b:** YA RESUELTO en P1 (docstrings apuntan a bump_common.py; sin accion).
+- **F18:** pins a Node 24 en validate.yml (4 jobs) + mutation.yml: checkout v4.3.1->v7.0.0
+  (9c091bb...), setup-uv v5->v8.3.2 (11f9893...). Falta: matriz Python 3.12/3.13 (parte de F18,
+  se documenta como follow-up, NO implementada esta vuelta).
+- **F12c:** HECHO. `scripts/check_manifests.py` (valida todos los manifests + guarda `../` por
+  glob, 1 sola vez en el job `suite`); removidas las duplicaciones de los 3 jobs de validate.yml.
+- **F4:** HECHO. Fix cross-mode en memory_checkpoint.py (siembra el ancla del modo entrante via el
+  contador compartido `disparos`): rama nativa siembra `fired=True` en 1ra obs si hubo disparos;
+  rama fallback amplia la guarda v0.2 a `(checkpoint_disparado or disparos)`. + test nuevo
+  `test_toggle_modo_no_duplica_disparo`. Debugger reprodujo el bug y diseño el parche.
+- **F17/F19 + F18-parcial:** documentados en release.md (deuda de proceso: gate de bump, matriz
+  Python 3.12/3.13, ADR versionado).
+VERIFICADO local: 174 passed/4 skipped; ruff/mypy(23)/check_ascii/skills/yaml/check_manifests verdes.
+FALTA: commit + push + PR de la branch.
 
 ## Objetivo / frase 4D
 Diligencia: remediar la auditoria 2026-07-15 (P1 y P2) y agregar tooling de sesion.

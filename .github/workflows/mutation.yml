@@ -19,8 +19,8 @@ jobs:
     # cota dura muy por debajo del limite default de 360 min para no quemar runner-minutes.
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
       # mutmut 2.5.1 muta el archivo IN-PLACE en disco -> el subprocess `uv run --script` de

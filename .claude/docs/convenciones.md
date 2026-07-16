@@ -1,7 +1,6 @@
 ---
 generated: 2026-07-03
 source: 4d-init
-content_hash: db831c75349f4cb0dab869f195329e81beb748db358f2ce155390e9504aa6e7a
 ---
 
 # Convenciones de este proyecto
