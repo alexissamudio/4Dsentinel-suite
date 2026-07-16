@@ -1,15 +1,26 @@
 # Estado de sesion — 2026-07-16 — agent-improver: piloto + ESCALADO a los 11 agentes (en curso)
 
-## ESCALADO (post-reset del session limit) — commit cc2fb56, PR #13
-- **Motor extendido con modo META-ONLY** (`runMetaOnly`): agentes SIN casos golden corren solo
-  meta-review + synthesis (para validator/debugger que usan Bash, librarian que extrae, risk-assessor
-  escalar). VALIDADO con librarian (run wku2o40nh, metaOnly:true, reviewDiff de calidad).
+## ESCALADO COMPLETO — los 11 agentes pasaron por el loop. PR #13 CI 5/5 VERDE.
+- **Motor extendido con modo META-ONLY** (`runMetaOnly`): agentes sin casos golden corren solo
+  meta-review + synthesis (validator/debugger usan Bash, librarian extrae, risk-assessor escalar).
 - **9 casos golden nuevos** (verificados a mano): code-reviewer x3, advisor x3, auditor-de-redaccion x3.
-- **Loop corriendo sobre los 7 restantes** (run wf_940dacb0-5ca, rounds:1 reps:2): code-reviewer/advisor/
-  auditor-de-redaccion (con eval) + compliance-auditor/debugger/risk-assessor/validator (meta-only).
-  => con esto los 11 agentes pasan por el loop. Falta: recolectar reviewDiffs + guardarlos en propuestas.
-- PENDIENTE aplicar los reviewDiffs (human-in-loop, cada uno = diff a revisar + bump). El del librarian
-  (meta-only) ya esta en el output; es bueno (completa §6 con === END ===, define status/severity, scope).
+- **Runs**: wku2o40nh (librarian meta-only), wf_940dacb0-5ca (los 7 restantes, 107 agentes).
+- **Resultados clave del eval**:
+  - **advisor: candidato ACEPTADO via RECALL** (baseline 0.875 -> 1.0, Δ+0.125, win 2/2) — 1er auto-aceptado.
+  - **code-reviewer: headroom real** (baseline 0.75 -> cand 0.85, Δ+0.10) — el dataset dificil SI da senal.
+  - **auditor-de-redaccion: candidato RECHAZADO** (Δ-0.04, degrada) -> NO aplicado (propuesta guardada).
+- **MEJORAS APLICADAS a 10/11 agentes** (todas con check_agents verde + gate F17 + CI verde, bump 0.6.2):
+  bug-hunter, security-auditor, critic (piloto) + advisor, code-reviewer (eval) + librarian, validator,
+  debugger, risk-assessor, compliance-auditor (meta-only). auditor-de-redaccion NO (candidato degradaba).
+- Propuestas durables: `.claude/docs/propuestas-agent-improver.md` (piloto) + `.claude/docs/propuestas-escalado.md` (8).
+- **Guardas verificadas en los 10**: frontmatter+tools intactos (Bash de validator/debugger preservado),
+  === SENTINEL-REPORT === y enums de verdict sin cambios, cita a agent-contract. check_agents 11/11 OK.
+
+## PENDIENTE (siguiente sesion)
+1. **Mergear PR #13** (CI verde). Auto-aprobacion: pedir OK al usuario -> `! gh pr merge 13 --squash --delete-branch`.
+2. auditor-de-redaccion: re-intentar (mejorar su dataset o el prompt del synth); su candidato degradaba.
+3. Mejora del motor: exponer `candidateFileFull`; el resume no cachea.
+4. Arreglar venv local (borrar .venv linux + uv sync).
 
 ---
 # Estado previo — agent-improver COMPLETO (piloto) + mejoras aplicadas (PR #13 verde)
