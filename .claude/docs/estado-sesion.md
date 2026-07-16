@@ -1,4 +1,18 @@
-# Estado de sesion — 2026-07-16 — agent-improver COMPLETO (piloto) + mejoras aplicadas (PR #13 verde)
+# Estado de sesion — 2026-07-16 — agent-improver: piloto + ESCALADO a los 11 agentes (en curso)
+
+## ESCALADO (post-reset del session limit) — commit cc2fb56, PR #13
+- **Motor extendido con modo META-ONLY** (`runMetaOnly`): agentes SIN casos golden corren solo
+  meta-review + synthesis (para validator/debugger que usan Bash, librarian que extrae, risk-assessor
+  escalar). VALIDADO con librarian (run wku2o40nh, metaOnly:true, reviewDiff de calidad).
+- **9 casos golden nuevos** (verificados a mano): code-reviewer x3, advisor x3, auditor-de-redaccion x3.
+- **Loop corriendo sobre los 7 restantes** (run wf_940dacb0-5ca, rounds:1 reps:2): code-reviewer/advisor/
+  auditor-de-redaccion (con eval) + compliance-auditor/debugger/risk-assessor/validator (meta-only).
+  => con esto los 11 agentes pasan por el loop. Falta: recolectar reviewDiffs + guardarlos en propuestas.
+- PENDIENTE aplicar los reviewDiffs (human-in-loop, cada uno = diff a revisar + bump). El del librarian
+  (meta-only) ya esta en el output; es bueno (completa §6 con === END ===, define status/severity, scope).
+
+---
+# Estado previo — agent-improver COMPLETO (piloto) + mejoras aplicadas (PR #13 verde)
 
 ## Objetivo / frase 4D
 Diligencia: construir `agent-improver` (Workflow que mide/mejora prompts de sentinel-agents), aplicar
