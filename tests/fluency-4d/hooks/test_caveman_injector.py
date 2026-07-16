@@ -22,9 +22,7 @@ def write_caveman(tmp_path, data) -> None:
     directory = tmp_path / "home" / ".claude" / "fluency4d"
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "caveman.json"
-    path.write_text(
-        data if isinstance(data, str) else json.dumps(data), encoding="utf-8"
-    )
+    path.write_text(data if isinstance(data, str) else json.dumps(data), encoding="utf-8")
 
 
 @pytest.mark.parametrize("level", LEVELS)

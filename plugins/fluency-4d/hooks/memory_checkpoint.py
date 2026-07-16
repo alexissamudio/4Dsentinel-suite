@@ -69,9 +69,7 @@ def _checkpoint_interval_tokens() -> int:
     except (TypeError, ValueError):
         value = 0
     if value <= 0:
-        log_debug(
-            f"FLUENCY_4D_CHECKPOINT_EVERY_TOKENS invalido ({raw!r}); usando {default}"
-        )
+        log_debug(f"FLUENCY_4D_CHECKPOINT_EVERY_TOKENS invalido ({raw!r}); usando {default}")
         return default
     return value
 

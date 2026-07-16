@@ -18,6 +18,7 @@ El plugin vive en `plugins/fluency-4d/`; este repo es su fuente de desarrollo.
 | Hooks | eventos, stdin/stdout, estado, bridge_router, checkpoint | .claude/docs/hooks.md |
 | Skills | frontmatter, triggers, references, registro doble | .claude/docs/skills.md |
 | Testing | pytest, conftest, aislamiento, cómo correr | .claude/docs/testing.md |
+| PSS | teoría de pruebas (triángulo, V&V, mutation, property, flaky) + gaps de la suite | .claude/docs/pss.md |
 | Release | versión en 3 lugares, caché, CI antes de tag | .claude/docs/release.md |
 | Filosofía | qué es / qué no es el plugin, criterio de decisión para features/ports | .claude/docs/filosofia.md |
 | Persistencia | qué pasa con planes/estado-sesion/puentes/memoria al cambiar requisitos (flow-back/forward/living) | .claude/docs/persistencia.md |

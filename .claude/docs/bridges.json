@@ -35,6 +35,13 @@
       "keywords": ["convenciones", "styleguide", "estilo de codigo", "lint", "linting", "ruff", "naming"],
       "rutas": [],
       "relaciones": [{"verbo": "va_con", "tema": "hooks"}]
+    },
+    {
+      "tema": "pss",
+      "archivo": ".claude/docs/pss.md",
+      "keywords": ["pss", "mutation", "flaky", "cobertura", "oraculo", "property-based", "verificacion y validacion"],
+      "rutas": [],
+      "relaciones": [{"verbo": "va_con", "tema": "testing"}]
     }
   ]
 }

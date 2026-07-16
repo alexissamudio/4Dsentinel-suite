@@ -68,7 +68,7 @@ def check_universales(errors: list[str]) -> None:
             print(f"  FAIL {name}: sin frontmatter")
             continue
         frontmatter = fm_match.group(1)
-        body = text[fm_match.end():]
+        body = text[fm_match.end() :]
         problems = []
 
         name_match = NAME_KEY.search(frontmatter)

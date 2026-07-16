@@ -40,17 +40,13 @@ def test_pasa_sobre_repo_real():
 
 
 def test_command_no_absoluto_falla(tmp_path):
-    path = _write_plugin_json(
-        tmp_path, {"mcpServers": {"cbm": {"command": "codebase-memory-mcp"}}}
-    )
+    path = _write_plugin_json(tmp_path, {"mcpServers": {"cbm": {"command": "codebase-memory-mcp"}}})
     errs = cc.check_plugin_json(path)
     assert any("CWE-427" in e or "PATH" in e for e in errs), errs
 
 
 def test_command_absoluto_ok(tmp_path):
-    path = _write_plugin_json(
-        tmp_path, {"mcpServers": {"cbm": {"command": "/usr/local/bin/cbm"}}}
-    )
+    path = _write_plugin_json(tmp_path, {"mcpServers": {"cbm": {"command": "/usr/local/bin/cbm"}}})
     assert cc.check_plugin_json(path) == []
 
 
@@ -62,9 +58,7 @@ def test_sin_mcpservers_ok(tmp_path):
 def test_command_drive_relative_falla(tmp_path):
     # C:foo (sin barra) es DRIVE-RELATIVE en Windows: resuelve contra el cwd de la
     # unidad, hijackeable. El regex viejo lo aceptaba como "absoluto Windows".
-    path = _write_plugin_json(
-        tmp_path, {"mcpServers": {"cbm": {"command": "C:foo\\bar"}}}
-    )
+    path = _write_plugin_json(tmp_path, {"mcpServers": {"cbm": {"command": "C:foo\\bar"}}})
     errs = cc.check_plugin_json(path)
     assert any("CWE-427" in e or "PATH" in e for e in errs), errs
 
@@ -109,8 +103,6 @@ def test_command_unc_absoluto_ok(tmp_path):
 def test_command_un_solo_backslash_falla(tmp_path):
     # Un solo backslash (\foo) es raiz-relativo de la unidad actual (hijackeable)
     # -> sigue rechazado; el fix UNC solo abre `\\` (dos).
-    path = _write_plugin_json(
-        tmp_path, {"mcpServers": {"cbm": {"command": "\\foo\\cbm.exe"}}}
-    )
+    path = _write_plugin_json(tmp_path, {"mcpServers": {"cbm": {"command": "\\foo\\cbm.exe"}}})
     errs = cc.check_plugin_json(path)
     assert any("CWE-427" in e or "PATH" in e for e in errs), errs

@@ -79,9 +79,7 @@ def set_version(new_version: str) -> int:
     MARKETPLACE.write_text(
         json.dumps(marketplace, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    PLUGIN.write_text(
-        json.dumps(plugin, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    PLUGIN.write_text(json.dumps(plugin, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"OK - version {new_version} escrita en los 2 lugares")
     return check()
 

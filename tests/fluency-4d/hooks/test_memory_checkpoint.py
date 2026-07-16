@@ -105,9 +105,7 @@ def test_save_pct_inf_cae_a_default(run_hook, project, tmp_path):
     # dispara al cruzar la cadencia por defecto (120k tok).
     t = make_transcript(tmp_path, 520_000)  # 130k tok >= 120k
     for i, val in enumerate(("inf", "1e999", "-inf")):
-        out = run_hook(
-            HOOK, fb(project, t, f"inf{i}"), env_extra={"FLUENCY_4D_SAVE_PCT": val}
-        )
+        out = run_hook(HOOK, fb(project, t, f"inf{i}"), env_extra={"FLUENCY_4D_SAVE_PCT": val})
         assert "estado-sesion.md" in out, val
 
 

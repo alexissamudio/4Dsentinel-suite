@@ -92,9 +92,7 @@ def test_router_tema_largo_malicioso_se_trunca(run_hook, project):
 def test_router_archivo_home_expansion_no_se_inyecta(run_hook, project):
     data = {
         "version": 1,
-        "temas": [
-            {"tema": "auth", "archivo": "~/.ssh/id_rsa", "keywords": ["auth", "login"]}
-        ],
+        "temas": [{"tema": "auth", "archivo": "~/.ssh/id_rsa", "keywords": ["auth", "login"]}],
     }
     write_bridges(project, data=data)
     out = run_hook(ROUTER, r_payload(project, "secb1", "login"))

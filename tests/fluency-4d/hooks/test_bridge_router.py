@@ -81,9 +81,7 @@ def test_arranque_y_tema_combinados_trailer_una_vez(run_hook, project):
 
 def test_cap_dos_temas_por_prompt(run_hook, project):
     write_bridges(project)
-    out = run_hook(
-        HOOK, payload(project, "s9", "login, endpoints y migraciones de database")
-    )
+    out = run_hook(HOOK, payload(project, "s9", "login, endpoints y migraciones de database"))
     assert out.count("Este proyecto documenta") == 2
 
 
