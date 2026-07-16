@@ -28,4 +28,7 @@ strict = true
 # que mypy no resuelve estaticamente; ignore_missing_imports evita que eso rompa strict.
 ignore_missing_imports = true
 explicit_package_bases = true
+# scripts/ en el path para que mypy resuelva el import hermano `bump_common`
+# (los wrappers de bump delegan en el; sin esto seria Any -> no-any-return).
+mypy_path = ["scripts"]
 exclude = ["tests/sentinel-agents/fixtures"]
