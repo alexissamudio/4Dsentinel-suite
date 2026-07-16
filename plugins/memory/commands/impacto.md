@@ -1,7 +1,7 @@
 ---
 description: Mapea los cambios de git a los simbolos afectados (envuelve detect_changes). Util antes de review o release.
 argument-hint: "[rango git opcional; por defecto los cambios sin commitear]"
-allowed-tools: ["mcp__plugin_4dsentinel-memory_codebase-memory__detect_changes", "mcp__plugin_4dsentinel-memory_codebase-memory__list_projects"]
+allowed-tools: ["mcp__codebase-memory__detect_changes", "mcp__codebase-memory__list_projects"]
 ---
 
 Mapeá los **cambios de git a los símbolos** (funciones/clases) afectados.

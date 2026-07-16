@@ -1,7 +1,7 @@
 ---
 description: Muestra el mapa de arquitectura de un proyecto indexado (envuelve get_architecture): stack, rutas, hotspots y clusters.
 argument-hint: "[nombre del proyecto; por defecto el del repo actual]"
-allowed-tools: ["mcp__plugin_4dsentinel-memory_codebase-memory__get_architecture", "mcp__plugin_4dsentinel-memory_codebase-memory__list_projects"]
+allowed-tools: ["mcp__codebase-memory__get_architecture", "mcp__codebase-memory__list_projects"]
 ---
 
 Mostrá el **mapa de arquitectura** de un proyecto indexado.

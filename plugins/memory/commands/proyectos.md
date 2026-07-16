@@ -1,7 +1,7 @@
 ---
 description: Lista los proyectos indexados en codebase-memory y su estado (envuelve list_projects).
 argument-hint: "(sin argumentos)"
-allowed-tools: ["mcp__plugin_4dsentinel-memory_codebase-memory__list_projects"]
+allowed-tools: ["mcp__codebase-memory__list_projects"]
 ---
 
 Listá los **proyectos indexados** en el grafo de codebase-memory.
