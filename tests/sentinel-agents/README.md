@@ -25,3 +25,15 @@ Invocación (desde un cwd cualquiera, con el plugin instalado):
 ```
 claude -p "Invocá el subagente sentinel-agents:security-auditor sobre tests/fixtures/target-vulnerable/ y pegá su bloque SENTINEL-REPORT" --allowedTools "Agent,Read,Grep,Glob"
 ```
+
+## 3. Cadencia (cuándo correr la capa 2 — si no se agenda, se pierde)
+
+La capa semántica es el vértice del triángulo PSS que NO se puede cubrir con pytest
+(prompts no deterministas; ver `.claude/docs/pss.md` §G6). Se gobierna con proceso:
+corré la eval manual **antes de**:
+- cada release que toque `agents/*.md`, `references/agent-contract.md`, o la KB ISO;
+- mergear un cambio en el prompt de un agente (aunque el CI estructural pase).
+
+Registrá `recall`/`precision`/`contrato` del run en el PR. Si el recall baja de los 3
+hallazgos plantados o aparecen alucinaciones, NO mergear. La capa 1 (estructural, CI)
+NO sustituye esto: valida la FORMA del agente, no que ENCUENTRE lo que debe.

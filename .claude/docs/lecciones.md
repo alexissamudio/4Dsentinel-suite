@@ -30,3 +30,12 @@ lo valida ningún `.py`.
 ocurriendo en los propios docs. Nada lo atrapa automáticamente.
 **Cómo aplicar:** al tocar hooks/tests/agentes, revisar el doc del tema (el hook
 `doc_drift` avisa). Considerar un check que cuente hooks/tests reales vs lo documentado.
+
+## [2026-07-15] — pytest-cov NO ve los hooks (corren por subprocess)
+**Contexto:** al agregar coverage, los hooks daban 0% pese a estar muy testeados.
+**Lección:** los hooks se ejecutan por subprocess (`uv run --script`), y `pytest-cov`
+instrumenta solo el proceso padre → mide 0% (señal FALSA de "sin tests"). En cambio
+`mutmut` SÍ los cubre porque muta el archivo en disco que el subprocess lee.
+**Cómo aplicar:** medir `--cov` solo del código importado directo (`scripts/`); para los
+hooks confiar en los tests E2E por subprocess (+ mutation), no en el % de cobertura.
+Mutation en Windows requiere WSL (mutmut no corre nativo).
