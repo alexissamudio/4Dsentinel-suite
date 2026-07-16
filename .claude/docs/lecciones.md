@@ -51,3 +51,17 @@ bajo strict. Fix: agregar el código `unused-ignore` a la lista →
 sea inútil donde no).
 **Cómo aplicar:** al tipar código con ramas por `os.name`/plataforma, verificá mypy en
 AMBAS (Windows local + WSL/linux) antes de pushear; el CI es linux.
+
+## [2026-07-15] — El prefijo de tools MCP cambia según el SCOPE de registro
+**Contexto:** los 6 comandos de memory tenían `allowed-tools` con prefijo plugin-scoped
+`mcp__plugin_4dsentinel-memory_codebase-memory__*`, pero el fix CWE-427 movió el registro
+del MCP de `plugin.json` a user-scope (`/suite-setup` → `claude mcp add codebase-memory`).
+Las tools reales pasaron a `mcp__codebase-memory__*` → allowlists muertos, comandos caían
+en prompt de permiso. Ningún check validaba los nombres.
+**Lección:** el prefijo de una tool MCP depende de CÓMO se registra el server: plugin
+declara `mcpServers` → `mcp__plugin_<plugin>_<server>__<tool>`; `claude mcp add <name>`
+user-scope → `mcp__<name>__<tool>`. Mover el registro rompe cualquier `allowed-tools`
+hardcodeado con el prefijo viejo, en silencio.
+**Cómo aplicar:** al cambiar el scope/registro de un MCP, actualizá todos los
+`allowed-tools`; agregá un check de CI que valide los nombres de tools, no solo que la
+clave exista. En este entorno las tools se ven como `mcp__codebase-memory__<tool>`.
