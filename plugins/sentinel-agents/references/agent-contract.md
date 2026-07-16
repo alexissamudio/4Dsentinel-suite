@@ -110,15 +110,19 @@ Cada agente cierra con UN bloque de verdict parseable (ver §6). Todos admiten
 
 Los agentes son read-only: no persisten hallazgos para otro agente. El **handoff
 lo hace el ORQUESTADOR** (el main Claude, típicamente vía el skill `/sentinel-audit`):
-corre un agente, toma su bloque `=== SENTINEL-REPORT ===`, y lo PEGA en la
-invocación del siguiente como evidencia de entrada.
+corre un agente, toma su bloque `=== SENTINEL-REPORT ===`, y lo relaya al siguiente
+como evidencia de entrada. Forma preferida: **por RUTA** — el orquestador escribe el
+bloque a `<target>/.sentinel/<run-id>/<agente>.md` y le pasa al siguiente agente esa
+ruta + verdict + un digest de los ids clave; el agente la abre con `Read`/`Grep` y
+trae solo el finding que va a citar. (Pegar el bloque textual sigue siendo válido,
+pero infla el input del agente que lo recibe.)
 
-- Cuando el compliance-auditor CONSUME un bloque del security-auditor, su
-  `evidence:` del control DEBE citar el finding relayado (p. ej. "alimentado por
-  security-auditor CWE-287 en auth.js:17"). Si no recibió bloque, corre standalone
-  y su evidencia sale solo de su propio recorrido.
+- Cuando el compliance-auditor CONSUME el reporte del security-auditor (por ruta o
+  pegado), su `evidence:` del control DEBE citar el finding relayado (p. ej.
+  "alimentado por security-auditor CWE-287 en auth.js:17"). Si no recibió nada, corre
+  standalone y su evidencia sale solo de su propio recorrido.
 - El orquestador escribe un marcador `handoff: <A>→<B>` en el informe combinado
-  cuando efectivamente pegó el bloque de A en la invocación de B.
+  cuando efectivamente relayó el reporte de A a la invocación de B.
 
 **Dueños/dedup por TIPO DE ID** (regla, no tabla enumerada; el dedup lo ejecuta el
 orquestador best-effort, sin garantía):
@@ -171,6 +175,10 @@ ubica así, en orden:
    carpeta como raíz del KB.
 3. Si no la encontrás, reportá `INCOMPLETE` explicando que no pudiste ubicar el KB
    (no inventes controles de memoria).
+
+Ya en el KB, para saltar a un control por su id consultá `INDEX.md` (lookup
+`CTRL-id → archivo`) y abrí solo ese checklist con `Grep`; no hace falta leer
+`README.md` ni `00-INSTRUCCIONES-IA.md` completos para orientarte.
 
 ## 8. Ejecutores (validator y debugger) — detección de stack y timeouts
 
