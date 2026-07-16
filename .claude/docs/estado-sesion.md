@@ -1,6 +1,53 @@
-# Estado de sesión — 2026-07-15 — AUDITORÍA 4D EN CURSO
+# Estado de sesión — 2026-07-16 — REMEDIACIÓN P1 COMPLETA (sin push/PR)
 
 ## Objetivo / frase 4D
+Diligencia: ejecutar el P1 de la auditoría 2026-07-15 (estructural, alto ROI).
+Branch: **`fix/audit-p1-structural`** (desde main 5ef2c62). **10 commits, todo P1
+cerrado, verificado local (173 passed/4 skipped, ruff+mypy+9 checks verdes).**
+FALTA: push + abrir PR (esperar confirmación del usuario).
+
+## P1 — TODO HECHO (commits, en orden)
+- `67acd7f` #6a F8 · `bbdcff8` #6b F9 · `3892aaa` hardening review #6 (verdict CLEAN)
+- `9e1d89a` #10a F3 (nombres MCP en commands) · `580a161` #10b F1 (allowlist agentes)
+- `7092a61` #8 F14 (bump_suite + check-tag) · `3e4854a` #9a F15 ASCII · `3816b44` #9b
+  F15 trailer · `33aabb2` fix regex trailer (falso positivo con prosa) · `ba68810`
+  #7 F6 (pin actions por SHA + ruff/mypy/deps fijas)
+- Docs actualizadas: release.md (bump_suite, check-tag, supply-chain), testing.md
+  (mypy_path, nuevos checks, conteo 177).
+
+## Próximo paso
+1. `git push origin fix/audit-p1-structural` + `gh pr create` (o merge a main si el
+   usuario prefiere). Esperar CI verde (ahora con jobs nuevos: ASCII, trailer).
+2. Actualizar el banner de remediación en `auditoria-2026-07-15.md` (P1 hecho).
+3. Pendiente P2 (ver abajo): F16 coverage hooks + mutmut; F11 .sentinel/ gitignore;
+   F4/F5/F12 menores; F17/F18/F19 disciplina.
+
+## Objetivo / frase 4D (auditoría previa, cerrada)
+
+## Progreso P1 (esta sesión) — commits en fix/audit-p1-structural
+- **#6a · F8 — HECHO (67acd7f):** `scripts/bump_common.py`; los 3 bump scripts son
+  fachadas finas que preservan la API testeada (globals + set_version/read_versions/
+  _market_entry para el monkeypatch). `mypy_path=["scripts"]` en pyproject.
+- **#6b · F9 — HECHO (bbdcff8):** `scripts/frontmatter_utils.py` (frontmatter_body/
+  frontmatter/parse_tools/strip_quotes). Migrados check_agents, sentinel_check_skills,
+  check_commands (cross-dir vía sys.path+SUITE_ROOT). Regex `^---\s*\n` (F5). parse_tools
+  conserva `.strip("'\"")` exacto. fluency_check_skills queda aparte (importlib).
+- **Hardening review #6 — HECHO (3892aaa):** quitado `SEMVER` inerte de los wrappers;
+  nuevo `test_frontmatter_utils.py` (cubre rama de quotes de parse_tools). El
+  code-reviewer dio verdict CLEAN sobre 5ef2c62..bbdcff8 (2 Minor, ambos cerrados).
+- **#10 · defensa F3/F1 — HECHO (9e1d89a + 580a161):** check_commands valida NOMBRES de
+  tools MCP en allowed-tools (prefijo user-scope + KNOWN_MCP_TOOLS); check_agents suma
+  KNOWN_AGENT_TOOLS (allowlist positivo, caza typos). Con tests.
+- **#8 · F14 — HECHO (7092a61):** `scripts/bump_suite.py` (--check/--set/--check-tag) +
+  validate.yml trigger en tags v* + step `metadata.version == git tag` (solo en tag).
+
+## Pendiente P1 (en esta branch)
+- **#9 · F15:** checks de convenciones en CI (ASCII-only en `**/*.py`, trailer de commit).
+- **#7 · F6:** pin de actions por SHA + `uv.lock --frozen` + pin ruff/mypy (Dependabot).
+- Al cerrar: revisar docs (release.md por bump_suite, testing.md por mypy_path), push + PR.
+- Estado verificado: 166 passed / 4 skipped, ruff + mypy strict verdes.
+
+## Objetivo / frase 4D (auditoría previa, cerrada)
 Diligencia: auditoría completa 4D (loop-until-dry) de la suite, problemas presentes y
 futuros. Deliverable: informe + plan de remediación priorizado. SIN fixes.
 

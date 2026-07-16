@@ -65,3 +65,29 @@ hardcodeado con el prefijo viejo, en silencio.
 **Cómo aplicar:** al cambiar el scope/registro de un MCP, actualizá todos los
 `allowed-tools`; agregá un check de CI que valide los nombres de tools, no solo que la
 clave exista. En este entorno las tools se ven como `mcp__codebase-memory__<tool>`.
+(Hecho 2026-07-16: `check_commands.check_allowed_tools` + `KNOWN_MCP_TOOLS`.)
+
+## [2026-07-16] — Imports hermanos en scripts/ + mypy strict → no-any-return
+**Contexto:** al extraer `bump_common.py`/`frontmatter_utils.py`, los wrappers hacían
+`return bump_common.foo()` con retorno anotado. mypy (con `ignore_missing_imports`) no
+resolvía el import plano `import bump_common` → lo trataba como `Any` → 15 errores
+`Returning Any from function declared to return ...` bajo strict.
+**Lección:** el import plano funciona en RUNTIME (`uv run --script` pone el dir en
+`sys.path[0]`; los tests hacen `sys.path.insert`), pero mypy no lo ve sin ayuda.
+`mypy_path = ["scripts"]` en `pyproject.toml` lo resuelve con tipos reales, sin dar
+"source file found twice" (mismo nombre de módulo por ambas vías).
+**Cómo aplicar:** al agregar un módulo compartido en `scripts/` que otros scripts
+importan por nombre plano, verificá que `mypy_path` incluya su dir; corré mypy con los
+DIRS completos (como el CI), no archivos sueltos, que también falla la resolución.
+
+## [2026-07-16] — Un check de contenido se marca a sí mismo si no ancla el patrón
+**Contexto:** `check_commit_trailer.py` (prohíbe `Co-Authored-By: Claude`) marcó su
+PROPIO commit como infractor: el mensaje describía la regla y mencionaba el patrón
+(`noreply@anthropic.com`, `Co-Authored-By: Claude`) en prosa.
+**Lección:** un check que busca un patrón "en cualquier parte" del texto se dispara con
+menciones legítimas (docs, mensajes que describen la regla). Un trailer git SIEMPRE está
+a inicio de línea → anclarlo con `^...` + `re.MULTILINE` distingue el trailer real de una
+cita. El test debe incluir un caso "menciona la regla en prosa → NO marca".
+**Cómo aplicar:** al escribir un guard que busca strings prohibidos, anclá al formato
+estructural real (inicio de línea, trailer, key: value), no substring libre; testeá el
+falso positivo de auto-referencia.
