@@ -22,7 +22,12 @@ uv run --with pytest pytest tests/ -q
 Cada test ejecuta el hook REAL por subprocess (`uv run --script`) pasándole el
 payload JSON por stdin — no se importan los hooks como módulos. Fixtures:
 
-- `run_hook(nombre, payload, env_extra)`: corre el hook con un env aislado.
+- `run_hook(nombre, payload, env_extra)`: corre el hook con un env aislado. Bajo
+  `FLUENCY_COV` (solo el CI ubuntu la setea) envuelve el subprocess con
+  `coverage run --parallel-mode` para medir cobertura real de los hooks (F16); la
+  ruta default `uv run --script` queda intacta para dev local y Windows. Fija
+  `cwd=REPO_ROOT` para que los `.coverage.*` caigan donde el combine los espera.
+  Detalle del mecanismo en `pss.md` sec 9.
 - `state_of(session_id, sufijo)`: lee el archivo de estado que dejó el hook
   (`-ckpt`, `-drift` o sin sufijo para el router).
 - `project`: proyecto de juguete con `.claude/docs/` en tmp_path;

@@ -80,6 +80,21 @@ resolvía el import plano `import bump_common` → lo trataba como `Any` → 15 
 importan por nombre plano, verificá que `mypy_path` incluya su dir; corré mypy con los
 DIRS completos (como el CI), no archivos sueltos, que también falla la resolución.
 
+## [2026-07-16] — `mutmut results` SOLO lista sobrevivientes, no los matados
+**Contexto:** al validar el nightly de mutmut (F16), `mutmut run` sobre `check_kb_blank.py`
+mostró "Survived (28)" y `mutmut results` no listaba nada matado → pareció que TODOS los
+mutantes sobrevivían (mutmut roto). Falso: consultando la cache
+(`sqlite3 .mutmut-cache "select status,count(*) from mutant group by status"`) → 27 killed /
+28 survived / 55 total. El mutante de lógica real (`not in`→`in`) fue matado; los 28
+sobrevivientes eran legítimos (strings de mensajes que los tests no asertan, globales
+monkeypatcheados, guarda `__main__`/argv no ejercitada, equivalentes como maxsplit 1 vs 2).
+**Lección:** `mutmut results` es engañoso — solo imprime NO-matados. Para el mutation score
+real consultar la cache SQLite por `status` (`ok_killed` vs `bad_survived`). "Todo sobrevive"
+casi siempre es mala lectura, no mutmut roto. Y mutmut genera muchas mutaciones de strings que
+sobreviven bien (los tests no deben asertar texto de mensajes).
+**Cómo aplicar:** validar mutmut por conteo de la cache, no por `results`. mutmut nativo en
+Windows corre el baseline pero NO muta (necesita WSL, `pss.md:126`); validar siempre en Linux/WSL.
+
 ## [2026-07-16] — Un check de contenido se marca a sí mismo si no ancla el patrón
 **Contexto:** `check_commit_trailer.py` (prohíbe `Co-Authored-By: Claude`) marcó su
 PROPIO commit como infractor: el mensaje describía la regla y mencionaba el patrón
