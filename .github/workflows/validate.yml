@@ -32,16 +32,21 @@ jobs:
           uvx ruff@0.15.21 format --check plugins/fluency-4d/hooks/ scripts/ tests/ plugins/memory/scripts/
       - name: Mypy (strict, todo el Python)
         run: uvx mypy@2.3.0 plugins/fluency-4d/hooks/ scripts/ plugins/memory/scripts/
-      # Coverage SOLO del codigo importado directo (scripts): los hooks corren por
-      # subprocess (uv run --script) y pytest-cov no los ve -> medirlos daria 0% falso.
-      # Su cobertura real la dan los tests E2E por subprocess, no este numero.
-      - name: Pytest (+ coverage report de scripts)
+      # Coverage de scripts Y hooks. Los hooks corren por subprocess (uv run --script) y
+      # pytest-cov (que instrumenta el padre) no los veria -> con FLUENCY_COV=1 el conftest
+      # instrumenta el subprocess con `coverage run --parallel-mode` y el combine de pytest-cov
+      # une los data files .coverage.* (ver conftest.py + pss.md sec 9). coverage==7.15.2:
+      # misma version que arrastra pytest-cov==7.1.0, para que padre e hijo combinen sin
+      # mismatch de schema. Report-only (sin fail_under).
+      - name: Pytest (+ coverage report de scripts y hooks)
+        env:
+          FLUENCY_COV: "1"
         run: >
           uv run
           --with pytest==9.1.1 --with pytest-randomly==4.1.0
-          --with hypothesis==6.156.6 --with pytest-cov==7.1.0
+          --with hypothesis==6.156.6 --with pytest-cov==7.1.0 --with coverage==7.15.2
           pytest tests/ -q
-          --cov=scripts --cov=plugins/memory/scripts
+          --cov=scripts --cov=plugins/memory/scripts --cov=plugins/fluency-4d/hooks
           --cov-report=term-missing
       - name: Skills bien formados (contrato fluency)
         run: uv run scripts/fluency_check_skills.py

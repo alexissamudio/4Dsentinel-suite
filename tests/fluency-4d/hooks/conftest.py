@@ -34,13 +34,36 @@ def run_hook(tmp_path):
         env.pop("FLUENCY_4D_CHECKPOINT_EVERY_TOKENS", None)
         if env_extra:
             env.update(env_extra)
+        # Ruta default (dev local / job Windows): uv run --script, fiel a produccion.
+        # Bajo FLUENCY_COV (solo CI ubuntu) se instrumenta el subprocess con coverage
+        # para medir la cobertura REAL de los hooks: pytest-cov solo ve el proceso
+        # padre, asi que sin esto los hooks reportarian 0% falso. Como los hooks son
+        # PEP-723 con deps=[], correr bajo `coverage run` es funcionalmente identico a
+        # `uv run --script`. parallel-mode + coverage combine unen los data files.
+        # coverage==7.15.2: misma version que arrastra pytest-cov==7.1.0 (evita
+        # mismatch de schema entre padre e hijo al combinar).
+        cmd = ["uv", "run", "--script", str(HOOKS_DIR / hook_name)]
+        if os.environ.get("FLUENCY_COV"):
+            cmd = [
+                "uv",
+                "run",
+                "--with",
+                "coverage==7.15.2",
+                "coverage",
+                "run",
+                "--parallel-mode",
+                "--source",
+                str(HOOKS_DIR),
+                str(HOOKS_DIR / hook_name),
+            ]
         result = subprocess.run(
-            ["uv", "run", "--script", str(HOOKS_DIR / hook_name)],
+            cmd,
             input=json.dumps(payload),
             capture_output=True,
             text=True,
             encoding="utf-8",
             env=env,
+            cwd=REPO_ROOT,
             timeout=120,
         )
         assert result.returncode == 0, result.stderr

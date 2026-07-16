@@ -1,0 +1,53 @@
+name: mutation (nightly)
+
+# Mutation testing NO bloqueante (F16 de la auditoria 2026-07-15). Workflow separado en
+# schedule -> nunca es un required-check de PRs. Surface = step summary + artifact, no issues
+# (por eso permisos minimos contents:read). Corre solo en ubuntu (UTF-8; los hooks ya son
+# ASCII -> sin conflicto cp1252 de Windows).
+on:
+  schedule:
+    - cron: "0 6 * * *" # diario 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  mutmut:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      # mutmut 2.5.1 muta el archivo IN-PLACE en disco -> el subprocess `uv run --script` de
+      # la fixture run_hook lee la version mutada, asi los hooks se mutan de verdad. mutmut 3.x
+      # aisla en mutants/ y NO mutaria el fuente que el subprocess ejecuta -> por eso el pin 2.x.
+      # `|| true`: nightly informativo; los mutantes sobrevivientes no ponen el job en rojo.
+      # check_agents.py entra al set aunque no tuvo spot-check previo (report-only): sobrevivientes
+      # ahi son aceptables.
+      - name: Mutation testing (hooks + guardas de seguridad, no bloqueante)
+        run: >
+          uv run --with mutmut==2.5.1
+          --with pytest==9.1.1 --with pytest-randomly==4.1.0 --with hypothesis==6.156.6
+          mutmut run
+          --paths-to-mutate "plugins/fluency-4d/hooks/,scripts/check_agents.py,scripts/check_kb_blank.py,plugins/memory/scripts/check_commands.py"
+          --runner "uv run --with pytest==9.1.1 --with pytest-randomly==4.1.0 --with hypothesis==6.156.6 pytest tests/ -q -x"
+          --simple-output --no-progress
+          || true
+      - name: Resumen de resultados al step summary
+        if: always()
+        run: |
+          {
+            echo '## Mutation testing (mutmut 2.5.1) - hooks + guardas'
+            echo '```'
+            uv run --with mutmut==2.5.1 mutmut results 2>&1 || echo '(sin resultados: revisar el step anterior)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Subir cache de mutmut como artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutmut-results
+          path: .mutmut-cache
+          if-no-files-found: warn

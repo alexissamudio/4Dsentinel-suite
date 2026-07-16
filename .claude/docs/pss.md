@@ -158,11 +158,18 @@ Statement < branch < condition < **MC-DC** (criterio de aviónica). Mide **ejecu
 validación**: 100% de cobertura con oráculos vacíos sigue siendo fallo #2. Es métrica de
 verificación; nada dice del vértice de negocio.
 
-**Caveat de esta suite (importante):** los hooks corren por **subprocess**
-(`uv run --script`), así que `pytest-cov` (que instrumenta el proceso padre) los mide
-**0% aunque estén muy testeados** — un reporte de cobertura de los hooks sería una señal
-FALSA. Por eso el `--cov` de CI mide solo `scripts/` (código importado directo); la
-cobertura real de los hooks la dan los tests E2E por subprocess, no un número.
+**Cómo se mide la cobertura de los hooks (F16):** los hooks corren por **subprocess**
+(`uv run --script`), así que `pytest-cov` —que instrumenta el proceso padre— **por sí solo
+los mediría 0% aunque estén muy testeados**. Para evitar esa señal falsa, la fixture
+`run_hook` (`conftest.py`) instrumenta el subprocess con `coverage run --parallel-mode`
+**cuando `FLUENCY_COV` está seteada** (solo el job ubuntu del CI). Padre e hijo escriben
+data files `.coverage.*` con la misma versión de `coverage` (pineada 7.15.2 = la que arrastra
+`pytest-cov==7.1.0`) y `parallel=true`+`relative_files=true` (`pyproject.toml [tool.coverage.run]`);
+el combine de pytest-cov los une al cerrar la sesión → el `--cov=plugins/fluency-4d/hooks` del
+CI reporta cobertura **real**. Dev local y el job Windows corren la ruta `uv run --script` sin
+instrumentar (sin `FLUENCY_COV`), intacta y rápida. Report-only: **sin `fail_under`**, coherente
+con el resto de la suite. Recordá el fallo #2: cobertura mide ejecución, no validación — el número
+de hooks solo vale junto a los asserts E2E de efectos que ya existen.
 
 ---
 

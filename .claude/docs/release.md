@@ -77,3 +77,14 @@ temp dir, CWE-377) corren en los jobs ubuntu y se saltean en Windows.
 **Supply-chain (F6):** las actions están pineadas por **SHA de commit** (no por tag mutable) y
 `ruff`/`mypy`/deps de pytest tienen **versión fija** en el workflow. El trigger incluye
 `tags: [v*]`. Al subir una action o el tooling, actualizar el SHA/versión a conciencia.
+
+**Coverage de hooks (F16):** el job `fluency-4d` corre con `FLUENCY_COV=1`, que hace que la fixture
+`run_hook` instrumente el subprocess de cada hook con `coverage run` y mida su cobertura REAL
+(ver `pss.md` sec 9). `coverage` está pineado a la misma versión que arrastra `pytest-cov` para que
+el combine no falle por mismatch de schema. Es **report-only** (sin `fail_under`).
+
+**Mutation nightly (F16, `.github/workflows/mutation.yml`):** workflow SEPARADO en `schedule`
+(diario) + `workflow_dispatch`, **no bloqueante** (nunca es required-check de PRs). Corre `mutmut`
+**pineado 2.x** (muta in-place → el subprocess `uv run --script` lee la mutación; mutmut 3.x aísla
+en `mutants/` y NO serviría) sobre hooks + guardas de seguridad; surface = step summary + artifact,
+permisos `contents: read`. Sobrevivientes ahí son informativos, no rompen nada.

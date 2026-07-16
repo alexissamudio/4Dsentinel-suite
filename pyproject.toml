@@ -32,3 +32,12 @@ explicit_package_bases = true
 # (los wrappers de bump delegan en el; sin esto seria Any -> no-any-return).
 mypy_path = ["scripts"]
 exclude = ["tests/sentinel-agents/fixtures"]
+
+[tool.coverage.run]
+# Los hooks corren por subprocess (uv run --script); bajo FLUENCY_COV el conftest los
+# instrumenta con `coverage run --parallel-mode` (ver tests/fluency-4d/hooks/conftest.py).
+# parallel: padre (pytest-cov) e hijo (subprocess) escriben data files .coverage.* que el
+# combine final une. relative_files: normaliza rutas para que ambos (misma cwd = raiz repo)
+# combinen sin desalinear. El --cov/--source de la CLI define que se mide en cada proceso.
+parallel = true
+relative_files = true
