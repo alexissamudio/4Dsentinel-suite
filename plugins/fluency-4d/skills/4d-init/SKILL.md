@@ -53,7 +53,8 @@ proyecto (archivos clave con rutas, flujo, convenciones, gotchas) — no teoría
 SIEMPRE (naming, formato, idioma de identificadores, estructura de carpetas,
 linters detectados). Si la evidencia es poca, el doc lo dice honestamente:
 línea "⚠ Generado con poca evidencia — validar" y `evidence: low` en el
-frontmatter. Pasa por la misma protección de hash en re-ejecución. Su entrada
+frontmatter. En re-ejecución se trata como cualquier doc: se pregunta antes
+de regenerar. Su entrada
 en bridges.json usa keywords específicas: `["convenciones", "styleguide",
 "estilo de codigo", "lint", "linting", "naming"]` (NO "style"/"estilo"/"formato"
 a secas: false-positives con estilos de UI).
@@ -133,7 +134,7 @@ Al escribir código, respetá `.claude/docs/convenciones.md`.
 3. Temas nuevos detectados se proponen como en la Fase 3; temas cuyos archivos fuente
    desaparecieron se proponen para eliminar de la tabla.
 4. El bloque entre centinelas se regenera; todo lo demás en CLAUDE.md queda intacto.
-5. **Reglas-siempre (sin hash propio):** baseline = el backup previo. Compará la
+5. **Reglas-siempre:** baseline = el backup previo. Compará la
    sección "## Reglas del proyecto" del bloque actual contra la del backup más
    reciente; si difieren, el humano las editó → AskUserQuestion (conservar /
    regenerar / fusionar). Orden de reglas estable entre corridas (evita diffs
