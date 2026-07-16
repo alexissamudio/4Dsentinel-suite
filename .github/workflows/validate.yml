@@ -3,6 +3,7 @@ name: validate
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -86,5 +87,8 @@ jobs:
           uv run python -m json.tool plugins/memory/.claude-plugin/plugin.json > /dev/null
       - name: Versiones paraguas == subtree
         run: uv run scripts/check_suite_versions.py
+      - name: metadata.version == git tag (solo en push de tag)
+        if: github.ref_type == 'tag'
+        run: uv run scripts/bump_suite.py --check-tag "${{ github.ref_name }}"
       - name: Plugin memory bien formado
         run: uv run plugins/memory/scripts/check_commands.py
