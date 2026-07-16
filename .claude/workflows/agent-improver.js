@@ -330,21 +330,34 @@ async function runRound(target, currentFull, cases, reps) {
   const candRate = avg(candRates)
   const candFpCount = avg(candFps)
 
-  // pareo por rep: cuantas reps mejoran por MARGIN
+  // pareo por rep: cuantas reps mejoran el catch-rate por MARGIN, y en cuantas no lo degradan.
   const n = Math.min(baseRates.length, candRates.length)
   let winReps = 0
+  let heldReps = 0
   for (let i = 0; i < n; i++) {
-    if (candRates[i] - baseRates[i] > MARGIN) winReps++
+    const d = candRates[i] - baseRates[i]
+    if (d > MARGIN) winReps++
+    if (d >= -1e-9) heldReps++
   }
-  const majority = winReps > n / 2
-  const fpOk = candFpCount <= baseFpCount
-  const accepted = majority && fpOk
+  // Dos vias de aceptacion:
+  //  (A) RECALL: el candidato sube el catch-rate por MARGIN en la mayoria de reps y no empeora FP.
+  //  (B) PRECISION: cuando el recall ya esta al techo (o no puede subir), aceptar si el candidato
+  //      MANTIENE el recall en la mayoria de reps y BAJA los falsos positivos. Sin esta via, una
+  //      mejora real de precision (menos FP a igual catch) quedaba descartada (caso critic del piloto).
+  const fpOk = candFpCount <= baseFpCount + 1e-9
+  const fpImproved = candFpCount < baseFpCount - 1e-9
+  const recallHeld = heldReps > n / 2
+  const acceptedByRecall = winReps > n / 2 && fpOk
+  const acceptedByPrecision = recallHeld && fpImproved
+  const accepted = acceptedByRecall || acceptedByPrecision
+  const via = acceptedByRecall ? 'RECALL' : acceptedByPrecision ? 'PRECISION' : null
 
   return {
     accepted,
+    via,
     reason: accepted
-      ? `mejora en ${winReps}/${n} reps por >${MARGIN}, fp no sube`
-      : `no aceptado (win ${winReps}/${n}, fp base=${baseFpCount.toFixed(2)} cand=${candFpCount.toFixed(2)})`,
+      ? `aceptado via ${via}: win ${winReps}/${n} reps, held ${heldReps}/${n}, fp base=${baseFpCount.toFixed(2)} cand=${candFpCount.toFixed(2)}`
+      : `no aceptado (win ${winReps}/${n}, held ${heldReps}/${n}, fp base=${baseFpCount.toFixed(2)} cand=${candFpCount.toFixed(2)})`,
     baseRate,
     candRate,
     deltaCatch: candRate - baseRate,
@@ -383,6 +396,7 @@ async function improveAgent(target, rounds, reps) {
     history.push({
       round: round + 1,
       accepted: res.accepted,
+      via: res.via || null,
       reason: res.reason,
       baseRate: res.baseRate,
       candRate: res.candRate,
@@ -422,12 +436,21 @@ function loadPrompt(target) {
 }
 
 // ------------------------------------------------------------------- main
+// `args` puede llegar como objeto o, segun como se invoque, como string JSON: normalizar.
+let cfg = args
+if (typeof cfg === 'string') {
+  try {
+    cfg = JSON.parse(cfg)
+  } catch (e) {
+    cfg = {}
+  }
+}
+if (!cfg || typeof cfg !== 'object') cfg = {}
+
 const targets =
-  args && args.targets && args.targets.length
-    ? args.targets
-    : ['bug-hunter', 'security-auditor', 'critic']
-const rounds = args && args.rounds ? args.rounds : 2
-const reps = args && args.reps ? args.reps : 3
+  cfg.targets && cfg.targets.length ? cfg.targets : ['bug-hunter', 'security-auditor', 'critic']
+const rounds = cfg.rounds ? cfg.rounds : 2
+const reps = cfg.reps ? cfg.reps : 3
 
 log(`agent-improver: targets=[${targets.join(', ')}] rounds=${rounds} reps=${reps}`)
 
@@ -441,6 +464,7 @@ const report = results.filter(Boolean).map((r) => ({
   rounds: (r.rounds || []).map((rd) => ({
     round: rd.round,
     accepted: rd.accepted,
+    via: rd.via,
     reason: rd.reason,
     baseRate: rd.baseRate,
     candRate: rd.candRate,
@@ -450,9 +474,12 @@ const report = results.filter(Boolean).map((r) => ({
     diff: rd.diff,
     metaFindings: rd.metaFindings,
   })),
-  // El diff del ULTIMO candidato aceptado es el que el conductor revisa/aplica.
+  // El diff del ULTIMO candidato aceptado por el gate (el que se aplicaria en el loop).
   proposedDiff:
     (r.rounds || []).filter((rd) => rd.accepted).map((rd) => rd.diff).slice(-1)[0] || null,
+  // El diff de la PRIMERA ronda SIEMPRE (aceptado o no): el conductor lo revisa a mano aunque el
+  // gate automatico no lo haya aceptado (p.ej. mejora de calidad sin delta de catch-rate medible).
+  reviewDiff: (r.rounds || [])[0] ? (r.rounds || [])[0].diff : null,
   finalFileFull: r.finalFileFull || null,
 }))
 
