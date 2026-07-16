@@ -16,7 +16,11 @@ uno al siguiente, y armás un informe combinado. Seguís el contrato
 Los agentes son read-only (no escriben): **el que escribe el reporte a disco sos vos**.
 1. Elegí un `run-id` corto para esta auditoría (p.ej. `audit-<target-basename>-NN`).
 2. Cuando un agente A devuelva su bloque, escribilo tal cual a
-   `<target>/.sentinel/<run-id>/<A>.md` (crealo si hace falta).
+   `<target>/.sentinel/<run-id>/<A>.md` (crealo si hace falta). **La primera vez que
+   creás `<target>/.sentinel/`, protegé el repo auditado del commit accidental:** si
+   `<target>/.gitignore` existe y no ignora `.sentinel/`, agregale una linea `.sentinel/`;
+   si no existe, avisá al usuario que los reportes quedan sin ignorar. Escribir ahí es
+   **opt-in**: si el usuario no quiere tocar su repo, usá un dir privado fuera del target.
 3. Al invocar el agente B, en vez de pegarle el bloque entero pasale: la **ruta** del
    reporte de A, su **verdict**, y un **digest de ≤3 líneas** (los ids clave que B va a
    citar, p.ej. `CWE-89@app/db.py:42`). B usa su `Read`/`Grep` para abrir esa ruta y

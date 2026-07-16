@@ -8,3 +8,6 @@ htmlcov/
 .hypothesis/
 .mutmut-cache
 mutants/
+# Artefactos de una auditoria /sentinel-audit (por si se auto-audita este repo);
+# nunca deben commitearse (evidencia real, IPs, nombres). F11 de la auditoria.
+.sentinel/
