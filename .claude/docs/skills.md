@@ -1,7 +1,6 @@
 ---
 generated: 2026-07-03
 source: 4d-init
-content_hash: a0a46d8c9ca10cda16db9b0b88d9003858f7f02e1e776d01a9fb10017b1134b3
 ---
 
 # Skills en este proyecto

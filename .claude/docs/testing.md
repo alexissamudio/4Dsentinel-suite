@@ -1,7 +1,6 @@
 ---
 generated: 2026-07-03
 source: 4d-init
-content_hash: b3f21db0aeb82c6da7662a10dbedb61fea954056ca6763fccc02307ea7b156d3
 ---
 
 # Testing en este proyecto

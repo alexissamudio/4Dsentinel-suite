@@ -276,7 +276,7 @@ El camino mínimo para ver la suite funcionando desde cero:
 flowchart LR
     U[Vos] --> C{{Conductor · agente principal}}
     C -->|marco 4D| F[🧭 fluency-4d<br/>/4d · hooks]
-    C -->|delega auditorías| S[🛡️ sentinel-agents<br/>11 auditores]
+    C -->|delega auditorías| S[🛡️ sentinel-agents<br/>11 agentes]
     C -->|consulta el grafo| M[🧠 4dsentinel-memory<br/>MCP codebase-memory]
     M -.->|relay: el conductor pasa<br/>resultados del grafo| S
 ```

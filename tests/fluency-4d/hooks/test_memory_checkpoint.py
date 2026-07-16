@@ -128,3 +128,27 @@ def test_intervalo_invalido_cae_a_default(run_hook, project, tmp_path):
     assert "estado-sesion.md" in run_hook(
         HOOK, fb(project, t, "c3"), env_extra={"FLUENCY_4D_CHECKPOINT_EVERY_TOKENS": "0"}
     )
+
+
+def test_toggle_modo_no_duplica_disparo(run_hook, project, state_of, tmp_path):
+    # F4: al alternar modo nativo<->fallback (el host togglea si manda
+    # used_percentage) NO se debe duplicar el checkpoint recien emitido, pero la
+    # cadencia normal de cada modo tiene que seguir viva.
+
+    # Nativo dispara; el host deja de mandar used_percentage (fallback):
+    assert "estado-sesion.md" in run_hook(HOOK, nat(project, 55, "t1"))
+    t = make_transcript(tmp_path, 520_000)  # 130k tok
+    assert run_hook(HOOK, fb(project, t, "t1")) == ""  # NO redispara al togglear
+    assert state_of("t1", "-ckpt")["disparos"] == 1
+    t = make_transcript(tmp_path, 1_010_000)  # ~252k >= 130k+120k -> cadencia viva
+    assert "estado-sesion.md" in run_hook(HOOK, fb(project, t, "t1"))
+    assert state_of("t1", "-ckpt")["disparos"] == 2
+
+    # Inverso: fallback dispara; vuelve nativo -> no duplica; re-arme sigue vivo.
+    t = make_transcript(tmp_path, 520_000)  # 130k tok
+    assert "estado-sesion.md" in run_hook(HOOK, fb(project, t, "t2"))
+    assert run_hook(HOOK, nat(project, 55, "t2")) == ""  # NO redispara al togglear
+    assert state_of("t2", "-ckpt")["disparos"] == 1
+    assert run_hook(HOOK, nat(project, 20, "t2")) == ""  # caida >20: re-arma
+    assert "estado-sesion.md" in run_hook(HOOK, nat(project, 55, "t2"))
+    assert state_of("t2", "-ckpt")["disparos"] == 2

@@ -161,6 +161,11 @@ def main() -> None:
 
     if es_nativo:
         pct = value
+        # F4: primera observacion nativa tras un disparo del OTRO modo (fallback)
+        # -> arrancar "ya disparado" para no duplicar el checkpoint al togglear.
+        # El re-arme por compactacion (abajo) lo vuelve a armar si corresponde.
+        if "last_seen_pct" not in state and state.get("disparos"):
+            state["fired"] = True
         last_seen = float(state.get("last_seen_pct", 0))
         if pct < last_seen - NATIVE_DROP_POINTS:
             state["fired"] = False  # compactacion detectada: re-armar
@@ -174,9 +179,13 @@ def main() -> None:
         interval = _checkpoint_interval_tokens()  # cadencia absoluta, no % de ventana
         last_seen = float(state.get("last_seen_tokens", 0))
         last_fired = float(state.get("last_fired_tokens", 0))
-        # Migracion desde estado v0.2: el flag viejo sin ancla de tokens
-        # sembraria un disparo duplicado post-upgrade.
-        if state.get("checkpoint_disparado") and "last_fired_tokens" not in state:
+        # Migracion desde estado v0.2 (flag viejo sin ancla) O un disparo previo
+        # del OTRO modo (nativo): sembrar el ancla de tokens en la PRIMERA
+        # observacion fallback para no duplicar al togglear. Tras el primer fire
+        # fallback el ancla ya existe -> cadencia normal cada ~interval (F4).
+        if "last_fired_tokens" not in state and (
+            state.get("checkpoint_disparado") or state.get("disparos")
+        ):
             last_fired = tokens
             state["last_fired_tokens"] = tokens
         if tokens < last_seen * 0.5:  # el transcript se reseteo

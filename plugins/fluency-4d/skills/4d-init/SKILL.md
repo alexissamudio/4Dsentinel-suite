@@ -43,19 +43,18 @@ frontmatter obligatorio:
 ---
 generated: <fecha ISO>
 source: 4d-init
-content_hash: <sha256 del cuerpo, sin el frontmatter>
 ---
 ```
 
-Calculá el hash con: `uv run python -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" <archivo-cuerpo>`
-(o equivalente sobre el texto del cuerpo). El contenido: cómo funciona el tema EN ESTE
+El contenido: cómo funciona el tema EN ESTE
 proyecto (archivos clave con rutas, flujo, convenciones, gotchas) — no teoría genérica.
 
 **Excepción a la regla de evidencia:** `.claude/docs/convenciones.md` se genera
 SIEMPRE (naming, formato, idioma de identificadores, estructura de carpetas,
 linters detectados). Si la evidencia es poca, el doc lo dice honestamente:
 línea "⚠ Generado con poca evidencia — validar" y `evidence: low` en el
-frontmatter. Pasa por la misma protección de hash en re-ejecución. Su entrada
+frontmatter. En re-ejecución se trata como cualquier doc: se pregunta antes
+de regenerar. Su entrada
 en bridges.json usa keywords específicas: `["convenciones", "styleguide",
 "estilo de codigo", "lint", "linting", "naming"]` (NO "style"/"estilo"/"formato"
 a secas: false-positives con estilos de UI).
@@ -74,7 +73,8 @@ doc desactualizado cuando se editan archivos del tema:
 ```
 
 **Reglas de keywords:** específicas del tema, en español (sin acentos: el hook
-normaliza) e inglés; mínimo 4 caracteres; RECHAZÁ keywords genéricas que matchearían
+normaliza) e inglés; mínimo 3 caracteres (el hook descarta las de <3 vía
+`MIN_KEYWORD_LEN` en `bridge_router.py`); RECHAZÁ keywords genéricas que matchearían
 en cualquier prompt ("api", "codigo", "test" solo, "base", "dato").
 
 ## Fase 4.5 — Reglas-siempre vs conocimiento-por-tema
@@ -127,14 +127,14 @@ Al escribir código, respetá `.claude/docs/convenciones.md`.
 
 ## Re-ejecución (modo actualización)
 
-1. Por cada doc existente en `bridges.json`, recalculá el hash del cuerpo y comparalo
-   con el `content_hash` del frontmatter.
-2. **Si difieren, el humano lo editó: NO lo regeneres sin preguntar** (AskUserQuestion:
-   conservar / regenerar / fusionar mostrando diferencias).
+1. Por cada doc existente en `bridges.json`, NO podés saber automáticamente si el humano
+   lo editó (el frontmatter solo lleva `generated`/`source`).
+2. **Antes de regenerar un doc que ya existe, SIEMPRE preguntá** (AskUserQuestion:
+   conservar / regenerar / fusionar mostrando diferencias). Nunca lo pises sin confirmar.
 3. Temas nuevos detectados se proponen como en la Fase 3; temas cuyos archivos fuente
    desaparecieron se proponen para eliminar de la tabla.
 4. El bloque entre centinelas se regenera; todo lo demás en CLAUDE.md queda intacto.
-5. **Reglas-siempre (sin hash propio):** baseline = el backup previo. Compará la
+5. **Reglas-siempre:** baseline = el backup previo. Compará la
    sección "## Reglas del proyecto" del bloque actual contra la del backup más
    reciente; si difieren, el humano las editó → AskUserQuestion (conservar /
    regenerar / fusionar). Orden de reglas estable entre corridas (evita diffs

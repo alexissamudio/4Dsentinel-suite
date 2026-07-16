@@ -1,7 +1,6 @@
 ---
 generated: 2026-07-03
 source: 4d-init
-content_hash: c235e7050712aa56915067a2d058f7a37f728db955e4fb6a03106ba40b7b25d9
 ---
 
 # Hooks en este proyecto
@@ -19,7 +18,7 @@ NUNCA listarlo en plugin.json — causa "Duplicate hooks file").
 | `caveman_injector.py` | UserPromptSubmit | Si el flag `~/.claude/fluency4d/caveman.json` está ON (opt-in vía `/caveman`), reinyecta en CADA turno la directiva del modo Caveman (estilo token-eficiente). Sin edge-trigger: esa reinyección es lo que da la persistencia |
 | `suite_playbook.py` | UserPromptSubmit | Con keywords ESTRECHAS inyecta un NUDGE que sugiere al conductor OFRECER una capacidad de la suite (indexar con el grafo, auditar) en el momento justo; nunca dispara la acción. Dedup por tipo por sesión; no dispara en plan mode (lo cubre `plan_calibrator`) ni en subagentes |
 | `doc_drift.py` | PostToolUse `Edit\|Write\|MultiEdit\|NotebookEdit` | Si se edita bajo las `rutas` de un tema, recuerda revisar su doc; matching por segmento casefolded |
-| `memory_checkpoint.py` | PostToolUse `.*` | Al cruzar `FLUENCY_4D_SAVE_PCT` (50%) instruye guardar estado; re-armado dual (caída de % nativo / intervalo de tokens fallback) |
+| `memory_checkpoint.py` | PostToolUse `.*` | Al cruzar `FLUENCY_4D_SAVE_PCT` (50%) instruye guardar estado; re-armado dual (caída de % nativo / intervalo de tokens fallback); anti-redisparo compartido vía el contador `disparos` al togglear modo (F4) |
 | `discernment_gate.py` | Stop | Opt-in `FLUENCY_4D_STRICT=1`: bloquea UNA vez con checklist |
 
 `hook_utils.py` comparte: `read_stdin_safe` (hilo+join, compatible Windows),
