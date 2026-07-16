@@ -1,0 +1,14 @@
+{
+  "agent": "auditor-de-redaccion",
+  "notes": "requisito de exportacion: 'formato estandar' no declarado (supuesto) + 'tiempo razonable' no medible + 'usuarios autorizados' sin rol + un criterio (12 meses) sin requisito que lo motive; 2 decoys precisos.",
+  "must_catch": [
+    { "id": "Supuesto@requisito.md:8", "where": "requisito.md:8", "why": "supuesto no declarado (sutil): 'el formato estandar de la empresa' da por sentado un formato definido en otra parte y nunca dice cual (CSV/PDF/XLSX); no se puede implementar sin adivinar. Important" },
+    { "id": "Ambiguedad@requisito.md:10", "where": "requisito.md:10", "why": "medibilidad: 'completarse en un tiempo razonable' no fija umbral (segundos, tamano de dataset) -> requisito no verificable. Important" },
+    { "id": "Ambiguedad@requisito.md:13", "where": "requisito.md:13", "why": "claridad/completitud: 'usuarios autorizados' no define que rol o permiso otorga el acceso -> no se puede validar quien puede exportar. Important" },
+    { "id": "Gap@requisito.md:18", "where": "requisito.md:18", "why": "cobertura (sutil): CA-3 impone un limite de 12 meses que ningun requisito del §Detalle motiva ni menciona; criterio de aceptacion sin requisito que lo respalde. Minor" }
+  ],
+  "decoys": [
+    { "where": "requisito.md:17", "why": "CA-2 'el total coincide con el total mostrado en pantalla' es un criterio de igualdad concreto y testeable: parece vago pero es verificable." },
+    { "where": "requisito.md:9", "why": "'todas las ventas del periodo seleccionado' es preciso y completo: 'todas' define el universo exacto, no es ambiguedad." }
+  ]
+}

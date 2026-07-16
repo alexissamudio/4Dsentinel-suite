@@ -1,0 +1,14 @@
+{
+  "agent": "advisor",
+  "notes": "tarea de rate limiting al login (task.md) contra repo/auth.py + gunicorn.conf.py: supuesto de estado (contador en memoria con 4 workers), requisito sin especificar (umbral/ventana), dependencia de identidad de cliente (IP tras proxy) y caso borde (desbloqueo del usuario legitimo); 2 decoys (hashing cubierto, alcance acotado).",
+  "must_catch": [
+    { "id": "STORAGE", "where": "repo/gunicorn.conf.py:3", "why": "supuesto falso sobre el estado del sistema: el contador en memoria (task.md:8) no funciona con multiples procesos: gunicorn.conf.py:3 fija workers=4 -> cada worker tiene su propio dict, el limite real es umbral x4 e inconsistente segun a que worker cae el request; hace falta un store compartido (Redis/DB). Critical" },
+    { "id": "THRESHOLD", "where": "task.md:7", "why": "requisito no especificado: 'supera el umbral' no define cuantos intentos, en que ventana de tiempo, ni cuanto dura el bloqueo; sin esos valores no se puede planificar ni implementar la logica. Critical" },
+    { "id": "CLIENTID", "where": "repo/auth.py:15", "why": "dependencia/caso borde de identidad: identificar por IP (task.md:9) via request.remote_addr (auth.py:15) se rompe detras de un proxy/load-balancer: todos los clientes comparten la IP del proxy -> un atacante bloquea a todos y un NAT compartido se auto-bloquea; requiere resolver X-Forwarded-For / confianza de proxy. Important" },
+    { "id": "LOCKOUT-RECOVERY", "where": "task.md:14", "why": "caso borde ignorado (sutil): el unico reset del contador es tras un login exitoso (task.md:14), pero un cliente bloqueado (task.md:7) no puede loguearse -> el usuario legitimo queda en deadlock permanente; falta expiracion de ventana / captcha / desbloqueo. Important" }
+  ],
+  "decoys": [
+    { "where": "repo/auth.py:18", "why": "la comparacion de contrasena parece insegura pero esta cubierta: usa check_password_hash (auth.py:18) y la tarea la deja explicitamente fuera de alcance (task.md:13); no es un gap" },
+    { "where": "task.md:12", "why": "que no se protejan signup/reset-password parece un gap de cobertura pero el alcance esta acotado a proposito al login en auth.py (task.md:12); es limite de alcance especificado, no un hueco" }
+  ]
+}

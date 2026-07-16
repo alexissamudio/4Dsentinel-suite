@@ -1,0 +1,14 @@
+{
+  "agent": "advisor",
+  "notes": "tarea de borrado de cuenta (task.md) contra repo/models.py: dependencia de datos ignorada (FKs sin ON DELETE CASCADE), requisito no dicho (re-autenticacion para accion destructiva), tension de compliance (hard vs soft delete y traza de auditoria) y caso borde (sesiones activas sin invalidar); 2 decoys (exportacion fuera de alcance, codigo de exito ya especificado).",
+  "must_catch": [
+    { "id": "CASCADE", "where": "repo/models.py:19", "why": "dependencia de datos ignorada (sutil): la tarea solo borra la fila de users (task.md:7), pero orders/sessions/audit_log referencian users.id con ForeignKey y NINGUNA declara ondelete/CASCADE (models.py:19, 26, 33) -> el DELETE viola la FK (falla) o deja filas huerfanas; hay que decidir cascada vs anonimizacion antes de planificar. Critical" },
+    { "id": "REAUTH", "where": "task.md:8", "why": "requisito no especificado: se pide que solo borre su propia cuenta (task.md:8) pero no exige confirmacion ni re-autenticacion; una accion destructiva e irreversible disparada por una sesion robada o un CSRF borra la cuenta sin re-verificar identidad -> falta paso de confirmacion/re-auth. Important" },
+    { "id": "HARD-VS-SOFT", "where": "repo/models.py:33", "why": "tension de compliance no considerada: no se define hard delete vs soft delete; audit_log referencia al usuario (models.py:33) y un borrado fisico rompe la traza de auditoria y puede chocar con retencion legal -> falta decidir soft-delete/anonimizacion, no es solo un DELETE. Important" },
+    { "id": "SESSIONS", "where": "repo/models.py:26", "why": "caso borde ignorado: no contempla invalidar las sesiones activas; tras borrar el usuario, las filas de sessions con tokens vigentes (models.py:26) quedan y pueden seguir autenticando o apuntar a un user_id inexistente. Important" }
+  ],
+  "decoys": [
+    { "where": "task.md:11", "why": "que no se exporten los datos antes de borrar parece un gap pero esta explicitamente fuera de alcance (task.md:11, va en otra tarea); no es un supuesto oculto" },
+    { "where": "task.md:12", "why": "que no se defina la respuesta de exito parece un gap pero ya esta especificado: devolver 204 (task.md:12); no es un hueco" }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "agent": "code-reviewer",
+  "notes": "cache TTL: naming que induce a bug (activos vs inactivos), constante duplicada hardcodeada y semantica de expiracion inconsistente entre funciones; 1 decoy (default mutable bien defendido).",
+  "must_catch": [
+    { "id": "MISLEADING_NAME", "where": "user_cache.py:15", "why": "naming que induce a bug: get_active_users promete activos pero el filtro (status != 'active') devuelve los INACTIVOS; el caller procesa el conjunto opuesto" },
+    { "id": "HARDCODED_TTL", "where": "user_cache.py:32", "why": "duplicacion riesgosa: el umbral 300 esta hardcodeado en vez de usar TTL_SECONDS; cambiar la constante deja este camino con el valor viejo" },
+    { "id": "EXPIRY_INCONSISTENT", "where": "user_cache.py:44", "why": "inconsistencia sutil: is_fresh usa age < TTL_SECONDS mientras get_profile usa age > 300; en el borde (age == 300) una da fresco y la otra expirado para el mismo registro" }
+  ],
+  "decoys": [
+    { "where": "user_cache.py:21", "why": "el default mutable esta correctamente defendido con 'if extra is None' antes de asignar {}; no hay estado compartido entre llamadas" }
+  ]
+}

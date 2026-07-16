@@ -10,13 +10,14 @@ requires-python = ">=3.11"
 # testpaths incluye AMBAS carpetas reales para que un `pytest` pelado local corra
 # tambien tests/scripts/ (los bump/check) y no de un verde falso (F10 de la auditoria).
 testpaths = ["tests/fluency-4d", "tests/scripts"]
-addopts = "--ignore=tests/sentinel-agents"
+addopts = "--ignore=tests/sentinel-agents --ignore=tests/agent-evals"
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-# No lintear los fixtures deliberadamente vulnerables de sentinel-agents.
-extend-exclude = ["tests/sentinel-agents/fixtures"]
+# No lintear los fixtures deliberadamente vulnerables de sentinel-agents ni los
+# snippets con bugs plantados de agent-evals (son ground-truth para el eval, no codigo real).
+extend-exclude = ["tests/sentinel-agents/fixtures", "tests/agent-evals"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

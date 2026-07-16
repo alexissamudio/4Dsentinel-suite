@@ -1,0 +1,14 @@
+{
+  "agent": "auditor-de-redaccion",
+  "notes": "spec de notificaciones: 2 requisitos no medibles + 1 conflicto de alcance (SMS) + 1 gap de reintentos sin valor; 2 decoys que parecen vagos pero estan cuantificados/definidos.",
+  "must_catch": [
+    { "id": "Ambiguedad@spec.md:8", "where": "spec.md:8", "why": "medibilidad: RF-1 'entregar de forma rapida' no es verificable, no fija umbral de latencia/tiempo -> imposible aceptar/rechazar la implementacion. Important" },
+    { "id": "Conflicto@spec.md:18", "where": "spec.md:18", "why": "consistencia: la §4 dice que soporta SMS para todos los eventos criticos, pero la §1 (linea 5) declara SMS explicitamente fuera de alcance; contradiccion interna que haria construir lo incorrecto. Critical" },
+    { "id": "Ambiguedad@spec.md:14", "where": "spec.md:14", "why": "medibilidad: RNF-1 'volumen esperado sin degradarse' no da numero ni umbral (throughput, usuarios concurrentes) -> requisito no testeable. Important" },
+    { "id": "Gap@spec.md:21", "where": "spec.md:21", "why": "cobertura/completitud (sutil): 'hasta agotar los intentos configurados' asume una cantidad y un backoff que nunca se declaran en ningun lado; RF-4 queda sin criterio de aceptacion ni valor testeable. Important" }
+  ],
+  "decoys": [
+    { "where": "spec.md:15", "why": "RNF-2 'latencia push no supera 5s en p95' PARECE del mismo tipo que 'rapida' de RF-1, pero esta plenamente cuantificado (umbral + percentil): bien especificado, no es hallazgo." },
+    { "where": "spec.md:10", "why": "RF-3 'desactivar push desde su perfil' es una accion concreta y verificable: no es gap ni ambiguedad." }
+  ]
+}

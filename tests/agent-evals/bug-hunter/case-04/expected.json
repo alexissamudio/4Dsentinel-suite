@@ -1,0 +1,11 @@
+{
+  "agent": "bug-hunter",
+  "notes": "excepcion tragada (parse_record devuelve None implicito) + null deref del None en enqueue_all; 1 decoy (safe_divide maneja el edge).",
+  "must_catch": [
+    { "id": "SWALLOW", "where": "parser.py:13", "why": "excepcion tragada: except pass sin log ni return explicito; parse_record devuelve None silenciosamente, el caller no distingue error de dato vacio" },
+    { "id": "NONEUSE", "where": "parser.py:25", "why": "rec puede ser None (parse invalido); rec['id'] lanza TypeError -> el bug de SWALLOW se propaga a un crash en el consumidor" }
+  ],
+  "decoys": [
+    { "where": "parser.py:33", "why": "safe_divide SI maneja b==0 devolviendo None; el edge case esta cubierto, no es bug" }
+  ]
+}

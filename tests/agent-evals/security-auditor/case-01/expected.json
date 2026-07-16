@@ -1,0 +1,10 @@
+{
+  "agent": "security-auditor",
+  "notes": "SQL injection por f-string en la query; 1 decoy (consulta parametrizada con placeholder).",
+  "must_catch": [
+    { "id": "CWE-89", "where": "users_db.py:9", "why": "SQL injection: username interpolado con f-string en la query (sink SQL, fuente no confiable); payload como x' OR '1'='1 rompe la consulta. Critical/High" }
+  ],
+  "decoys": [
+    { "where": "users_db.py:19", "why": "list_by_role usa placeholder ? con parametros vinculados: consulta parametrizada, no es injection" }
+  ]
+}

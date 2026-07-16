@@ -95,6 +95,39 @@ sobreviven bien (los tests no deben asertar texto de mensajes).
 **Cómo aplicar:** validar mutmut por conteo de la cache, no por `results`. mutmut nativo en
 Windows corre el baseline pero NO muta (necesita WSL, `pss.md:126`); validar siempre en Linux/WSL.
 
+## [2026-07-16] — agent-improver: el output del loop no se auto-aplica ni siempre da delta
+**Contexto:** al construir `agent-improver` (Workflow que mejora prompts de agentes) y dogfoodearlo:
+(a) el `synth.diff` que genera el LLM NO es `git apply`-able — trae entities HTML (`&lt;`/`&gt;`) y
+conteos de línea `@@` imprecisos → "corrupt patch"; (b) con Opus, el baseline cazó el 100% de los
+casos golden INCLUSO los diseñados "difíciles" (race, float-eq, off-by-one enmascarado) → sin headroom
+para medir delta de recall; el gate correctamente no auto-acepta.
+**Lección:** un loop de mejora de prompts es human-in-loop de verdad: el diff se aplica A MANO (que ES
+la revisión de no-regresión), no mecánicamente. Y el valor no es solo el delta de catch-rate (un modelo
+fuerte satura casos razonables); el **meta-review** es el entregable más consistente — produce gaps
+reales y accionables (p. ej. "la ficha no define su SCOPE de entrada", "la enumeración de salida omite
+`summary:`") que se aplican aunque el delta sea 0. El judge además es ruidoso (FP 2.0→1.33 en un run,
+1.67→1.67 en otro) → por eso reps + margen.
+**Cómo aplicar:** aplicar los `reviewDiff` a mano respetando check_agents (frontmatter/verdict/
+=== SENTINEL-REPORT === intactos) + bump del plugin (F17); no confiar en git apply. Para medir delta de
+recall se necesitarían casos que el modelo objetivo NO cace — difícil de calibrar con modelos fuertes;
+tratar el meta-review como la señal primaria. Mejora del motor pendiente: exponer `candidateFileFull`
+(hoy solo `diff`) para poder sobrescribir el .md sin depender del diff.
+
+## [2026-07-16] — Gotchas de entorno/harness en la máquina Windows del usuario
+**Contexto:** varios bloqueos de tooling ajenos al código: (a) el `.venv` del repo es de LINUX
+(`home = /home/samud/.local/.../linux-x86_64`) → `uv run` intenta recrearlo y FALLA al borrar el symlink
+`.venv/lib64` ("Access is denied"); (b) `Workflow({scriptPath})` con un `.js` en CRLF → el permission
+handler lo rechaza ("script contains control characters"); (c) el clasificador de permisos BLOQUEA
+`gh pr merge` de un PR que el propio agente abrió (auto-aprobación); (d) `Workflow({name})` no resuelve
+workflows de `.claude/workflows/` (solo built-ins) → usar `scriptPath`.
+**Lección:** son límites del entorno, no del trabajo. Workarounds: (a) `uv run --no-project --python 3.12
+python scripts/<x>.py` (entorno efímero, no toca el .venv roto) y `uvx ruff`; arreglo real = borrar
+`.venv` + `uv sync`; (b) forzar LF: `.claude/workflows/*.js text eol=lf` en `.gitattributes` + normalizar;
+(c) el merge de un PR propio requiere OK explícito del usuario o que lo mergee él; (d) invocar por scriptPath.
+**Cómo aplicar:** para checks Python locales usar el entorno efímero de uv; para workflows mantenerlos en
+LF; no intentar auto-mergear PRs propios (pedir al usuario). El `resume` de Workflow puede NO cachear aunque
+los prompts no cambien (re-corre full) — no asumir cache barato.
+
 ## [2026-07-16] — Un check de contenido se marca a sí mismo si no ancla el patrón
 **Contexto:** `check_commit_trailer.py` (prohíbe `Co-Authored-By: Claude`) marcó su
 PROPIO commit como infractor: el mensaje describía la regla y mencionaba el patrón

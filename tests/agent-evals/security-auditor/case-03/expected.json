@@ -1,0 +1,14 @@
+{
+  "agent": "security-auditor",
+  "notes": "4 vulnerabilidades explotables sutiles (SSRF por allowlist con substring, IDOR sin chequeo de ownership, open redirect, comparacion de firma no constante); 2 decoys (redirect validado contra allowlist exacto, compare_digest constante).",
+  "must_catch": [
+    { "id": "CWE-918", "where": "account_api.py:30", "why": "SSRF: el allowlist se valida con 'ALLOWED_HOST in url' (substring); http://api.internal.example.com.attacker.com/ o ...?x=api.internal.example.com pasa el check y permite pegarle a hosts internos. High" },
+    { "id": "CWE-639", "where": "account_api.py:40", "why": "IDOR / Broken Access Control: get_invoice usa invoice_id crudo y no verifica ownership contra request.user_id; cualquier usuario autenticado lee facturas ajenas iterando ids (la query esta parametrizada, el hueco es de autorizacion). High" },
+    { "id": "CWE-601", "where": "account_api.py:48", "why": "Open Redirect: 'next' viene del usuario y se pasa a redirect() sin validar que sea ruta interna; ?next=https://evil.com redirige fuera del sitio (phishing). Medium" },
+    { "id": "CWE-208", "where": "account_api.py:56", "why": "comparacion de firma no constante: '==' sobre strings corta en el primer byte distinto; el timing filtra el prefijo correcto y permite forjar la firma del webhook byte a byte. Medium" }
+  ],
+  "decoys": [
+    { "where": "account_api.py:67", "why": "safe_redirect valida 'next' contra un allowlist EXACTO de rutas relativas ({/dashboard,/settings,/billing}); una URL absoluta externa no matchea y cae al default, no es open redirect" },
+    { "where": "account_api.py:75", "why": "verify_token usa hmac.compare_digest -> comparacion en tiempo constante; no filtra timing, no es CWE-208" }
+  ]
+}

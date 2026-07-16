@@ -1,0 +1,14 @@
+{
+  "agent": "auditor-de-redaccion",
+  "notes": "politica de backups: retencion 90 dias contra minimo regulatorio de 1 anio (conflicto) + 'incrementales frecuentes' sin intervalo + 'restaurar cuando sea necesario' sin RTO + 'forma segura' sin metodo; 2 decoys bien definidos.",
+  "must_catch": [
+    { "id": "Conflicto@politica.md:16", "where": "politica.md:16", "why": "consistencia: la §5 exige conservar los datos de clientes un minimo de 1 anio, pero la §4 (linea 13) borra los respaldos a los 90 dias; cumplir una viola la otra -> contradiccion regulatoria. Critical" },
+    { "id": "Ambiguedad@politica.md:10", "where": "politica.md:10", "why": "medibilidad: 'respaldos incrementales frecuentes' no fija intervalo (cada cuantas horas/minutos) -> el RPO no es verificable ni auditable. Important" },
+    { "id": "Gap@politica.md:19", "where": "politica.md:19", "why": "completitud/cobertura: 'restaurar cuando sea necesario' no define objetivo de tiempo de restauracion (RTO), quien autoriza ni criterio de aceptacion; deja la restauracion sin requisito medible. Important" },
+    { "id": "Ambiguedad@politica.md:13", "where": "politica.md:13", "why": "claridad (sutil): 'se eliminan de forma segura' no especifica metodo ni estandar de borrado (p.ej. sobrescritura, cripto-shred) -> 'seguro' es interpretable. Minor" }
+  ],
+  "decoys": [
+    { "where": "politica.md:7", "why": "el alcance ('bases productivas y adjuntos de clientes') esta claramente delimitado: no es gap ni ambiguedad." },
+    { "where": "politica.md:22", "why": "el responsable esta nombrado nominalmente (administrador de sistemas ejecuta y supervisa): el requisito de asignar responsable esta cumplido, no es hallazgo." }
+  ]
+}

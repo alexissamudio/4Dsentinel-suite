@@ -1,0 +1,13 @@
+{
+  "agent": "code-reviewer",
+  "notes": "PR de reembolsos: la tarea era solo agregar refund_order; el diff esconde un cambio de fee fuera de scope, refund_order finge exito ante monto invalido y no valida montos negativos; 2 decoys (concat de strings y scan lineal).",
+  "must_catch": [
+    { "id": "FAKE_SUCCESS", "where": "payment_refund.py:29", "why": "error silenciado / contrato roto: si amount > payment['amount'] devuelve True sin registrar nada; el caller cree que el reembolso se aplico cuando no ocurrio" },
+    { "id": "OUT_OF_SCOPE_FEE", "where": "payment_refund.py:36", "why": "cambio fuera de scope: el PR era solo agregar refund_order, pero compute_fee cambia la logica de fee (ignora REFUND_FEE=0.0 y hardcodea 2.5%), regresion no pedida escondida en el diff" },
+    { "id": "NO_NEGATIVE_GUARD", "where": "payment_refund.py:28", "why": "validacion faltante: no se chequea amount <= 0; un monto negativo pasa el unico control y se guarda payment['refunded'] = negativo, corrompiendo el pago" }
+  ],
+  "decoys": [
+    { "where": "payment_refund.py:45", "why": "concatenar strings con + dentro de un loop chico es legible y correcto; cambiarlo a join/f-string es micro-optimizacion sin valor a esta escala" },
+    { "where": "payment_refund.py:17", "why": "el scan lineal de _find_payment es apropiado para una lista de pagos; construir un indice/dict seria complejidad prematura sin evidencia de volumen" }
+  ]
+}
