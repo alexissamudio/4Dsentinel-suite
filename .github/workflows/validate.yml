@@ -78,6 +78,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # historia completa para el check de trailers de commit
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -89,6 +91,10 @@ jobs:
         run: uv run scripts/check_suite_versions.py
       - name: ASCII puro en los .py de produccion
         run: uv run scripts/check_ascii.py
+      - name: Sin atribucion de IA en los commits
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: uv run scripts/check_commit_trailer.py "$BASE"
       - name: metadata.version == git tag (solo en push de tag)
         if: github.ref_type == 'tag'
         run: uv run scripts/bump_suite.py --check-tag "${{ github.ref_name }}"
