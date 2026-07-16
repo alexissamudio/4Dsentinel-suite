@@ -205,6 +205,12 @@ en bytes exactos (derandomización de borde).
 - **PR2** cierra **G5** (coverage de scripts + mutation spot-check 3/3 sobre las
   guardas), **G7** (property-based con Hypothesis sobre `safe_doc_path`), **G6/Fase D**
   (cadencia de la eval semántica en `tests/sentinel-agents/README.md` §3).
+- **PR3** subió mypy de lenient a **`strict = true`** (28 errores mecánicos saldados:
+  `hook_main` tipado con ParamSpec/TypeVar mató 7 `untyped-decorator` + 3
+  `no-untyped-def`; `dict` → `dict[str, Any]`; `json.loads` → variable local tipada).
+  Trampa cross-platform resuelta: el `# type: ignore` de `os.getuid` (POSIX-only) lleva
+  `unused-ignore` para no fallar en el CI linux con `warn_unused_ignores` (verificado en
+  Windows y WSL).
 
 ### Mapeo a 4D
 - **Property testing** → Descripción más fuerte del requisito (todo el dominio).

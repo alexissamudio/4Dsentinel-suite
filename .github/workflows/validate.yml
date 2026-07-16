@@ -25,7 +25,7 @@ jobs:
         run: |
           uvx ruff check plugins/fluency-4d/hooks/ scripts/ tests/ plugins/memory/scripts/
           uvx ruff format --check plugins/fluency-4d/hooks/ scripts/ tests/ plugins/memory/scripts/
-      - name: Mypy (lenient, todo el Python)
+      - name: Mypy (strict, todo el Python)
         run: uvx mypy plugins/fluency-4d/hooks/ scripts/ plugins/memory/scripts/
       # Coverage SOLO del codigo importado directo (scripts): los hooks corren por
       # subprocess (uv run --script) y pytest-cov no los ve -> medirlos daria 0% falso.

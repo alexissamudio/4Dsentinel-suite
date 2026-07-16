@@ -39,3 +39,15 @@ instrumenta solo el proceso padre → mide 0% (señal FALSA de "sin tests"). En 
 **Cómo aplicar:** medir `--cov` solo del código importado directo (`scripts/`); para los
 hooks confiar en los tests E2E por subprocess (+ mutation), no en el % de cobertura.
 Mutation en Windows requiere WSL (mutmut no corre nativo).
+
+## [2026-07-15] — mypy strict + `# type: ignore` platform-only = trampa cross-platform
+**Contexto:** `os.getuid()` (POSIX-only, guardado por `os.name`) llevaba
+`# type: ignore[attr-defined]`. En lenient no molestaba; con `strict = true` (que activa
+`warn_unused_ignores`) el CI **linux** —donde `getuid` SÍ existe— vería el ignore como
+inútil y FALLARÍA, aunque en Windows pasa.
+**Lección:** un `type: ignore` que solo aplica en una plataforma rompe el CI de la otra
+bajo strict. Fix: agregar el código `unused-ignore` a la lista →
+`# type: ignore[attr-defined, unused-ignore]` (suprime el error donde aplica Y tolera que
+sea inútil donde no).
+**Cómo aplicar:** al tipar código con ramas por `os.name`/plataforma, verificá mypy en
+AMBAS (Windows local + WSL/linux) antes de pushear; el CI es linux.
