@@ -83,6 +83,9 @@ no vienen de un mal prompt, sino de un mal **reparto***. Las cuatro dimensiones:
 - **`bridge_router`** — cuando tu prompt matchea el keyword de un tema, inyecta ese doc antes de responder.
 - **`memory_checkpoint`** — al llenarse el contexto, te recuerda guardar el estado de la sesión.
 - **`doc_drift`** — si editaste código de un tema, te avisa por si su doc quedó desactualizado.
+- **`caveman_injector`** — si prendiste `/caveman`, reinyecta la directiva del modo token-eficiente en cada turno (esa reinyección es lo que la hace persistir).
+- **`suite_playbook`** — con keywords estrechas, sugiere al conductor que OFREZCA una capacidad de la suite (indexar con el grafo, auditar) en el momento justo; nunca dispara la acción, el humano decide.
+- **`discernment_gate`** — opt-in (`FLUENCY_4D_STRICT=1`): al terminar, bloquea una vez con un checklist de discernimiento.
 
 **Configuración (variables de entorno, opcionales):**
 - `FLUENCY_4D_SAVE_PCT` — umbral del checkpoint (default `50`; `0` lo desactiva). En modo nativo
@@ -95,8 +98,8 @@ no vienen de un mal prompt, sino de un mal **reparto***. Las cuatro dimensiones:
 
 ## 🛡️ sentinel-agents — los auditores
 
-**11 agentes read-only** (herramientas `Read`/`Grep`/`Glob`; dos ejecutores con `Bash` pero que
-nunca editan). Todos comparten un contrato: **evidencia dura** (`archivo:línea` re-leído), **verdict
+**9 auditores read-only + 2 ejecutores** (`validator` y `debugger`, con `Bash` pero que nunca
+editan); los 9 restantes usan solo `Read`/`Grep`/`Glob`. Todos comparten un contrato: **evidencia dura** (`archivo:línea` re-leído), **verdict
 parseable**, **severidad calibrada**, y una **auto-verificación adversarial** (cada hallazgo se
 marca `CONFIRMED` o `PLAUSIBLE`). Cierran con un bloque `=== SENTINEL-REPORT ===` máquina-legible.
 

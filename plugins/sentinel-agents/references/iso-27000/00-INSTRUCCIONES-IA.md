@@ -2,6 +2,8 @@
 
 > Este archivo es el **contrato de operación**. Si eres un agente de IA (o un humano que sigue un proceso), léelo completo antes de tocar cualquier checklist. Define cómo interpretar la carpeta, cómo marcar estados, qué evidencia exigir y qué nunca debes hacer.
 
+> **¿Buscas un control puntual por su id?** Mira `INDEX.md` (lookup `CTRL-id → archivo`) y abre directo el checklist que lo contiene, sin releer este archivo entero.
+
 ---
 
 ## 1. Propósito y modelo mental
