@@ -13,9 +13,10 @@ Verifica que cada plugins/sentinel-agents/agents/*.md cumpla:
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
+
+from frontmatter_utils import frontmatter, parse_tools
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENTS_DIR = REPO_ROOT / "plugins" / "sentinel-agents" / "agents"
@@ -25,62 +26,6 @@ PROHIBIDAS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 # (ejecutores). Allowlist cerrada y bidireccional (ver check_agent): un agente
 # con Bash fuera del set falla; un agente del set sin Bash falla (drift).
 BASH_ALLOWED = {"validator", "debugger"}
-
-
-def _frontmatter_body(text: str) -> str | None:
-    m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
-    return m.group(1) if m else None
-
-
-def frontmatter(text: str) -> dict[str, str]:
-    body = _frontmatter_body(text)
-    if body is None:
-        return {}
-    fm = {}
-    for line in body.splitlines():
-        if ":" in line:
-            k, v = line.split(":", 1)
-            fm[k.strip()] = v.strip()
-    return fm
-
-
-def parse_tools(text: str) -> set[str]:
-    """Extrae el set de tools del frontmatter en AMBOS formatos:
-
-    - inline con comas:   ``tools: Read, Grep, Glob``  (o ``[Read, Grep]``)
-    - bloque lista YAML:  ``tools:\\n  - Read\\n  - Bash``
-
-    Reune todas las herramientas en un set sin importar el formato. Sin esto,
-    un ``tools:`` en formato lista dejaba el campo vacio (el parser scalar solo
-    veia ``tools`` -> "") y un agente con Write/Bash PASABA el check (falso OK),
-    rompiendo la garantia read-only que este check protege.
-    """
-    body = _frontmatter_body(text)
-    if body is None:
-        return set()
-    lines = body.splitlines()
-    tools: set[str] = set()
-    for i, line in enumerate(lines):
-        m = re.match(r"^tools\s*:\s*(.*)$", line)
-        if not m:
-            continue
-        inline = m.group(1).strip().strip("[]").strip()
-        if inline:
-            # Formato inline con comas.
-            tools |= {t.strip().strip("'\"") for t in inline.split(",") if t.strip()}
-        else:
-            # Formato bloque lista: lineas siguientes '- X' (con indentacion 0 o
-            # mas: YAML acepta el item a la misma columna que la clave), hasta la
-            # proxima clave (primera linea no vacia que no sea un item de lista).
-            for nxt in lines[i + 1 :]:
-                if not nxt.strip():
-                    continue
-                item = re.match(r"^\s*-\s+(.+?)\s*$", nxt)
-                if not item:
-                    break
-                tools.add(item.group(1).strip().strip("'\""))
-        break
-    return tools
 
 
 def check_agent(path: Path) -> list[str]:

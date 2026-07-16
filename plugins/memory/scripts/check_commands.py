@@ -28,6 +28,11 @@ COMMANDS_DIR = REPO_ROOT / "commands"
 SKILLS_DIR = REPO_ROOT / "skills"
 SUITE_ROOT = REPO_ROOT.parent.parent  # raiz de 4Dsentinel-suite
 
+# El helper de frontmatter vive en scripts/ (raiz de la suite); este check corre
+# desde plugins/memory/scripts/, asi que agrega ese dir al path para importarlo.
+sys.path.insert(0, str(SUITE_ROOT / "scripts"))
+from frontmatter_utils import frontmatter  # noqa: E402
+
 
 def _plugin_jsons() -> list[Path]:
     """Todos los plugins/*/.claude-plugin/plugin.json de la suite. La regla
@@ -35,18 +40,6 @@ def _plugin_jsons() -> list[Path]:
     futura que declare mcpServers PATH-resuelto en cualquiera debe frenar CI.
     Un plugin sin plugin.json simplemente no aparece (no es error)."""
     return sorted(SUITE_ROOT.glob("plugins/*/.claude-plugin/plugin.json"))
-
-
-def frontmatter(text: str) -> dict[str, str]:
-    m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
-    if not m:
-        return {}
-    fm = {}
-    for line in m.group(1).splitlines():
-        if ":" in line:
-            k, v = line.split(":", 1)
-            fm[k.strip()] = v.strip()
-    return fm
 
 
 def check_command(path: Path) -> list[str]:
