@@ -26,6 +26,7 @@ import sys
 import time
 import unicodedata
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -81,7 +82,7 @@ def keyword_matches(keyword: str, norm_prompt: str) -> bool:
     return re.search(r"(?<!\w)" + re.escape(kw) + r"(?!\w)", norm_prompt) is not None
 
 
-def arranque_lines(cwd: Path, state: dict) -> list[str]:
+def arranque_lines(cwd: Path, state: dict[str, Any]) -> list[str]:
     """Primer prompt de la sesion: senalar lecciones y estado previo si existen.
 
     Marca 'arranque_inyectado' aunque no exista ninguno, para no re-chequear
@@ -119,7 +120,7 @@ def arranque_lines(cwd: Path, state: dict) -> list[str]:
     return lines
 
 
-def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
+def tema_lines(cwd: Path, prompt: str, state: dict[str, Any]) -> list[str]:
     """Puentes por tema segun bridges.json; puede devolver vacio por cualquier motivo."""
     bridges_path = cwd / ".claude" / "docs" / "bridges.json"
     if not bridges_path.is_file():
@@ -137,7 +138,7 @@ def tema_lines(cwd: Path, prompt: str, state: dict) -> list[str]:
     # El loop de hits corta con break en el cap, asi que no sirve para resolver
     # destinos de relaciones mas alla del cap (un destino valido se marcaria
     # como dangling). Este indice recorre todos los temas validos.
-    entry_por_tema: dict[str, dict] = {}
+    entry_por_tema: dict[str, dict[str, Any]] = {}
     for entry in temas:
         if not isinstance(entry, dict):
             continue

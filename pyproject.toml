@@ -23,10 +23,9 @@ select = ["E", "F", "W", "I"]
 
 [tool.mypy]
 python_version = "3.11"
-# Arranque LENIENT: sin --strict. Los hooks usan sys.path.insert + imports entre
-# hermanos (bridge_router/hook_utils) que mypy no resuelve estaticamente; degradan a
-# Any en vez de fallar. Se sube rigor en una iteracion posterior.
+strict = true
+# Los hooks usan sys.path.insert + imports entre hermanos (bridge_router/hook_utils)
+# que mypy no resuelve estaticamente; ignore_missing_imports evita que eso rompa strict.
 ignore_missing_imports = true
-# Los hooks comparten basenames? No (glob confirmado), pero por las dudas:
 explicit_package_bases = true
 exclude = ["tests/sentinel-agents/fixtures"]

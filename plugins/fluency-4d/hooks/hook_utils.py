@@ -28,10 +28,15 @@ import tempfile
 import threading
 import time
 import unicodedata
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, ParamSpec, TypeVar
 
 MAX_STDIN_BYTES = 1024 * 1024
 STATE_TTL_SECONDS = 4 * 60 * 60  # 4 horas
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
 
 # Chars que, si vienen de un bridges.json hostil, podrian romper/confundir la
 # plantilla de display o el markdown del additionalContext: backticks (delimitan
@@ -122,7 +127,7 @@ def read_stdin_safe(timeout: float = 5.0) -> str:
     return result["data"]
 
 
-def parse_hook_input(raw: str) -> dict:
+def parse_hook_input(raw: str) -> dict[str, Any]:
     try:
         data = json.loads(raw) if raw else {}
     except json.JSONDecodeError:
@@ -130,7 +135,7 @@ def parse_hook_input(raw: str) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _emit(obj: dict) -> None:
+def _emit(obj: dict[str, Any]) -> None:
     # ensure_ascii=True: la consola de Windows puede ser cp1252; el texto
     # acentuado viaja escapado dentro del JSON y llega intacto.
     sys.stdout.write(json.dumps(obj, ensure_ascii=True) + "\n")
@@ -177,17 +182,18 @@ def log_debug(message: str) -> None:
         pass
 
 
-def hook_main(event: str):
+def hook_main(event: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R | None]]:
     """Decorador: cualquier excepcion degrada a pass-through (nunca romper la sesion)."""
 
-    def decorator(fn):
+    def decorator(fn: Callable[_P, _R]) -> Callable[_P, _R | None]:
         @functools.wraps(fn)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R | None:
             try:
                 return fn(*args, **kwargs)
             except Exception as exc:  # noqa: BLE001 - degradacion intencional
                 log_debug(f"{event} hook error: {exc}")
                 output_empty()
+                return None
 
         return wrapper
 
@@ -197,7 +203,7 @@ def hook_main(event: str):
 # --- Estado por sesion (dedup) -------------------------------------------------
 
 
-def session_key(data: dict) -> str:
+def session_key(data: dict[str, Any]) -> str:
     sid = data.get("session_id")
     if sid:
         return "sid-" + hashlib.sha256(str(sid).encode()).hexdigest()[:16]
@@ -221,7 +227,7 @@ def _state_path(key: str) -> Path:
         # si no es nuestro (uid distinto) fallamos cerrado en vez de operar sobre
         # estado ajeno. hook_main traga el OSError -> passthrough (igual que el
         # caso symlink de arriba): fail-safe, no fail-open peligroso.
-        if directory.stat().st_uid != os.getuid():  # type: ignore[attr-defined]
+        if directory.stat().st_uid != os.getuid():  # type: ignore[attr-defined, unused-ignore]
             raise OSError("directorio de estado no es propiedad del usuario: " + str(directory))
         try:
             os.chmod(directory, 0o700)
@@ -230,7 +236,7 @@ def _state_path(key: str) -> Path:
     return directory / f"{key}.json"
 
 
-def load_state(key: str) -> dict:
+def load_state(key: str) -> dict[str, Any]:
     path = _state_path(key)
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
@@ -243,7 +249,7 @@ def load_state(key: str) -> dict:
     return state
 
 
-def load_caveman() -> dict:
+def load_caveman() -> dict[str, Any]:
     """Lee el flag global de modo caveman (~/.claude/fluency4d/caveman.json).
 
     Solo lectura. Devuelve el dict si esta prendido (on=True) y level es valido;
@@ -304,7 +310,7 @@ def bump_stats(cwd: str, temas_nuevos: list[str], nueva_sesion: bool) -> None:
         log_debug(f"stats no disponibles: {exc}")
 
 
-def save_state(key: str, state: dict) -> None:
+def save_state(key: str, state: dict[str, Any]) -> None:
     state["_ts"] = time.time()
     path = _state_path(key)
     payload = json.dumps(state, ensure_ascii=True)

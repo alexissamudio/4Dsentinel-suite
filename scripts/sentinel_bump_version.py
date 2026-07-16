@@ -25,6 +25,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MARKETPLACE = REPO_ROOT / ".claude-plugin" / "marketplace.json"
@@ -33,9 +34,10 @@ PLUGIN_NAME = "sentinel-agents"
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 
 
-def _market_entry(m: dict) -> dict:
+def _market_entry(m: dict[str, Any]) -> dict[str, Any]:
     """Devuelve la entrada del plugin en marketplace.json por `name` (no por indice)."""
-    for entry in m.get("plugins", []):
+    plugins: list[dict[str, Any]] = m.get("plugins", [])
+    for entry in plugins:
         if entry.get("name") == PLUGIN_NAME:
             return entry
     print(
