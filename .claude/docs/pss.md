@@ -122,6 +122,15 @@ muertos / (total − equivalentes).**
 - Coverage dice "lo ejecuté"; mutation dice "lo habría atrapado si estuviera mal".
 - Costo alto → correr sobre **código crítico** y **archivos cambiados**. Tooling:
   `mutmut`, `cosmic-ray`.
+- **A diferencia de coverage, mutmut SÍ funciona sobre los hooks:** muta el archivo en
+  disco y el subprocess lo lee mutado. **Windows:** mutmut requiere WSL
+  (`uvx mutmut run` desde `wsl -e bash -lc`). Spot-check manual ya hecho (PR2) sobre las
+  3 guardas — 3/3 mutantes muertos:
+  - `check_commands._command_is_safe`: quitar `[\\/]` (drive-relative `C:foo` pasaría) →
+    matado por `test_command_drive_relative_falla`.
+  - `hook_utils.safe_doc_path`: `".."` → `"..x"` (traversal permitido) → matado por el
+    property test + 2 E2E.
+  - `check_kb_blank.check`: `!=` → `==` (detección invertida) → matado por el test nuevo.
 
 ---
 
@@ -148,6 +157,12 @@ retry-until-green.
 Statement < branch < condition < **MC-DC** (criterio de aviónica). Mide **ejecución, no
 validación**: 100% de cobertura con oráculos vacíos sigue siendo fallo #2. Es métrica de
 verificación; nada dice del vértice de negocio.
+
+**Caveat de esta suite (importante):** los hooks corren por **subprocess**
+(`uv run --script`), así que `pytest-cov` (que instrumenta el proceso padre) los mide
+**0% aunque estén muy testeados** — un reporte de cobertura de los hooks sería una señal
+FALSA. Por eso el `--cov` de CI mide solo `scripts/` (código importado directo); la
+cobertura real de los hooks la dan los tests E2E por subprocess, no un número.
 
 ---
 
@@ -182,6 +197,14 @@ en bytes exactos (derandomización de borde).
 | G7 | **Tests de seguridad por ejemplo** (3 paths) donde una propiedad cubriría el dominio | `test_bridge_security.py` |
 | G8 | **Sin `pytest-randomly`**: dependencia de orden no se expone | `pyproject.toml` |
 | G9 | **Drift documental**: `testing.md` decía "30 tests / 4 hooks" vs 128/7 real (fallo #1 a nivel doc) | `testing.md:9` (histórico) |
+
+### Estado de ejecución
+- **PR1** (merge `ce80bdc`) cerró **G1** (mypy lenient), **G2/G4** (ruff completo +
+  format + CI parejo), **G3** (test de `check_kb_blank`), **G8** (`pytest-randomly`),
+  **G9** (drift + puente `pss.md`).
+- **PR2** cierra **G5** (coverage de scripts + mutation spot-check 3/3 sobre las
+  guardas), **G7** (property-based con Hypothesis sobre `safe_doc_path`), **G6/Fase D**
+  (cadencia de la eval semántica en `tests/sentinel-agents/README.md` §3).
 
 ### Mapeo a 4D
 - **Property testing** → Descripción más fuerte del requisito (todo el dominio).
