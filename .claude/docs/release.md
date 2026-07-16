@@ -92,14 +92,17 @@ permisos `contents: read`. Sobrevivientes ahí son informativos, no rompen nada.
 único `scripts/check_manifests.py` (descubre los manifests por glob), invocado una sola vez en el
 job `suite`. Antes se repetían inline en 3 jobs.
 
-## Deuda de proceso pendiente (auditoría F17/F18/F19)
+**Gate de bump (F17):** `scripts/check_bump_on_change.py` (job `suite`) FALLA si un PR cambia
+contenido **shippeado** de un plugin (cualquier archivo bajo su `source` del marketplace: código,
+hooks, skills, agents, commands, plugin.json) **sin** bumpear su `version`. Compara `BASE..HEAD`
+(mismo `BASE` que `check_commit_trailer`). Docs internos del repo (`.claude/docs/`, `README`,
+`docs/adr/`, auditoría) no son contenido de plugin → no cuentan. Un plugin nuevo (sin versión en
+`BASE`) no exige bump. Cierra "todo cambio shippeado ⇒ bump".
 
-- **F17 — bump como precondición de release (no implementado):** hoy es disciplina manual
-  (`CLAUDE.md:12-13` + este doc). Falta un gate de CI que exija bump cuando cambian archivos
-  **no-doc** de un plugin, para que no se shippee código stale sin señal. Pendiente.
-- **F18 (parcial):** los pins de actions ya están en **Node 24** (`checkout` v7, `setup-uv` v8 —
-  hecho). Falta la **matriz Python 3.12/3.13** en el CI para adelantarse al EOL de 3.11. Pendiente.
-- **F19 — ADR como archivos fuente versionados (no implementado):** las decisiones que hoy solo
-  viven en el grafo `.codebase-memory/graph.db.zst` (caché reconstruible por `index_repository`)
-  se perderían al re-indexar. Pendiente materializar un `docs/adr/` versionado, con el grafo como
-  caché. Ver `persistencia.md`.
+**Matriz Python (F18):** el job `fluency-4d` corre en matriz `python-version: [3.12, 3.13]` (vía
+`UV_PYTHON`) para adelantarse al EOL de 3.11. Los pins de actions ya están en **Node 24**
+(`checkout` v7, `setup-uv` v8).
+
+**ADR versionados (F19):** las decisiones de arquitectura viven en `docs/adr/` como archivos fuente
+versionados (MADR liviano); el grafo `.codebase-memory/graph.db.zst` es caché reconstruible, no su
+hogar. Ver `docs/adr/README.md`.
