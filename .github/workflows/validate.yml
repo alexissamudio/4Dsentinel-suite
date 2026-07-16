@@ -15,8 +15,8 @@ jobs:
   fluency-4d:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
       - name: JSON de manifests validos
@@ -28,16 +28,18 @@ jobs:
         run: "! grep -q '\\.\\./' plugins/fluency-4d/.claude-plugin/plugin.json"
       - name: Ruff (lint + format check, todo el Python)
         run: |
-          uvx ruff check plugins/fluency-4d/hooks/ scripts/ tests/ plugins/memory/scripts/
-          uvx ruff format --check plugins/fluency-4d/hooks/ scripts/ tests/ plugins/memory/scripts/
+          uvx ruff@0.15.21 check plugins/fluency-4d/hooks/ scripts/ tests/ plugins/memory/scripts/
+          uvx ruff@0.15.21 format --check plugins/fluency-4d/hooks/ scripts/ tests/ plugins/memory/scripts/
       - name: Mypy (strict, todo el Python)
-        run: uvx mypy plugins/fluency-4d/hooks/ scripts/ plugins/memory/scripts/
+        run: uvx mypy@2.3.0 plugins/fluency-4d/hooks/ scripts/ plugins/memory/scripts/
       # Coverage SOLO del codigo importado directo (scripts): los hooks corren por
       # subprocess (uv run --script) y pytest-cov no los ve -> medirlos daria 0% falso.
       # Su cobertura real la dan los tests E2E por subprocess, no este numero.
       - name: Pytest (+ coverage report de scripts)
         run: >
-          uv run --with pytest --with pytest-randomly --with hypothesis --with pytest-cov
+          uv run
+          --with pytest==9.1.1 --with pytest-randomly==4.1.0
+          --with hypothesis==6.156.6 --with pytest-cov==7.1.0
           pytest tests/ -q
           --cov=scripts --cov=plugins/memory/scripts
           --cov-report=term-missing
@@ -47,18 +49,21 @@ jobs:
   fluency-4d-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
       - name: Pytest (Windows)
-        run: uv run --with pytest --with pytest-randomly --with hypothesis pytest tests/ -q
+        run: >
+          uv run
+          --with pytest==9.1.1 --with pytest-randomly==4.1.0 --with hypothesis==6.156.6
+          pytest tests/ -q
 
   sentinel-agents:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
       - name: JSON de manifests validos
@@ -77,10 +82,10 @@ jobs:
   suite:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0 # historia completa para el check de trailers de commit
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
       - name: JSON del marketplace paraguas + plugin memory
