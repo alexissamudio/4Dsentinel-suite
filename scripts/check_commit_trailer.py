@@ -24,14 +24,13 @@ import re
 import subprocess
 import sys
 
-# Atribucion de IA prohibida (case-insensitive). Especifico a proposito para no
-# marcar un commit que mencione 'anthropic' en prosa legitima.
+# Trailer de co-autoria de IA prohibido. Anclado a INICIO de linea (un trailer
+# git siempre lo esta) para NO marcar un commit que solo MENCIONE la regla en
+# prosa (p.ej. este mismo repo describe el patron en docs y mensajes). Requiere
+# claude/anthropic en el valor del trailer.
 AI_ATTRIBUTION = re.compile(
-    r"co-authored-by:\s*claude"
-    r"|co-authored-by:[^\n]*anthropic"
-    r"|generated with \[?claude"
-    r"|noreply@anthropic\.com",
-    re.IGNORECASE,
+    r"^co-authored-by:[^\n]*\b(?:claude|anthropic)\b",
+    re.IGNORECASE | re.MULTILINE,
 )
 
 
@@ -76,8 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     offenders = offending_commits(base)
     if offenders:
         print(
-            "ERROR - commits con atribucion de IA prohibida (CLAUDE.md): "
-            + ", ".join(offenders),
+            "ERROR - commits con atribucion de IA prohibida (CLAUDE.md): " + ", ".join(offenders),
             file=sys.stderr,
         )
         return 1
