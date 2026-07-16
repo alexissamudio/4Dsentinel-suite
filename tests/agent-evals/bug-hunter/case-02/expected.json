@@ -1,0 +1,11 @@
+{
+  "agent": "bug-hunter",
+  "notes": "condicional invertido en withdraw (permite sobregiro) + fuga de recurso por falta de with; 1 decoy (default float, no mutable).",
+  "must_catch": [
+    { "id": "INVCOND", "where": "account.py:11", "why": "condicional invertido: 'if self.balance < amount' retira justo cuando NO alcanza el saldo -> permite sobregiro / corrompe balance" },
+    { "id": "LEAK", "where": "account.py:21", "why": "fuga de recurso: open() sin 'with'; si la comprehension lanza, f.close() nunca corre -> file descriptor filtrado" }
+  ],
+  "decoys": [
+    { "where": "account.py:31", "why": "tax_rate=0.21 no es un default mutable (float inmutable); no hay aliasing ni mutacion compartida" }
+  ]
+}

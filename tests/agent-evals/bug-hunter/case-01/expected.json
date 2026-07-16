@@ -1,0 +1,11 @@
+{
+  "agent": "bug-hunter",
+  "notes": "off-by-one en indexado + null deref por dict.get sin chequeo; 1 decoy (clamp correcto).",
+  "must_catch": [
+    { "id": "OB1", "where": "buggy_snippet.py:9", "why": "off-by-one: range(len(values)) accede values[i+1], desborda en la ultima iteracion (IndexError)" },
+    { "id": "NULLDEREF", "where": "buggy_snippet.py:17", "why": "scores.get(name) devuelve None si falta la clave; label.upper() lanza AttributeError" }
+  ],
+  "decoys": [
+    { "where": "buggy_snippet.py:29", "why": "el clamp con >= y <= es correcto: acota i a [0, len-1] antes de indexar, no desborda" }
+  ]
+}

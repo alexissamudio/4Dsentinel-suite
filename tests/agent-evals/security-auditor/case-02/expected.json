@@ -1,0 +1,11 @@
+{
+  "agent": "security-auditor",
+  "notes": "secreto hardcodeado + command injection via os.system; 1 decoy (subprocess con lista y shell=False).",
+  "must_catch": [
+    { "id": "CWE-78", "where": "ops.py:14", "why": "command injection: host sin sanitizar interpolado en os.system (sink shell); 'h; rm -rf /' ejecuta comandos arbitrarios. Critical/High" },
+    { "id": "CWE-798", "where": "ops.py:7", "why": "secreto hardcodeado: API_KEY en el fuente queda en repo e historial de git; exposicion de credencial. Medium/High" }
+  ],
+  "decoys": [
+    { "where": "ops.py:20", "why": "subprocess.run con argumentos en lista y shell=False no pasa el input por una shell; no es command injection" }
+  ]
+}

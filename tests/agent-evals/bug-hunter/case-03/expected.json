@@ -1,0 +1,11 @@
+{
+  "agent": "bug-hunter",
+  "notes": "division por cero con lista vacia + mutacion durante iteracion (remote saltea elementos); 1 decoy (indexado correcto en running_max).",
+  "must_catch": [
+    { "id": "DIVZERO", "where": "stats.py:8", "why": "division por cero: total / len(measurements) lanza ZeroDivisionError con lista vacia (edge case no manejado)" },
+    { "id": "MUTITER", "where": "stats.py:15", "why": "mutacion durante iteracion: values.remove(v) mientras se itera values corre los indices y saltea elementos -> deja negativos, resultado incorrecto" }
+  ],
+  "decoys": [
+    { "where": "stats.py:26", "why": "result[i-1] no es off-by-one: result crece con cada append y el rango arranca en 1; el indexado es valido" }
+  ]
+}

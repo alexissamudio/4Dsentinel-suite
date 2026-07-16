@@ -1,0 +1,11 @@
+{
+  "agent": "critic",
+  "notes": "plan contra repo/app.py: referencia funcion inexistente (migrate) + paso destructivo en prod; 1 decoy (get_user si existe).",
+  "must_catch": [
+    { "id": "NOFUNC", "where": "plan.md:4", "why": "paso inejecutable: app.migrate() no existe en repo/app.py (solo connect_db/run_query/get_user); el Paso 1 no se puede ejecutar. Critical" },
+    { "id": "DESTRUCTIVE", "where": "plan.md:13", "why": "el Paso 4 borra app.db en produccion afirmando 'recreacion limpia', pero migrate() no existe -> se pierden datos sin recrear el esquema. Critical" }
+  ],
+  "decoys": [
+    { "where": "plan.md:10", "why": "modificar get_user() es ejecutable: la funcion SI existe en repo/app.py:20; el paso es valido, no un gap" }
+  ]
+}

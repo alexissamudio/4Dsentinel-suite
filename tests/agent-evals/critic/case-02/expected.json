@@ -1,0 +1,11 @@
+{
+  "agent": "critic",
+  "notes": "plan contra repo/cache.py: afirma un cliente Redis que no existe + orden de dependencias invertido (usa en Paso 1 lo que crea en Paso 3); 1 decoy (set existe).",
+  "must_catch": [
+    { "id": "FALSECLAIM", "where": "plan.md:4", "why": "afirmacion falsa sobre el repo: el Paso 1 dice reutilizar 'el cliente Redis que ya vive en cache.py', pero cache.py es un dict en memoria (_store), no hay Redis. Critical" },
+    { "id": "BADORDER", "where": "plan.md:10", "why": "secuenciacion rota: el Paso 1 usa el cliente/pool de Redis, pero recien el Paso 3 crea el connection pool -> se usa una dependencia antes de crearla. Important" }
+  ],
+  "decoys": [
+    { "where": "plan.md:7", "why": "extender cache.set() con un parametro ttl es ejecutable: set() existe en repo/cache.py:10; el paso es valido en si mismo" }
+  ]
+}
