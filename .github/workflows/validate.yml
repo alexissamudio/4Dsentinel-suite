@@ -27,8 +27,15 @@ jobs:
           uvx ruff format --check plugins/fluency-4d/hooks/ scripts/ tests/ plugins/memory/scripts/
       - name: Mypy (lenient, todo el Python)
         run: uvx mypy plugins/fluency-4d/hooks/ scripts/ plugins/memory/scripts/
-      - name: Pytest
-        run: uv run --with pytest --with pytest-randomly pytest tests/ -q
+      # Coverage SOLO del codigo importado directo (scripts): los hooks corren por
+      # subprocess (uv run --script) y pytest-cov no los ve -> medirlos daria 0% falso.
+      # Su cobertura real la dan los tests E2E por subprocess, no este numero.
+      - name: Pytest (+ coverage report de scripts)
+        run: >
+          uv run --with pytest --with pytest-randomly --with hypothesis --with pytest-cov
+          pytest tests/ -q
+          --cov=scripts --cov=plugins/memory/scripts
+          --cov-report=term-missing
       - name: Skills bien formados (contrato fluency)
         run: uv run scripts/fluency_check_skills.py
 
@@ -40,7 +47,7 @@ jobs:
         with:
           enable-cache: true
       - name: Pytest (Windows)
-        run: uv run --with pytest --with pytest-randomly pytest tests/ -q
+        run: uv run --with pytest --with pytest-randomly --with hypothesis pytest tests/ -q
 
   sentinel-agents:
     runs-on: ubuntu-latest
