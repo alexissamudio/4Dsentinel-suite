@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Suite unificada: marco 4D de AI Fluency (fluency-4d) + agentes de auditoria (sentinel-agents) + memoria de codebase (codebase-memory-mcp) en un solo install",
-    "version": "1.0.2"
+    "version": "1.0.3"
   },
   "plugins": [
     {
@@ -44,7 +44,7 @@
       "name": "sentinel-agents",
       "source": "./plugins/sentinel-agents",
       "description": "Agentes de auditoria: compliance (ISO 27000), seguridad (OWASP/CWE/CVSS), code-review, riesgo, bug-hunt, y calidad de redaccion; read-only con evidencia dura",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "author": {
         "name": "Alexis Samudio"
       },
