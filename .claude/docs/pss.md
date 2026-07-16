@@ -124,8 +124,9 @@ muertos / (total − equivalentes).**
   `mutmut`, `cosmic-ray`.
 - **A diferencia de coverage, mutmut SÍ funciona sobre los hooks:** muta el archivo en
   disco y el subprocess lo lee mutado. **Windows:** mutmut requiere WSL
-  (`uvx mutmut run` desde `wsl -e bash -lc`). Spot-check manual ya hecho (PR2) sobre las
-  3 guardas — 3/3 mutantes muertos:
+  (`uvx mutmut run` desde `wsl -e bash -lc`). Desde F16 esto corre automatizado en el
+  **nightly `mutation.yml`** (ubuntu, `mutmut==2.5.1`, no bloqueante; ver `release.md`).
+  Spot-check manual ya hecho (PR2) sobre las 3 guardas — 3/3 mutantes muertos:
   - `check_commands._command_is_safe`: quitar `[\\/]` (drive-relative `C:foo` pasaría) →
     matado por `test_command_drive_relative_falla`.
   - `hook_utils.safe_doc_path`: `".."` → `"..x"` (traversal permitido) → matado por el

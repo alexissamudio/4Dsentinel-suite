@@ -15,6 +15,9 @@ permissions:
 jobs:
   mutmut:
     runs-on: ubuntu-latest
+    # El runner corre tests/ completo por mutante (los tests de hooks lanzan subprocess);
+    # cota dura muy por debajo del limite default de 360 min para no quemar runner-minutes.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
@@ -46,7 +49,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Subir cache de mutmut como artifact
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mutmut-results
           path: .mutmut-cache
