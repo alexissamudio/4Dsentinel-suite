@@ -1,45 +1,50 @@
-# Estado de sesion — 2026-07-16 — agent-improver CONSTRUIDO + mejoras piloto aplicadas (PR #13 verde)
+# Estado de sesion — 2026-07-16 — agent-improver COMPLETO (piloto) + mejoras aplicadas (PR #13 verde)
 
 ## Objetivo / frase 4D
-Diligencia: construir `agent-improver` (Workflow que mide/mejora los prompts de sentinel-agents),
-aplicar sus primeras propuestas y endurecer el dataset. Plan: `~/.claude/plans/snug-launching-newt.md`.
+Diligencia: construir `agent-improver` (Workflow que mide/mejora prompts de sentinel-agents), aplicar
+sus propuestas, endurecer el dataset y verificar. Plan: `~/.claude/plans/snug-launching-newt.md`.
 
-## HECHO Y VERIFICADO
-### Rama `feat/agent-improver` (scaffolding) — commits a8d091f, 1221224, f0f6a32
-- Dataset golden `tests/agent-evals/` (bug-hunter x4, security-auditor x2, critic x2) + RUBRIC + README.
-- Motor `.claude/workflows/agent-improver.js`: load -> baseline-eval -> meta-review (panel 3) ->
-  synthesis -> candidate-eval+select (vias RECALL + PRECISION, margen 0.05, mayoria de reps) -> loop-until-dry.
-  Role-play read-only + judge, ambos con schema. Propuestas durables en `.claude/docs/propuestas-agent-improver.md`.
-- Verif #2 CUMPLIDA: 2 runs (111 agentes c/u, 0 err). Baseline catch-rate 1.0 en los 3 (dataset facil saturaba).
+## PR #13 — CI 5/5 VERDE (rama `feat/improve-sentinel-agents`)
+Incluye TODO el trabajo (scaffolding + mejoras + dataset duro). Commits:
+- Scaffolding: motor `.claude/workflows/agent-improver.js` + dataset `tests/agent-evals/` (bug-hunter x5,
+  security-auditor x3, critic x3) + RUBRIC + README + propuestas durables.
+- Mejoras piloto a los 3 agentes (.md) + bump **sentinel-agents 0.6.1 -> 0.6.2** (F17).
+- Dataset endurecido: +3 casos dificiles (verificados a mano).
+- Mejoras EXTRA a bug-hunter (del 3er run, aplicadas a mano por session-limit del synth): **scope de
+  entrada** (Método) + **`summary:` en la enumeración de salida** + clase **no-terminación**.
+- fix LF del workflow (.gitattributes `.claude/workflows/*.js text eol=lf`).
+Guardas verdes en todos: check_agents, check_suite_versions (sentinel 0.6.2), gate F17. Frontmatter +
+=== SENTINEL-REPORT === + enums de verdict intactos.
 
-### Rama `feat/improve-sentinel-agents` = feat/agent-improver + mejoras. **PR #13 (CI 5/5 VERDE)**
-- **Mejoras piloto aplicadas** (commit 7433795) a bug-hunter/security-auditor/critic .md, a mano desde
-  las propuestas del loop, no-regresion de contrato verificada. Bump **sentinel-agents 0.6.1 -> 0.6.2** (F17).
-  Guardas verdes: check_agents (11 OK), check_suite_versions, check_bump_on_change (F17), frontmatter +
-  === SENTINEL-REPORT === + enums de verdict intactos. CI Linux confirma (job sentinel-agents + suite pass).
-- **Dataset endurecido** (commit 5dbcecf): +3 casos DIFICILES/sutiles con headroom:
-  bug-hunter/case-05 (alias de clase, float-eq, off-by-one enmascarado, race check-then-act),
-  security-auditor/case-03 (SSRF substring-allowlist, IDOR, open-redirect, timing no-constante),
-  critic/case-03 (return inexistente, sentinel None, flush borra-todo, criterio no medible). Ground-truth
-  verificado a mano (lineas exactas, decoys convincentes).
+## VERIFICACION del motor (3 runs, todos con baseline catch-rate 1.0)
+- Run 1 y 2 (3 targets): motor OK end-to-end; ningun candidato aceptado (baseline satura + judge-noise).
+- Run 3 (bug-hunter, dataset DURO): baseline SIGUE 1.0 (Opus caza los casos dificiles igual) -> **NO hay
+  headroom de recall**. El synth murio por **session limit** (ver abajo). El meta-review SI dio 2 gaps
+  Important nuevos (scope de entrada + summary omitido) -> aplicados a mano a bug-hunter.md.
+- **CONCLUSION**: para agentes cazados por un modelo fuerte, el valor del loop es el **meta-review**
+  (guard de regresion + mejoras de calidad), no el delta de catch-rate. Documentado en README y lecciones.
 
-## GOTCHAS de esta sesion (para recordar)
-- El `synth.diff` del loop NO es git-apply-able (entities HTML + conteos de linea del LLM) -> aplicar A
-  MANO (que ademas es la revision humana del plan). Mejora futura del motor: exponer `candidateFileFull`.
-- El `.venv` es de LINUX -> `uv run` falla al recrearlo (symlink lib64 access denied). Workaround usado:
-  `uv run --no-project --python 3.12 python scripts/<x>.py` (entorno efimero, no toca el .venv). ruff: `uvx ruff`.
-  Arreglo real pendiente: borrar `.venv` (Remove-Item -Recurse -Force) + `uv sync`.
-- `Workflow({name:'agent-improver'})` no resuelve -> usar `scriptPath`. El `resume` NO cacheo (re-corrio full).
+## BLOQUEO ACTIVO: session limit de Claude
+`You've hit your session limit · resets 2:50pm (America/Asuncion)`. NO se pueden correr mas Workflows/
+subagentes hasta el reset. El trabajo LOCAL (git, edicion, checks Python con entorno efimero, CI de
+GitHub) NO esta bloqueado.
 
-## PENDIENTE
-1. **Mergear PR #13** (CI verde). OJO auto-aprobacion: el clasificador bloquea `gh pr merge` de PR que
-   yo mismo abri -> requiere OK explicito del usuario o que lo mergee el.
-2. **Correr el loop sobre el dataset DURO** para confirmar headroom: `Workflow({scriptPath:
-   'C:\\Users\\samud\\dev\\4Dsentinel-suite\\.claude\\workflows\\agent-improver.js', args:{targets:['bug-hunter'], rounds:2, reps:3}})`
-   -> ver si ahora hay un candidato ACEPTADO via RECALL (baseline < 1.0). Costoso (~2.8M tok/run).
-3. Escalar a los 8 agentes restantes (mismo motor, sumar casos golden).
-4. Arreglar venv local. Revisar `.claude/docs/testing.md` (se edito pyproject/tests).
-5. El scaffolding solo (feat/agent-improver) quedo SIN PR propio: PR #13 lo incluye entero.
+## PENDIENTE (tras el reset del session limit)
+1. **Mergear PR #13** (CI verde). Auto-aprobacion: el clasificador bloquea `gh pr merge` de MI PR ->
+   pedir OK al usuario o que lo mergee el: `! gh pr merge 13 --squash --delete-branch`.
+2. **Escalar a los 8 agentes restantes** (advisor, code-reviewer, compliance-auditor, debugger, librarian,
+   risk-assessor, validator, auditor-de-redaccion): crear casos golden (>=3-4 c/u) en tests/agent-evals/
+   + correr el loop `Workflow({scriptPath: '...agent-improver.js', args:{targets:[...], rounds:2, reps:3}})`.
+   El motor no cambia; solo crece el dataset. OJO: crear los casos NO requiere API (edicion); correr el
+   loop SI. Costo ~2.8M tok/run de 3 targets, ~0.9M/run de 1 target.
+3. **Mejora del motor**: exponer `candidateFileFull` en el reporte (hoy solo `diff`, que no es git-apply-able).
+4. **Arreglar venv local** (borrar .venv linux + uv sync) para correr check_agents/pytest sin entorno efimero.
+
+## GOTCHAS (consolidados en .claude/docs/lecciones.md)
+- Diffs del synth NO son git-apply-able (entities HTML + conteos LLM) -> aplicar a mano.
+- .venv es de LINUX -> usar `uv run --no-project --python 3.12 python scripts/<x>.py`; `uvx ruff`.
+- Workflow rechaza .js con CRLF (permission handler) -> forzar LF; `Workflow({name})` no resuelve -> scriptPath.
+- Clasificador bloquea auto-merge de PR propio -> OK del usuario.
 
 ## ARRANCAR SESION NUEVA
 cd C:\Users\samud\dev\4Dsentinel-suite ; leer .claude/docs/estado-sesion.md y ~/.claude/plans/snug-launching-newt.md

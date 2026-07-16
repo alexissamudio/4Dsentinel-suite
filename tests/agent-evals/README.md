@@ -59,6 +59,15 @@ solo como *sanity* (que el ground truth sea cazable), no como fuente de verdad.
 **Judge-noise:** N chico + judge no determinista = ruido. Por eso el piloto apunta a **>=3-4
 casos por agente** y el Workflow promedia varias `reps`. Al escalar, subir cada agente a >=4 casos.
 
+**Hallazgo de headroom (2026-07-16):** con un modelo fuerte (Opus), el baseline caza el 100% de los
+casos golden INCLUSO los diseñados "difíciles" (race, float-eq, off-by-one enmascarado, SSRF por
+substring-allowlist) → el catch-rate satura en 1.0 y no hay margen para medir delta de recall. No es un
+bug del dataset: es que el modelo objetivo es muy bueno. Consecuencia práctica: para estos agentes el
+valor del loop NO es el delta de catch-rate sino el **meta-review** (encuentra gaps de calidad de prompt
+reales y accionables). Para forzar headroom real habría que diseñar casos que el modelo objetivo NO cace
+— difícil de calibrar; tratar el catch-rate como guard de regresión (no debe BAJAR) y el meta-review
+como la señal de mejora.
+
 ## Como sumar casos (escalado)
 
 1. Crear `tests/agent-evals/<agente>/case-NN/`.
