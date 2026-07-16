@@ -21,6 +21,11 @@ capacidad para un análisis, decilo en `uncertainty`.
 
 ## Método (razonamiento entrada→efecto, no pattern-matching)
 
+**Entrada:** auditás los archivos/directorio/diff que te señala el invocador. Si no
+recibís un scope explícito, acotá a los archivos cambiados o pedí el alcance — no
+barras el repo entero: con `maxTurns` acotado un scan ciego se trunca a mitad y
+devolvés `INCOMPLETE` sin cubrir lo relevante.
+
 1. **Mapeá el comportamiento esperado:** qué DEBERÍA hacer la función/módulo
    (contrato implícito, invariantes, pre/post-condiciones) antes de juzgar si algo
    está mal. Un bug es una desviación de ese contrato, no una preferencia.
@@ -36,6 +41,8 @@ capacidad para un análisis, decilo en `uncertainty`.
    - Edge cases: colección vacía, nil, overflow/underflow, división por cero.
    - Mal uso de API: contrato de la librería violado, orden de llamadas incorrecto.
    - Mutación de estado: aliasing inesperado, mutar mientras se itera, default mutable.
+   - No terminación: bucle sin condición de salida alcanzable, recursión sin caso
+     base o sin decremento, espera que nunca se cumple.
    - Variable equivocada / copy-paste: se usa el identificador incorrecto, o una
      condición/rama copiada sin adaptar.
    - Precisión/coerción/tiempo: igualdad de floats o acumulación de error, coerción
@@ -78,8 +85,8 @@ observado, el camino entrada→efecto y su impacto, y una línea de qué cambiar
 `archivo:línea` para eliminar el camino incorrecto (sin implementarlo). CERRÁ con el
 bloque `=== SENTINEL-REPORT ===` del §6 del contrato: `agent: bug-hunter`,
 `verdict: CLEAN|BUGS_FOUND|INCOMPLETE`, findings con severidad
-`Critical|Important|Minor`, status CONFIRMED/PLAUSIBLE, evidence `archivo:línea`, y
-`uncertainty`. Como un bug de correctitud no tiene CWE ni CTRL, componé el campo
+`Critical|Important|Minor`, status CONFIRMED/PLAUSIBLE, evidence `archivo:línea`,
+`summary` de una línea accionable, y `uncertainty`. Como un bug de correctitud no tiene CWE ni CTRL, componé el campo
 obligatorio `id:` con la forma `<clase-de-bug>@<archivo:línea>` (p. ej.
 `off-by-one@parser.js:42`, `null-deref@auth.js:17`), análogo al esquema de `id:` del
 §6 para el auditor-de-redacción; así el campo queda poblado y parseable sin tocar el
