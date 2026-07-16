@@ -6,10 +6,10 @@ requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
 # tests/sentinel-agents/ son FIXTURES (target-vulnerable con un test que falla a
-# proposito para el validator), NO suite pytest: se excluyen. Sin args, pytest usa
-# testpaths (~107 de fluency-4d); el CI corre `pytest tests/` explicito, que ademas
-# recolecta tests/scripts/ (~25 mas) porque el arg posicional ignora testpaths.
-testpaths = ["tests/fluency-4d"]
+# proposito para el validator), NO suite pytest: se excluyen via --ignore.
+# testpaths incluye AMBAS carpetas reales para que un `pytest` pelado local corra
+# tambien tests/scripts/ (los bump/check) y no de un verde falso (F10 de la auditoria).
+testpaths = ["tests/fluency-4d", "tests/scripts"]
 addopts = "--ignore=tests/sentinel-agents"
 
 [tool.ruff]
