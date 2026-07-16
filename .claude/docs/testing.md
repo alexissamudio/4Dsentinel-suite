@@ -6,7 +6,10 @@ content_hash: b3f21db0aeb82c6da7662a10dbedb61fea954056ca6763fccc02307ea7b156d3
 
 # Testing en este proyecto
 
-30 tests en `tests/hooks/` que congelan el comportamiento de los 4 hooks.
+~132 tests (128 pasan, 4 se saltean por ser POSIX-only) repartidos en
+`tests/fluency-4d/` (~107: los 7 hooks + `hook_utils` + el validador de skills) y
+`tests/scripts/` (~25: los bump y las guardas `check_*`). Congelan el comportamiento
+observado (caracterización) más algunos tests requisito-derivados de seguridad.
 Correr con:
 
 ```
