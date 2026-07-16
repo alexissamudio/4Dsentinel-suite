@@ -6,11 +6,11 @@
 """check_kb_blank.py - Guarda anti-write-back de la base ISO (por checksum).
 
 La KB (references/iso-27000/) viaja EN BLANCO con el plugin. Esta guarda impide
-que resultados de una auditoría (evidencia real, estados, IPs, nombres de la
-organización) se commiteen de vuelta al repo público. Compara cada archivo contra
-los hashes prístinos de .manifest.sha256; FALLA si algo difiere o falta.
+que resultados de una auditoria (evidencia real, estados, IPs, nombres de la
+organizacion) se commiteen de vuelta al repo publico. Compara cada archivo contra
+los hashes pristinos de .manifest.sha256; FALLA si algo difiere o falta.
 
-Editar la plantilla a propósito => regenerar el manifest conscientemente:
+Editar la plantilla a proposito => regenerar el manifest conscientemente:
   uv run scripts/check_kb_blank.py --update
 """
 
@@ -49,7 +49,7 @@ def update() -> int:
 
 def check() -> int:
     if not MANIFEST.is_file():
-        print("ERROR - falta .manifest.sha256; corré --update", file=sys.stderr)
+        print("ERROR - falta .manifest.sha256; corre --update", file=sys.stderr)
         return 1
     expected = {}
     for line in MANIFEST.read_text(encoding="utf-8").splitlines():
@@ -64,16 +64,16 @@ def check() -> int:
         if rel not in actual:
             problemas.append(f"FALTA: {rel}")
         elif actual[rel] != h:
-            problemas.append(f"MODIFICADO (posible write-back de auditoría): {rel}")
+            problemas.append(f"MODIFICADO (posible write-back de auditoria): {rel}")
     for rel in actual:
         if rel not in expected:
             problemas.append(f"NUEVO (no en el manifest): {rel}")
 
     if problemas:
-        print("ERROR - la KB no coincide con el manifest prístino:", file=sys.stderr)
+        print("ERROR - la KB no coincide con el manifest pristino:", file=sys.stderr)
         for p in problemas:
             print(f"  - {p}", file=sys.stderr)
-        print("Si el cambio es intencional en la PLANTILLA, corré --update.", file=sys.stderr)
+        print("Si el cambio es intencional en la PLANTILLA, corre --update.", file=sys.stderr)
         return 1
     print(f"OK - KB en blanco: {len(actual)} archivos coinciden con el manifest")
     return 0

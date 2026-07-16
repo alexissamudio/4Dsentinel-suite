@@ -12,24 +12,13 @@ Por cada plugins/sentinel-agents/skills/<nombre>/SKILL.md:
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
+from frontmatter_utils import frontmatter
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / "plugins" / "sentinel-agents" / "skills"
-
-
-def frontmatter(text: str) -> dict[str, str]:
-    m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
-    if not m:
-        return {}
-    fm = {}
-    for line in m.group(1).splitlines():
-        if ":" in line:
-            k, v = line.split(":", 1)
-            fm[k.strip()] = v.strip()
-    return fm
 
 
 def check_skill(path: Path) -> list[str]:

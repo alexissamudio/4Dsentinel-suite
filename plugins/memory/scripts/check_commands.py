@@ -28,6 +28,11 @@ COMMANDS_DIR = REPO_ROOT / "commands"
 SKILLS_DIR = REPO_ROOT / "skills"
 SUITE_ROOT = REPO_ROOT.parent.parent  # raiz de 4Dsentinel-suite
 
+# El helper de frontmatter vive en scripts/ (raiz de la suite); este check corre
+# desde plugins/memory/scripts/, asi que agrega ese dir al path para importarlo.
+sys.path.insert(0, str(SUITE_ROOT / "scripts"))
+from frontmatter_utils import frontmatter  # noqa: E402
+
 
 def _plugin_jsons() -> list[Path]:
     """Todos los plugins/*/.claude-plugin/plugin.json de la suite. La regla
@@ -37,16 +42,70 @@ def _plugin_jsons() -> list[Path]:
     return sorted(SUITE_ROOT.glob("plugins/*/.claude-plugin/plugin.json"))
 
 
-def frontmatter(text: str) -> dict[str, str]:
-    m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
-    if not m:
-        return {}
-    fm = {}
-    for line in m.group(1).splitlines():
-        if ":" in line:
-            k, v = line.split(":", 1)
-            fm[k.strip()] = v.strip()
-    return fm
+# Prefijo user-scope del MCP (lo que registra /suite-setup con `claude mcp add`).
+# El prefijo plugin-scoped `mcp__plugin_4dsentinel-memory_codebase-memory__` quedo
+# MUERTO al mover el registro a user-scope (fix CWE-427) -> los allowed-tools que
+# lo usaran caian en prompt de permiso en vez de correr pre-aprobados (F3).
+MCP_PREFIX = "mcp__codebase-memory__"
+# Tools reales del MCP codebase-memory. Allowlist mantenido A MANO: es el unico
+# ground-truth estatico (el MCP no se puede consultar en CI). Si el server agrega
+# o renombra un tool, actualizar aca. Defensa de F3/F1: un allowed-tools con
+# prefijo muerto o un tool inexistente frena el CI (no solo se valida la clave).
+KNOWN_MCP_TOOLS = {
+    "delete_project",
+    "detect_changes",
+    "get_architecture",
+    "get_code_snippet",
+    "get_graph_schema",
+    "index_repository",
+    "index_status",
+    "ingest_traces",
+    "list_projects",
+    "manage_adr",
+    "query_graph",
+    "search_code",
+    "search_graph",
+    "trace_path",
+}
+
+
+def _parse_allowed_tools(raw: str) -> list[str]:
+    """Extrae la lista de tools de un `allowed-tools` en cualquier formato:
+    array JSON (`["a", "b"]`) o inline con comas (`a, b`)."""
+    raw = raw.strip()
+    try:
+        val = json.loads(raw)
+        if isinstance(val, list):
+            return [str(t).strip() for t in val]
+    except json.JSONDecodeError:
+        pass
+    inner = raw.strip().strip("[]")
+    return [t.strip().strip("'\"") for t in inner.split(",") if t.strip()]
+
+
+def check_allowed_tools(raw: str) -> list[str]:
+    """Valida los NOMBRES de tools MCP en un allowed-tools (no solo su presencia).
+
+    Cada tool `mcp__*` debe usar el prefijo user-scope correcto y nombrar un tool
+    real del MCP. Las tools nativas (Read, Grep, ...) se aceptan sin validar aca.
+    """
+    errs = []
+    for tool in _parse_allowed_tools(raw):
+        if not tool.startswith("mcp__"):
+            continue  # tool nativa: no la valida este check
+        if not tool.startswith(MCP_PREFIX):
+            errs.append(
+                f"tool MCP '{tool}' con prefijo invalido: se espera "
+                f"'{MCP_PREFIX}<tool>' (user-scope, el que registra /suite-setup)"
+            )
+            continue
+        suffix = tool[len(MCP_PREFIX) :]
+        if suffix not in KNOWN_MCP_TOOLS:
+            errs.append(
+                f"tool MCP '{tool}' desconocido: '{suffix}' no esta en el set del "
+                f"MCP codebase-memory (revisa un typo o actualiza KNOWN_MCP_TOOLS)"
+            )
+    return errs
 
 
 def check_command(path: Path) -> list[str]:
@@ -55,6 +114,8 @@ def check_command(path: Path) -> list[str]:
     for campo in ("description", "allowed-tools"):
         if campo not in fm:
             errs.append(f"falta frontmatter '{campo}'")
+    if "allowed-tools" in fm:
+        errs += check_allowed_tools(fm["allowed-tools"])
     return errs
 
 

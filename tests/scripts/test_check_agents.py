@@ -81,3 +81,21 @@ def test_agente_con_write_en_lista_indent_cero_falla(tmp_path):
     path.write_text(_agent_tools_block(["Read", "Write"]), encoding="utf-8")
     errs = ca.check_agent(path)
     assert any("Write" in e for e in errs), errs
+
+
+def test_agente_con_tool_desconocida_falla(tmp_path):
+    # Defensa F1: un typo (tool fuera del allowlist positivo, no prohibida) hoy
+    # pasaba silencioso; ahora se reporta como desconocida.
+    path = tmp_path / "malo.md"
+    path.write_text(_agent("Read, Grepp"), encoding="utf-8")
+    errs = ca.check_agent(path)
+    assert any("desconocidas" in e and "Grepp" in e for e in errs), errs
+
+
+def test_agente_prohibida_no_duplica_mensaje_desconocida(tmp_path):
+    # Una tool prohibida (Write) NO debe aparecer tambien como "desconocida":
+    # PROHIBIDAS ya tiene su mensaje, el allowlist las excluye.
+    path = tmp_path / "malo.md"
+    path.write_text(_agent("Read, Write"), encoding="utf-8")
+    errs = ca.check_agent(path)
+    assert not any("desconocidas" in e for e in errs), errs

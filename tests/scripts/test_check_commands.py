@@ -106,3 +106,51 @@ def test_command_un_solo_backslash_falla(tmp_path):
     path = _write_plugin_json(tmp_path, {"mcpServers": {"cbm": {"command": "\\foo\\cbm.exe"}}})
     errs = cc.check_plugin_json(path)
     assert any("CWE-427" in e or "PATH" in e for e in errs), errs
+
+
+# --- check_allowed_tools: defensa de F3/F1 (validar NOMBRES de tools MCP) ---
+
+
+def test_allowed_tools_valido_ok():
+    # Los tools MCP reales con el prefijo user-scope correcto no fallan.
+    raw = '["mcp__codebase-memory__get_architecture", "mcp__codebase-memory__list_projects"]'
+    assert cc.check_allowed_tools(raw) == []
+
+
+def test_allowed_tools_prefijo_muerto_falla():
+    # F3: el prefijo plugin-scoped quedo muerto tras mover el registro a user-scope.
+    raw = '["mcp__plugin_4dsentinel-memory_codebase-memory__get_architecture"]'
+    errs = cc.check_allowed_tools(raw)
+    assert any("prefijo invalido" in e for e in errs), errs
+
+
+def test_allowed_tools_tool_inexistente_falla():
+    # Un typo en el nombre del tool (no esta en KNOWN_MCP_TOOLS) frena el CI.
+    raw = '["mcp__codebase-memory__get_architectureX"]'
+    errs = cc.check_allowed_tools(raw)
+    assert any("desconocido" in e for e in errs), errs
+
+
+def test_allowed_tools_formato_inline():
+    # Formato inline con comas (sin corchetes JSON) tambien se valida.
+    raw = "mcp__codebase-memory__search_graph, mcp__codebase-memory__trace_path"
+    assert cc.check_allowed_tools(raw) == []
+
+
+def test_allowed_tools_nativa_se_ignora():
+    # Tools nativas (Read, Grep) no las valida este check MCP.
+    raw = '["Read", "Grep", "mcp__codebase-memory__list_projects"]'
+    assert cc.check_allowed_tools(raw) == []
+
+
+def test_known_mcp_tools_cubre_los_usados_por_los_comandos():
+    # Los tools que realmente usan los 6 comandos deben estar en el allowlist.
+    usados = {
+        "get_architecture",
+        "list_projects",
+        "search_graph",
+        "detect_changes",
+        "index_repository",
+        "trace_path",
+    }
+    assert usados <= cc.KNOWN_MCP_TOOLS, usados - cc.KNOWN_MCP_TOOLS

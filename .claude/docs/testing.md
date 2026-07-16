@@ -6,11 +6,12 @@ content_hash: b3f21db0aeb82c6da7662a10dbedb61fea954056ca6763fccc02307ea7b156d3
 
 # Testing en este proyecto
 
-~132 tests (128 pasan, 4 se saltean por ser POSIX-only) repartidos en
-`tests/fluency-4d/` (~107: los 7 hooks + `hook_utils` + el validador de skills) y
-`tests/scripts/` (~25: los bump y las guardas `check_*`). Congelan el comportamiento
-observado (caracterización) más algunos tests requisito-derivados de seguridad.
-Correr con:
+~177 tests (173 pasan, 4 se saltean por ser POSIX-only) repartidos en
+`tests/fluency-4d/` (los 7 hooks + `hook_utils` + el validador de skills) y
+`tests/scripts/` (los bump/`bump_suite`, `frontmatter_utils`, y las guardas
+`check_*`: agents, commands, kb_blank, suite_versions, ascii, commit_trailer).
+Congelan el comportamiento observado (caracterización) más tests requisito-derivados
+de seguridad. Correr con:
 
 ```
 uv run --with pytest pytest tests/ -q
@@ -46,3 +47,10 @@ El env del subprocess redirige TODO lo persistente a `tmp_path`:
 - Al tocar `bridge_router.py`, los 4 tests que congelan el bloque de emisión
   única (trailer una vez, vacío-pero-estado-guardado, cap 2 temas, bridges
   malformado) son los que avisan si rompiste algo.
+- **Imports hermanos en `scripts/` + mypy strict:** los scripts se importan por
+  nombre plano (`from bump_common import ...`, `from frontmatter_utils import ...`);
+  funciona en runtime porque `uv run --script` pone el dir del script en `sys.path[0]`,
+  y los tests hacen `sys.path.insert(0, scripts)`. Para que mypy los resuelva con
+  tipos reales (y no como `Any` → `no-any-return`) el `pyproject.toml` tiene
+  `mypy_path = ["scripts"]`. `check_commands.py` (en `plugins/memory/scripts/`) hace
+  su propio `sys.path.insert(SUITE_ROOT/"scripts")` para el import cross-dir.

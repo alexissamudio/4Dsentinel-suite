@@ -35,10 +35,15 @@ El CI corre este check y falla si divergen.
 
 ## Bumpear el paraguas (release de la suite)
 
-`metadata.version` **no tiene script** (ningún bump per-plugin la toca, a propósito). Para un
-release de la suite, editá `metadata.version` **a mano** en `marketplace.json`.
-`check_suite_versions.py` NO la valida (es independiente de los plugins); solo tiene que ser
-semver válido. El tag y el release de GitHub usan esta versión (`vX.Y.Z`).
+`metadata.version` la maneja **`scripts/bump_suite.py`** (ningún bump per-plugin la toca):
+
+- `uv run scripts/bump_suite.py --set X.Y.Z` → escribe `metadata.version`.
+- `uv run scripts/bump_suite.py --check` → la imprime.
+- `uv run scripts/bump_suite.py --check-tag vX.Y.Z` → valida `metadata.version == tag`.
+
+`check_suite_versions.py` NO valida el paraguas (es independiente de los plugins). El tag y el
+release de GitHub usan esta versión (`vX.Y.Z`); en un **push de tag** el CI corre
+`bump_suite.py --check-tag` y **frena el release si el tag no coincide** con `metadata.version`.
 
 ## Ciclo de desarrollo local
 
@@ -52,8 +57,8 @@ en el lugar sin ese update.
 ## Orden de release (NO alterarlo)
 
 1. **Bump** lo que cambió: `<plugin>_bump_version.py --set X.Y.Z` por cada plugin tocado, y/o
-   `metadata.version` a mano para el release de la suite. Commits convencionales (subject ≤ 50
-   chars, SIN atribución de IA).
+   `bump_suite.py --set X.Y.Z` para el release de la suite. Commits convencionales (subject ≤ 50
+   chars, SIN atribución de IA — el CI lo verifica con `check_commit_trailer.py`).
 2. **Verificar**: `uv run scripts/check_suite_versions.py` + `uv run pytest tests/ -q` verde.
    Prueba en vivo del feature si aplica (hooks por stdin y/o `claude -p` en un toy project).
 3. **Push y CI**: `git push origin main`; esperar `gh run watch <run-id> --exit-status` hasta
@@ -64,7 +69,11 @@ en el lugar sin ese update.
 ## CI (.github/workflows/validate.yml)
 
 Cuatro jobs: `fluency-4d` (ubuntu) y `fluency-4d-windows` (pytest en la plataforma real de uso),
-`sentinel-agents` (agentes/skills/KB), y `suite` (JSON válidos, versiones per-plugin
-sincronizadas vía `check_suite_versions.py`, ruff). Requiere `astral-sh/setup-uv@v5`: uv no viene
-en los runners. Los tests POSIX-only (p. ej. ownership del temp dir, CWE-377) corren en los jobs
-ubuntu y se saltean en Windows.
+`sentinel-agents` (agentes/skills/KB), y `suite` (JSON válidos, `check_suite_versions.py`,
+`check_ascii.py`, `check_commit_trailer.py`, y en push de tag `bump_suite.py --check-tag`).
+Requiere `setup-uv`: uv no viene en los runners. Los tests POSIX-only (p. ej. ownership del
+temp dir, CWE-377) corren en los jobs ubuntu y se saltean en Windows.
+
+**Supply-chain (F6):** las actions están pineadas por **SHA de commit** (no por tag mutable) y
+`ruff`/`mypy`/deps de pytest tienen **versión fija** en el workflow. El trigger incluye
+`tags: [v*]`. Al subir una action o el tooling, actualizar el SHA/versión a conciencia.
