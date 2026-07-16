@@ -1,7 +1,7 @@
 ---
 description: Rastrea llamadores/llamados e impacto de una funcion en el grafo (envuelve trace_path).
 argument-hint: "<nombre de la funcion> [inbound|outbound|both]"
-allowed-tools: ["mcp__plugin_4dsentinel-memory_codebase-memory__trace_path", "mcp__plugin_4dsentinel-memory_codebase-memory__list_projects"]
+allowed-tools: ["mcp__codebase-memory__trace_path", "mcp__codebase-memory__list_projects"]
 ---
 
 Rastreá el **grafo de llamadas** de una función (análisis de impacto).

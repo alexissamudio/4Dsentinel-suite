@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Least-privilege: el workflow solo valida, no publica ni escribe.
+permissions:
+  contents: read
+
 jobs:
   fluency-4d:
     runs-on: ubuntu-latest

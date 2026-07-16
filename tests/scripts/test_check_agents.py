@@ -57,3 +57,27 @@ def test_agente_con_bash_no_permitido_falla(tmp_path):
     path.write_text(_agent("Read, Grep, Bash"), encoding="utf-8")
     errs = ca.check_agent(path)
     assert any("Bash" in e for e in errs), errs
+
+
+def _agent_tools_block(items: list[str], name: str = "malo") -> str:
+    """Frontmatter con `tools` en bloque-lista YAML a indentacion CERO (BH-01)."""
+    lista = "\n".join(f"- {t}" for t in items)
+    return (
+        "---\n"
+        f"name: {name}\n"
+        "description: agente de prueba\n"
+        "model: inherit\n"
+        "maxTurns: 10\n"
+        "tools:\n"
+        f"{lista}\n"
+        "---\n"
+        "cuerpo que referencia agent-contract.md\n"
+    )
+
+
+def test_agente_con_write_en_lista_indent_cero_falla(tmp_path):
+    # BH-01: una lista YAML valida a indentacion 0 NO debe burlar el guard read-only.
+    path = tmp_path / "malo.md"
+    path.write_text(_agent_tools_block(["Read", "Write"]), encoding="utf-8")
+    errs = ca.check_agent(path)
+    assert any("Write" in e for e in errs), errs

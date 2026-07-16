@@ -69,12 +69,13 @@ def parse_tools(text: str) -> set[str]:
             # Formato inline con comas.
             tools |= {t.strip().strip("'\"") for t in inline.split(",") if t.strip()}
         else:
-            # Formato bloque lista: lineas siguientes '- X' indentadas, hasta la
+            # Formato bloque lista: lineas siguientes '- X' (con indentacion 0 o
+            # mas: YAML acepta el item a la misma columna que la clave), hasta la
             # proxima clave (primera linea no vacia que no sea un item de lista).
             for nxt in lines[i + 1 :]:
                 if not nxt.strip():
                     continue
-                item = re.match(r"^\s+-\s+(.+?)\s*$", nxt)
+                item = re.match(r"^\s*-\s+(.+?)\s*$", nxt)
                 if not item:
                     break
                 tools.add(item.group(1).strip().strip("'\""))

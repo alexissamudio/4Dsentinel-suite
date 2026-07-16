@@ -1,7 +1,7 @@
 ---
 description: Busca funciones, clases y rutas en el grafo de codigo (envuelve search_graph), en vez de grep.
 argument-hint: "<consulta en lenguaje natural o patron, ej. 'login de usuarios'>"
-allowed-tools: ["mcp__plugin_4dsentinel-memory_codebase-memory__search_graph", "mcp__plugin_4dsentinel-memory_codebase-memory__list_projects"]
+allowed-tools: ["mcp__codebase-memory__search_graph", "mcp__codebase-memory__list_projects"]
 ---
 
 Buscá en el **grafo de código** del proyecto indexado (en vez de grep).

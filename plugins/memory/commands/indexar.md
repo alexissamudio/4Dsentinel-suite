@@ -1,7 +1,7 @@
 ---
 description: Indexa un repositorio en el grafo de codebase-memory (envuelve index_repository). Deja el artefacto dentro del repo.
 argument-hint: "[ruta del repo; por defecto el directorio actual]"
-allowed-tools: ["mcp__plugin_4dsentinel-memory_codebase-memory__index_repository"]
+allowed-tools: ["mcp__codebase-memory__index_repository"]
 ---
 
 Indexá el repositorio en el grafo de **codebase-memory**.
