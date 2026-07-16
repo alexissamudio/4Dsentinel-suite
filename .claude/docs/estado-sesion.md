@@ -68,13 +68,44 @@ honesto. El valor entregado: (a) guard de regresion (los agentes cazan 100% de c
 invalida el cache aunque los prompts de agent() no cambien. Para iterar barato, cambiar SOLO
 post-proceso puede no bastar. (No critico; ~2.8M tok por corrida.)
 
-## DECISION DEL USUARIO (pendiente)
-1. **Aplicar diffs reales** a los agentes (bug-hunter/security/critic) -> mejora de producto. Requiere
-   bump sentinel-agents 0.6.1->0.6.2 (gate F17) + check_agents.py verde + revision de no-regresion de
-   contrato. Es un PR aparte del scaffolding.
-2. **Endurecer dataset** (casos mas sutiles con headroom) para que el delta de recall sea medible.
-3. **Arreglar venv local** (borrar .venv linux + uv sync 3.12) para correr check_agents/pytest local.
-4. **PR del scaffolding** (rama feat/agent-improver: dataset + motor + pyproject). Sin tocar plugins.
+## 2 TAREAS APROBADAS POR EL USUARIO (para SESION NUEVA — contexto agoto ~270k)
+El usuario eligio: **(A) aplicar los diffs propuestos** + **(B) endurecer el dataset**.
+
+### OBSTACULO hallado (importante): los diffs NO aplican con `git apply`
+El `synth.diff` del loop trae entities HTML (`&lt;`/`&gt;`) y conteos de linea @@ imprecisos (tipico
+de diff hecho por LLM) -> `git apply --check` da "corrupt patch". Las propuestas des-escapadas quedaron
+en `.claude/docs/propuestas-agent-improver.md` (durable, en la rama). Dos caminos para aplicar:
+- (preferido) APLICAR A MANO guiandose por el diff = la "revision humana" que pide el plan (verif #5).
+- o recuperar el `candidateFileFull` del synth (esta en el journal.jsonl del run, NO en el reporte que
+  solo expone `diff`; mejora futura del motor: exponer candidateFileFull) y sobrescribir el .md, con cuidado.
+
+### (A) Aplicar diffs -> rama NUEVA `feat/improve-sentinel-agents` desde main (toca plugins/ -> bump)
+1. `git checkout main && git checkout -b feat/improve-sentinel-agents`.
+2. Editar A MANO `plugins/sentinel-agents/agents/{bug-hunter,security-auditor,critic}.md` segun
+   `.claude/docs/propuestas-agent-improver.md`. GUARDAS: NO tocar frontmatter (tools/model), NO tocar
+   `=== SENTINEL-REPORT ===` / `=== END ===` ni el enum de verdict; mantener la cita a `agent-contract`.
+   Los 3 diffs son buenos: agregan clases de bug/CWE, DEDUPLICAN teoria del contrato (citan §2/§3 en vez
+   de reescribir), definen el campo `id:` para bugs (`<clase>@archivo:linea`), agregan dedup con code-reviewer.
+3. Bump: `uv run scripts/sentinel_bump_version.py --set 0.6.2` (0.6.1->0.6.2; gate F17 lo exige).
+4. Verificar: `check_agents.py` verde + `pytest tests/scripts/test_check_agents.py` + grep de tokens.
+5. Commit + push + PR. (Este es el "loop con evidencia" del plan: aplicar -> guardas verdes.)
+
+### (B) Endurecer dataset -> en la rama del scaffolding `feat/agent-improver`
+Agregar casos golden mas SUTILES (que Opus NO cace al 100%) para dar headroom al delta de recall.
+Ideas: bugs de logica no obvios, races reales, CWE encadenados, planes con gaps sutiles. >=2 por agente.
+Estructura identica (input/ + expected.json). Objetivo: que un run muestre un candidato ACEPTADO via RECALL.
+
+### BLOQUEANTE de entorno para (A) paso 4
+El `.venv` es de Linux -> `uv run` falla. Arreglar antes: borrar `.venv` (el symlink `.venv/lib64` da
+"Access is denied" -> usar `Remove-Item -Recurse -Force .venv` de PowerShell) + `uv sync`. O correr
+check_agents con entorno efimero: `uv run --no-project --python 3.12 python scripts/check_agents.py`
+(verificar si check_agents importa PyYAML -> si si, sumar `--with pyyaml`).
+
+## OTROS PENDIENTES
+- PR del scaffolding (rama feat/agent-improver: dataset + motor + pyproject + propuestas). No toca plugins.
+- Revisar `.claude/docs/testing.md` (hook pidio: se edito pyproject/tests).
+- Mejora del motor: exponer `candidateFileFull` en el reporte (hoy solo `diff`, que no es git-apply-able);
+  y ver por que el `resume` no cacheo.
 
 ## PENDIENTE
 1. Leer resultado de verif #2; si el motor tiene un bug, iterar (Workflow resume con resumeFromRunId).
