@@ -55,12 +55,14 @@ universales — todas las cumplen por igual):
 - **Workflow guiado** (`/4d`, `/4d-init`): flujo multifase que INSTRUYE a Claude
   paso a paso; suele traer `references/*.md` con contenido pedagógico cargado bajo
   demanda. Triggers: literal + frases naturales.
-- **Comando-tool** (`/4d-status`, `/4d-quiz`): invocación puntual y acotada (reporte
-  read-only o utilidad). Triggers SOLO literales para no auto-dispararse.
+- **Comando-tool** (`/4d-status`, `/4d-quiz`, `/handoff`): invocación puntual y acotada
+  (reporte read-only o utilidad). Triggers SOLO literales para no auto-dispararse.
+  `/handoff` es la contraparte de escritura de `/4d-status`: arma el handoff de cierre
+  (git + plan + estado), actualiza `estado-sesion.md` y copia el resumen al portapapeles.
 - **Toggle** (`/caveman`): prende/apaga un flag global; el trabajo real lo hace un
   hook. Opt-in, arranca apagado.
 
-### Reglas universales (las cumplen las 5 skills)
+### Reglas universales (las cumplen las 6 skills)
 
 1. **`name` == directorio.** El frontmatter lleva `name` y es idéntico al nombre de
    la carpeta de la skill.
