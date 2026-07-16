@@ -7,7 +7,7 @@
 
 Verifica que cada plugins/sentinel-agents/agents/*.md cumpla:
 - frontmatter con name, description, model: inherit, maxTurns
-- tools allowlist SIN Write/Edit/Bash (read-only por construcción)
+- tools allowlist SIN Write/Edit/Bash (read-only por construccion)
 - referencia el contrato compartido en el cuerpo
 """
 
@@ -20,7 +20,7 @@ from frontmatter_utils import frontmatter, parse_tools
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENTS_DIR = REPO_ROOT / "plugins" / "sentinel-agents" / "agents"
-# Escritura/edición: prohibidas SIEMPRE, sin excepción.
+# Escritura/edicion: prohibidas SIEMPRE, sin excepcion.
 PROHIBIDAS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 # Bash: prohibido por defecto; permitido SOLO para los agentes de este set
 # (ejecutores). Allowlist cerrada y bidireccional (ver check_agent): un agente
@@ -49,7 +49,7 @@ def check_agent(path: Path) -> list[str]:
     tools = parse_tools(text)
     conflict = tools & PROHIBIDAS
     if conflict:
-        errs.append(f"tools incluye herramientas de escritura/edición: {sorted(conflict)}")
+        errs.append(f"tools incluye herramientas de escritura/edicion: {sorted(conflict)}")
     # Allowlist positivo: reporta tools desconocidas (typos) que PROHIBIDAS no
     # cubre; las prohibidas ya tienen su propio mensaje, no se duplican aca.
     unknown = tools - KNOWN_AGENT_TOOLS - PROHIBIDAS
@@ -58,9 +58,9 @@ def check_agent(path: Path) -> list[str]:
     # Bash: allowlist cerrada y bidireccional, evaluada por-archivo (file-driven).
     name = fm.get("name", path.stem)
     if "Bash" in tools and name not in BASH_ALLOWED:
-        errs.append(f"'{name}' declara Bash pero no está en BASH_ALLOWED (read-only)")
+        errs.append(f"'{name}' declara Bash pero no esta en BASH_ALLOWED (read-only)")
     if name in BASH_ALLOWED and "Bash" not in tools:
-        errs.append(f"'{name}' está en BASH_ALLOWED pero NO declara Bash (drift)")
+        errs.append(f"'{name}' esta en BASH_ALLOWED pero NO declara Bash (drift)")
     if "agent-contract" not in text:
         errs.append("el cuerpo no referencia agent-contract.md")
     return errs

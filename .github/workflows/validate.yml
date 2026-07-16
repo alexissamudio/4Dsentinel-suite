@@ -87,6 +87,8 @@ jobs:
           uv run python -m json.tool plugins/memory/.claude-plugin/plugin.json > /dev/null
       - name: Versiones paraguas == subtree
         run: uv run scripts/check_suite_versions.py
+      - name: ASCII puro en los .py de produccion
+        run: uv run scripts/check_ascii.py
       - name: metadata.version == git tag (solo en push de tag)
         if: github.ref_type == 'tag'
         run: uv run scripts/bump_suite.py --check-tag "${{ github.ref_name }}"
