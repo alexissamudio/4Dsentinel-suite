@@ -30,7 +30,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MARKETPLACE = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 PLUGIN = REPO_ROOT / "plugins" / "sentinel-agents" / ".claude-plugin" / "plugin.json"
 PLUGIN_NAME = "sentinel-agents"
-SEMVER = bump_common.SEMVER
 
 
 def _market_entry(marketplace: dict[str, Any]) -> dict[str, Any]:

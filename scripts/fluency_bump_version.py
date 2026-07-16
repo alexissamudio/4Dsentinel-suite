@@ -30,7 +30,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MARKETPLACE = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 PLUGIN = REPO_ROOT / "plugins" / "fluency-4d" / ".claude-plugin" / "plugin.json"
 PLUGIN_NAME = "fluency-4d"
-SEMVER = bump_common.SEMVER
 
 
 def _market_entry(marketplace: dict[str, Any]) -> dict[str, Any]:
