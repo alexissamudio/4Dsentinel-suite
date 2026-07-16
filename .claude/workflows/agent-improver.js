@@ -372,6 +372,40 @@ async function runRound(target, currentFull, cases, reps) {
   }
 }
 
+// ------------------------------------------------- ronda meta-review-only
+// Para agentes que NO encajan en el eval de deteccion sobre material estatico
+// (validator/debugger necesitan Bash; librarian extrae, no caza; risk-assessor da
+// un verdict escalar). Corre SOLO meta-review + synthesis (sin baseline/candidate
+// eval): el reviewDiff queda para revision humana; no hay delta que auto-aceptar.
+async function runMetaOnly(target, currentFull) {
+  const metaResults = await parallel(
+    [1, 2, 3].map((i) => () =>
+      agent(metaPrompt(target, i), {
+        schema: META_SCHEMA,
+        agentType: 'general-purpose',
+        phase: 'Meta-review',
+        label: `meta:${target}:rev${i}`,
+      })
+    )
+  )
+  const metaFindings = metaResults.filter(Boolean).flatMap((m) => m.findings)
+  const synth = await agent(synthPrompt(target, currentFull, [], [], metaFindings), {
+    schema: SYNTH_SCHEMA,
+    phase: 'Synthesis',
+    label: `synth:${target}`,
+  })
+  return {
+    accepted: false,
+    metaOnly: true,
+    reason: 'meta-review-only (sin casos golden): reviewDiff para revision humana',
+    baseRate: null,
+    metaFindings,
+    diff: synth ? synth.diff : null,
+    rationale: synth ? synth.rationale : 'synthesis fallo',
+    candidateFileFull: synth ? synth.candidateFileFull : null,
+  }
+}
+
 // --------------------------------------------------------------- por agente
 async function improveAgent(target, rounds, reps) {
   phase('Load')
@@ -381,14 +415,42 @@ async function improveAgent(target, rounds, reps) {
     phase: 'Load',
     label: `load:${target}`,
   })
-  if (!loaded || !loaded.cases || !loaded.cases.length) {
-    return { target, error: 'no se pudo cargar la ficha o no hay casos golden' }
+  if (!loaded || !loaded.agentFileFull) {
+    return { target, error: 'no se pudo cargar la ficha del agente' }
   }
 
   let currentFull = loaded.agentFileFull
-  const cases = loaded.cases
+  const cases = loaded.cases || []
   const history = []
   let changed = false
+
+  // Sin casos golden -> modo meta-review-only (una pasada, sin eval/loop).
+  if (!cases.length) {
+    log(`[${target}] sin casos golden -> meta-review-only`)
+    const res = await runMetaOnly(target, currentFull)
+    history.push({
+      round: 1,
+      accepted: false,
+      metaOnly: true,
+      via: null,
+      reason: res.reason,
+      baseRate: null,
+      candRate: null,
+      deltaCatch: null,
+      deltaFp: null,
+      diff: res.diff,
+      rationale: res.rationale,
+      metaFindings: res.metaFindings,
+    })
+    return {
+      target,
+      baselineRate: null,
+      metaOnly: true,
+      changed: false,
+      finalFileFull: null,
+      rounds: history,
+    }
+  }
 
   for (let round = 0; round < rounds; round++) {
     log(`[${target}] ronda ${round + 1}/${rounds}`)
@@ -432,6 +494,7 @@ function loadPrompt(target) {
 2. Lista las carpetas de caso en tests/agent-evals/${target}/ (case-NN). Para CADA caso:
    - Lee expected.json -> extrae must_catch y decoys tal cual.
    - Lee TODOS los archivos bajo su input/ (recursivo). Por cada archivo: name = ruta relativa a input/ (ej "buggy_snippet.py" o "repo/app.py"), content = su texto EXACTO y completo.
+   Si la carpeta tests/agent-evals/${target}/ NO existe o no tiene casos, devolve cases: [] (lista vacia). Es valido: ese agente corre en modo meta-review-only.
 3. Devolve el schema. NO resumas ni recortes: el content de cada input y la ficha deben ir textuales (otro agente los va a analizar byte a byte).`
 }
 
@@ -459,6 +522,7 @@ const results = await parallel(targets.map((t) => () => improveAgent(t, rounds, 
 const report = results.filter(Boolean).map((r) => ({
   target: r.target,
   error: r.error || null,
+  metaOnly: r.metaOnly || false,
   baselineRate: r.baselineRate,
   changed: r.changed,
   rounds: (r.rounds || []).map((rd) => ({

@@ -1,0 +1,13 @@
+{
+  "agent": "code-reviewer",
+  "notes": "cliente HTTP: mal uso de API (sin chequeo de status), contrato roto (None en 5xx), retry sin catch de red y complejidad muerta; 1 decoy (rango 2xx correcto).",
+  "must_catch": [
+    { "id": "NO_STATUS_CHECK", "where": "http_client.py:15", "why": "mal uso de API: se llama resp.json() sin raise_for_status()/chequear status; un 4xx/5xx se parsea como factura valida y el caller opera con datos basura" },
+    { "id": "RETRY_RETURNS_NONE", "where": "http_client.py:34", "why": "contrato roto: si todos los intentos dan 5xx la funcion devuelve None en vez de 'la respuesta final', el caller hace None.status_code" },
+    { "id": "RETRY_NO_NETWORK_CATCH", "where": "http_client.py:26", "why": "manejo de error faltante: requests.post no esta en try/except, una ConnectionError/Timeout aborta todos los reintentos pese a llamarse post_with_retry" },
+    { "id": "DEAD_IF_ELSE", "where": "http_client.py:43", "why": "complejidad innecesaria: las ramas if/else asignan exactamente lo mismo (headers[k] = extra[k]); el condicional no hace nada y el loop reimplementa un merge de dict" }
+  ],
+  "decoys": [
+    { "where": "http_client.py:52", "why": "el rango 200 <= x < 300 es exactamente 2xx; el chequeo es correcto y no redundante" }
+  ]
+}

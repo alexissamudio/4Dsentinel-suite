@@ -1,0 +1,14 @@
+{
+  "agent": "advisor",
+  "notes": "tarea de reportes PDF por email nightly (task.md) contra repo/settings.py + requirements.txt + reports.py: dependencia faltante (sin infra de email), supuesto de zona horaria (TZ=UTC vs 'medianoche'), requisito sin especificar (fallo/reintento/idempotencia) y caso borde (usuario activo sin datos); 2 decoys (generador de PDF ya existe, usuarios inactivos fuera de alcance).",
+  "must_catch": [
+    { "id": "NOSMTP", "where": "repo/requirements.txt:4", "why": "dependencia faltante: la tarea asume envio de email (task.md:9) pero no hay infra de correo: requirements.txt no incluye ninguna libreria de email/SMTP (solo Flask/psycopg2/reportlab/gunicorn) y settings.py no define servidor ni credenciales SMTP -> falta elegir y configurar el servicio de email antes de planificar. Critical" },
+    { "id": "TZ", "where": "repo/settings.py:3", "why": "supuesto de estado sin declarar (sutil): 'cada noche a medianoche' (task.md:7) es ambiguo en zona horaria; settings.py:3 fija TIMEZONE='UTC' pero la 'medianoche' del negocio/usuario suele ser hora local -> el reporte 'nocturno' se dispara a una hora corrida para el usuario. Important" },
+    { "id": "FAILRETRY", "where": "task.md:9", "why": "requisito no especificado: no define que pasa si el envio falla (SMTP caido, direccion invalida, rebote): sin reintento ni registro el reporte de esa noche se pierde en silencio; tampoco define idempotencia si el cron se solapa o se reejecuta -> emails duplicados. Important" },
+    { "id": "EMPTYDATA", "where": "repo/reports.py:14", "why": "caso borde ignorado: no define que hacer con un usuario activo sin metricas ese dia; generate_report igual produce un PDF (el loop de reports.py:14 no genera filas) -> se envia un reporte vacio/confuso en vez de omitirlo. Minor" }
+  ],
+  "decoys": [
+    { "where": "repo/reports.py:8", "why": "'construir el generador de PDF' parece un gap pero ya existe: generate_report (reports.py:8) usa reportlab (requirements.txt:3) y la tarea pide reusarlo (task.md:12); no es un hueco" },
+    { "where": "task.md:13", "why": "que no se manejen usuarios inactivos parece un gap pero esta especificado fuera de alcance a proposito (task.md:13 los ignora); no es un supuesto oculto" }
+  ]
+}
