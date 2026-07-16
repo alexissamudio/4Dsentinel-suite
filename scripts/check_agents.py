@@ -26,6 +26,12 @@ PROHIBIDAS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 # (ejecutores). Allowlist cerrada y bidireccional (ver check_agent): un agente
 # con Bash fuera del set falla; un agente del set sin Bash falla (drift).
 BASH_ALLOWED = {"validator", "debugger"}
+# Allowlist POSITIVO de tools validas para un agente read-only. Cerrado a
+# proposito: un tool fuera de este set (un typo como 'Reed', o una tool nueva
+# sin decision explicita) frena el CI en vez de pasar silencioso (defensa F1:
+# no solo se rechaza lo prohibido, se exige que lo declarado sea conocido).
+# Al sumar una tool read-only nueva (p.ej. WebFetch), agregarla aca a mano.
+KNOWN_AGENT_TOOLS = {"Read", "Grep", "Glob", "Bash"}
 
 
 def check_agent(path: Path) -> list[str]:
@@ -44,6 +50,11 @@ def check_agent(path: Path) -> list[str]:
     conflict = tools & PROHIBIDAS
     if conflict:
         errs.append(f"tools incluye herramientas de escritura/edición: {sorted(conflict)}")
+    # Allowlist positivo: reporta tools desconocidas (typos) que PROHIBIDAS no
+    # cubre; las prohibidas ya tienen su propio mensaje, no se duplican aca.
+    unknown = tools - KNOWN_AGENT_TOOLS - PROHIBIDAS
+    if unknown:
+        errs.append(f"tools declara herramientas desconocidas (typo?): {sorted(unknown)}")
     # Bash: allowlist cerrada y bidireccional, evaluada por-archivo (file-driven).
     name = fm.get("name", path.stem)
     if "Bash" in tools and name not in BASH_ALLOWED:
