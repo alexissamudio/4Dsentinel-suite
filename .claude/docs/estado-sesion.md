@@ -20,7 +20,10 @@ Decision usuario: F18 ahora + doc F17/F19; F4+F12 igual. HECHO hasta ahora:
 - **F17/F19 + F18-parcial:** documentados en release.md (deuda de proceso: gate de bump, matriz
   Python 3.12/3.13, ADR versionado).
 VERIFICADO local: 174 passed/4 skipped; ruff/mypy(23)/check_ascii/skills/yaml/check_manifests verdes.
-FALTA: commit + push + PR de la branch.
+PR #10 abierto, 4 checks CI verdes (incl. bump mayor de actions). code-review: CLEAN (3 Minor;
+el F-1 -refs colgantes a content_hash en 4d-init/SKILL.md- corregido en f100be9; F-2 hooks.json
+if is_file y F-3 edge multi-toggle = tradeoffs aceptados por diseno). FALTA: merge de #10 (esperando
+CI del fixup) + checkpoint final. Despues de esto: P2 CERRADO salvo deuda de proceso F17/F19/matriz-Py.
 
 ## Objetivo / frase 4D
 Diligencia: remediar la auditoria 2026-07-15 (P1 y P2) y agregar tooling de sesion.
