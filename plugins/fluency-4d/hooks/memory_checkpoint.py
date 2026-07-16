@@ -33,6 +33,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -74,7 +75,7 @@ def _checkpoint_interval_tokens() -> int:
     return value
 
 
-def usage_value(data: dict) -> tuple[float, bool] | None:
+def usage_value(data: dict[str, Any]) -> tuple[float, bool] | None:
     """Devuelve (valor, es_nativo): pct nativo, o tokens estimados SIN cap."""
     context_window = data.get("context_window")
     if isinstance(context_window, dict):
