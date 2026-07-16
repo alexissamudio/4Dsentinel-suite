@@ -14,6 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "fluency_bump_version.py"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -63,6 +65,23 @@ def test_set_no_toca_metadata_version(tmp_path, monkeypatch):
     assert p["version"] == "0.2.0"  # plugin.json actualizado
     # otras entradas del marketplace no se tocan
     assert next(e for e in m["plugins"] if e["name"] == "otro")["version"] == "1.2.3"
+
+
+def test_semver_rechaza_newline_final():
+    # F2/BH-03: "1.2.3\n" NO debe pasar la validacion (SEMVER usa \Z, no $).
+    assert fbv.set_version("1.2.3\n") == 1
+
+
+def test_version_faltante_da_error_limpio(tmp_path, monkeypatch):
+    # F2/BH-03: falta la clave 'version' -> SystemExit limpio, no KeyError.
+    market = tmp_path / "marketplace.json"
+    plugin = tmp_path / "plugin.json"
+    market.write_text(json.dumps({"plugins": [{"name": "fluency-4d"}]}), encoding="utf-8")
+    plugin.write_text(json.dumps({}), encoding="utf-8")
+    monkeypatch.setattr(fbv, "MARKETPLACE", market)
+    monkeypatch.setattr(fbv, "PLUGIN", plugin)
+    with pytest.raises(SystemExit):
+        fbv.read_versions()
 
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ MARKETPLACE = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 PLUGIN = REPO_ROOT / "plugins" / "fluency-4d" / ".claude-plugin" / "plugin.json"
 PLUGIN_NAME = "fluency-4d"
 
-SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
+SEMVER = re.compile(r"^\d+\.\d+\.\d+\Z")  # \Z (no $): rechaza un newline final
 
 
 def _market_entry(marketplace: dict[str, Any]) -> dict[str, Any]:
@@ -51,9 +51,16 @@ def _market_entry(marketplace: dict[str, Any]) -> dict[str, Any]:
 def read_versions() -> dict[str, str]:
     marketplace = json.loads(MARKETPLACE.read_text(encoding="utf-8"))
     plugin = json.loads(PLUGIN.read_text(encoding="utf-8"))
+    mv, pv = _market_entry(marketplace).get("version"), plugin.get("version")
+    if not isinstance(mv, str) or not isinstance(pv, str):
+        print(
+            "ERROR - falta la clave 'version' (string) en marketplace o plugin.json",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     return {
-        f"marketplace.plugins[{PLUGIN_NAME}].version": _market_entry(marketplace)["version"],
-        "plugin.json version": plugin["version"],
+        f"marketplace.plugins[{PLUGIN_NAME}].version": mv,
+        "plugin.json version": pv,
     }
 
 
