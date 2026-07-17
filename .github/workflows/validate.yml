@@ -95,6 +95,8 @@ jobs:
         run: uv run scripts/check_suite_versions.py
       - name: ASCII puro en los .py de produccion
         run: uv run scripts/check_ascii.py
+      - name: Enum de verdict de cada agente == seccion 4 del contrato
+        run: uv run scripts/check_verdict_enums.py
       - name: Sin atribucion de IA en los commits
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
