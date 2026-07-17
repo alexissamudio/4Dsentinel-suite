@@ -13,6 +13,10 @@ Marco de colaboración humano-IA + agentes de auditoría + memoria de codebase, 
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A63D2)
 ![español](https://img.shields.io/badge/idioma-español-f39c12)
 
+![fluency-4d](https://img.shields.io/badge/fluency--4d-0.19.1-3fb950)
+![sentinel-agents](https://img.shields.io/badge/sentinel--agents-0.6.3-58a6ff)
+![4dsentinel-memory](https://img.shields.io/badge/4dsentinel--memory-0.5.2-bc8cff)
+
 </div>
 
 ---
@@ -76,6 +80,9 @@ no vienen de un mal prompt, sino de un mal **reparto***. Las cuatro dimensiones:
 - **`/4d-status`** — estado del sistema 4D en el proyecto (puentes, lecciones, métricas). Solo lectura.
 - **`/4d-quiz`** — 24 preguntas de práctica de la certificación AI Fluency, con corrección explicada.
 - **`/caveman`** — modo de respuestas token-eficiente, opt-in (se prende/apaga).
+- **`/handoff`** — genera el handoff de cierre de sesión (git + plan activo + estado), **sugiere** el
+  commit (no lo ejecuta) y copia un resumen al portapapeles para arrancar limpio en una sesión nueva.
+  Es la contraparte de escritura de `/4d-status`.
 
 **Hooks (corren solos, en segundo plano):**
 - **`plan_calibrator`** — al entrar en *plan mode*, clasifica la tarea (grande vs chica) y calibra
@@ -231,7 +238,8 @@ AccountsReceivableView, DashboardView, StatsView, AgendaView, lib/utils, lib/tic
   la atestación (`gh attestation verify`) consulta la API de GitHub y **falla sin sesión**.
 - Para el grafo: `/suite-setup` baja el binario **firmado** (sigstore + SLSA L3, con checksum) de
   [`codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) — no se vendoriza.
-- Para desarrollar la suite: **[uv](https://docs.astral.sh/uv/)** (Python).
+- Para **desarrollar** la suite (no para usarla): **[uv](https://docs.astral.sh/uv/)** con **Python
+  3.11+** (los plugins corren sin Python; solo los hooks y tests lo necesitan).
 - SO: Windows / macOS / Linux (los hooks se prueban en Ubuntu + Windows).
 
 ## Instalar
@@ -251,20 +259,57 @@ reiniciá otra vez.
 
 ## Primeros pasos (recién instalado)
 
-El camino mínimo para ver la suite funcionando desde cero:
+Primero hacé la **base** (una vez, para todos). Después seguí **el camino** que corresponda a tu
+proyecto — no hace falta hacer los dos.
 
-1. **Reiniciá** Claude Code — los plugins cargan al arrancar.
-2. **Activá la memoria (una sola vez):** corré **`/suite-setup`** — instala el binario del grafo
-   **y registra el MCP** (con ruta absoluta; el plugin ya no lo declara, por CWE-427) — y
-   **reiniciá** de nuevo. Confirmá con **`/mcp`** que `codebase-memory` figura *conectado*.
-3. **Probá el marco 4D:** **`/4d "una tarea tuya"`** — te guía por Delegación → Descripción →
-   Discernimiento → Diligencia. O **`/4d-status`** para ver el estado 4D en un proyecto.
-4. **Indexá un repo (ideal uno grande):** abrí Claude Code en ese repo y corré **`/indexar`**. Después:
-   - **`/arquitectura`** — el mapa del sistema (stack, rutas, hotspots).
-   - **`/buscar <algo>`** — encontrá código en el grafo (ej. `/buscar login`).
-   - **`/rastrear <función>`** — quién la llama e impacto de un cambio.
-5. **Pedí una auditoría:** *"revisá este diff con `code-reviewer`"*, *"auditá `auth.py` con
-   `security-auditor`"*, o *"auditá la redacción de este spec con `auditor-de-redaccion`"*.
+> **Cómo leer los pasos:** cada paso lleva una etiqueta. **"obligatorio"** = sin esto el flujo no
+> arranca · **(recomendado)** = opcional pero conviene · **(opcional)** = usalo solo si lo necesitás.
+> Las comillas en *"obligatorio"* son a propósito: nada te fuerza, es lo mínimo para que ande.
+
+### Base — dejá la suite lista (una sola vez)
+
+1. **Reiniciá** Claude Code — **"obligatorio"**: los plugins cargan al arrancar.
+2. **Activá la memoria** — **"obligatorio" solo si vas a usar el grafo** (Camino B); **(opcional)**
+   si solo vas a usar el marco 4D y los auditores. Corré **`/suite-setup`** — instala el binario del
+   grafo **y registra el MCP** (con ruta absoluta; el plugin ya no lo declara, por CWE-427) — y
+   **reiniciá** de nuevo.
+3. **Verificá** — **(recomendado)**: **`/mcp`** muestra `codebase-memory` *conectado*, los agentes
+   `sentinel-agents:*` aparecen en la lista, y **`/4d-status`** responde. Listo: elegí tu camino.
+
+### Camino A — Proyecto nuevo o chico
+
+Cuando arrancás algo de cero o el repo entra en la cabeza, **no hace falta indexar** (`grep`/`Explore`
+ya alcanzan). El valor está en el **método** y las **auditorías puntuales**:
+
+1. **Encará la tarea con el 4D** — **"obligatorio"** (es el corazón del camino): **`/4d "lo que
+   querés hacer"`** te guía por Delegación → Descripción → Discernimiento → Diligencia, y te ofrece
+   (opt-in) delegar el gap-analysis en `advisor`.
+2. **Pedí auditorías puntuales** — **(opcional, cuando las necesites)**, en lenguaje natural:
+   *"revisá este diff con `code-reviewer`"*, *"auditá `auth.py` con `security-auditor`"*, *"auditá la
+   redacción de este spec con `auditor-de-redaccion`"*.
+3. **Cerrá la sesión con orden** — **(recomendado)**: **`/handoff`** guarda el estado y te deja el
+   resumen para arrancar limpio la próxima vez.
+
+### Camino B — Proyecto grande ya iniciado
+
+Cuando el repo es grande (del orden de cientos de archivos / miles de símbolos), primero
+**construí el grafo** y navegá por estructura en vez de leer archivo por archivo:
+
+1. **Indexá** — **"obligatorio"** (habilita todo el camino): abrí Claude Code en ese repo y corré
+   **`/indexar`** (deja el artefacto `.codebase-memory/` dentro del repo).
+2. **Generá los puentes de doc** — **(recomendado)**: **`/4d-init`** analiza el repo y arma un
+   **CLAUDE.md modular** con docs por tema (`auth`, `endpoints`, `database`…) que se **inyectan
+   solos** cuando tu prompt los toca. Complementa al grafo: el grafo mapea la estructura, los puentes
+   traen el contexto.
+3. **Mirá el mapa** — **(recomendado)**: **`/arquitectura`** — stack, rutas API, *hotspots* (lo más
+   llamado), *clusters*.
+4. **Navegá por estructura** — **(opcional, según necesites)**: **`/buscar <algo>`** (ej.
+   `/buscar login`) para encontrar código, y **`/rastrear <función>`** para ver quién la llama y el
+   impacto de tocarla.
+5. **Antes de mergear** — **(opcional, pre-merge)**: **`/impacto`** mapea tu `git diff` a los
+   símbolos afectados; después pedí *"revisá el diff con `code-reviewer` y corré `validator`"* (o
+   encadená con **`/sentinel-audit`**).
+6. **Cerrá con `/handoff`** — **(recomendado)**: para no arrastrar contexto a la próxima sesión.
 
 > **Cómo se invoca cada cosa:** los **`/comandos`** son de fluency-4d y de memory (los tipeás).
 > Los **auditores** (`code-reviewer`, `security-auditor`, `auditor-de-redaccion`…) se los pedís al
