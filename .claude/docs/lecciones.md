@@ -139,3 +139,19 @@ cita. El test debe incluir un caso "menciona la regla en prosa → NO marca".
 **Cómo aplicar:** al escribir un guard que busca strings prohibidos, anclá al formato
 estructural real (inicio de línea, trailer, key: value), no substring libre; testeá el
 falso positivo de auto-referencia.
+
+## [2026-07-16] — Ruido del judge != mejora real; verificá el candidato contra HEAD
+**Contexto:** en el `agent-improver` (reps:3, judge `effort:low`), el Run B reportó el
+candidato del synth "aceptado vía PRECISION, fp 2.33 -> 1.33". Lo presenté como "hay una
+versión mejor sin adoptar" y caractericé lo mergeado (0.6.3) como "cambio simple". Al
+diffear el `candidateFileFull` del journal contra HEAD, resultaron IDÉNTICOS (salvo el
+newline final): 0.6.3 YA ERA ese candidato. El fp 1.33 vs 2.33 fue variabilidad del LLM
+judge sobre ~el mismo texto, no una mejora de contenido.
+**Lección:** con reps bajos y judge de bajo esfuerzo, un delta de fp entre baseline y
+candidato puede ser RUIDO, no señal — sobre todo cuando el catch-rate satura. Antes de
+afirmar que un candidato es "mejor" o que "queda algo por adoptar", DIFF el texto del
+candidato contra lo que ya está mergeado; si es idéntico, no hay delta que shippear.
+**Cómo aplicar:** tratá los números del gate como ruidosos hasta anclarlos al TEXTO
+(diff/byte-compare). No vendas una mejora medida en 1 corrida de 3 reps sin verificar que
+el artefacto difiere; y no describas lo que mergeaste sin haber comparado su contenido real
+contra el original (git show BASE:archivo).
