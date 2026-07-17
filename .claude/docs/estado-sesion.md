@@ -16,6 +16,11 @@ Diligencia: actualizar doc de release (README + Requisitos + Primeros pasos frie
   vivian SOLO en esas refs locales. Limpieza hecha: git remote prune + borrar refs/original/* + reflog/gc.
   Shortlog --all local ahora SIN speedcodelabb. Respaldo: scratchpad/speedcodelabb-original-refs.bundle.
 - CERO force-push, CERO reescritura nueva. El equipo (Luis, Ivan) NO tiene que re-clonar.
+- Contributors por API de GitHub = solo alexissamudio (127); speedcodelabb desaparecio (incl. anon=1). La UI
+  web puede tardar en refrescar (cache), pero la fuente de datos ya esta limpia.
+- Render del README verificado en GitHub (navegador): banner GIF, los 3 badges de version nuevos
+  (fluency 0.19.1 / sentinel 0.6.3 / memory 0.5.2), tabla de 11 agentes, Primeros pasos con etiquetas
+  "obligatorio"/(recomendado)/(opcional) y el mermaid "Como se conectan" como SVG interactivo. Todo OK.
 
 ## DECISIONES (esta tanda)
 - speedcodelab != speedcodelabb (doble b). Era CONTRIBUTOR (por commits), no COLLABORATOR (accesos).
