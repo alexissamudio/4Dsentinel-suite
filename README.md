@@ -182,7 +182,9 @@ findings:
   status: CONFIRMED
   evidence: README.md:27 ("el conductor consulta el grafo y relaya al resto")
   summary: Jerga sin definir ("conductor", "relaya"); un usuario externo no puede interpretarla.
-uncertainty: desconozco si hay un doc de instalacion separado al que se delegue intencionalmente.
+uncertainty:
+  assumptions: el README es el unico punto de entrada de instalacion para el lector externo.
+  unknowns: desconozco si hay un doc de instalacion separado al que se delegue intencionalmente.
 === END ===
 ```
 
