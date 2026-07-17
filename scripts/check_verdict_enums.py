@@ -147,7 +147,10 @@ def main() -> int:
 
         if declared is None:
             fallas += 1
-            print(f"MISMATCH - {name}: no se pudo parsear el enum de verdict en la ficha", file=sys.stderr)
+            print(
+                f"MISMATCH - {name}: no se pudo parsear el enum de verdict en la ficha",
+                file=sys.stderr,
+            )
             continue
         if expected is None:
             fallas += 1
@@ -163,7 +166,8 @@ def main() -> int:
             if extra:
                 detail.append(f"sobra(n) {extra}")
             print(
-                f"MISMATCH - {name}: ficha={sorted(declared)} vs contrato={sorted(expected)} ({'; '.join(detail)})",
+                f"MISMATCH - {name}: ficha={sorted(declared)} vs "
+                f"contrato={sorted(expected)} ({'; '.join(detail)})",
                 file=sys.stderr,
             )
         else:
