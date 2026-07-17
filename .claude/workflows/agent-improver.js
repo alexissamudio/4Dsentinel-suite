@@ -286,6 +286,37 @@ function unionMissed(perRep) {
   return out
 }
 
+// ------------------------------------------------------------- accept-gate
+// Decision PURA de aceptacion del candidato vs baseline. Sin efectos, sin API:
+// solo aritmetica sobre las tasas por rep + los conteos de falsos positivos.
+// Extraida de runRound para poder testearla offline (ver
+// tests/workflows/agent-improver.test.js). Semantica EXACTA (no cambiar):
+//  (A) RECALL: el candidato sube el catch-rate por MARGIN en la MAYORIA de reps
+//      y no empeora FP.
+//  (B) PRECISION: cuando el recall ya esta al techo (o no puede subir), aceptar
+//      si MANTIENE el recall en la mayoria de reps y BAJA los falsos positivos.
+//      Sin esta via, una mejora real de precision (menos FP a igual catch)
+//      quedaba descartada (caso critic del piloto).
+function acceptGate({ baseRates, candRates, baseFpCount, candFpCount }) {
+  // pareo por rep: cuantas reps mejoran el catch-rate por MARGIN, y en cuantas no lo degradan.
+  const n = Math.min(baseRates.length, candRates.length)
+  let winReps = 0
+  let heldReps = 0
+  for (let i = 0; i < n; i++) {
+    const d = candRates[i] - baseRates[i]
+    if (d > MARGIN) winReps++
+    if (d >= -1e-9) heldReps++
+  }
+  const fpOk = candFpCount <= baseFpCount + 1e-9
+  const fpImproved = candFpCount < baseFpCount - 1e-9
+  const recallHeld = heldReps > n / 2
+  const acceptedByRecall = winReps > n / 2 && fpOk
+  const acceptedByPrecision = recallHeld && fpImproved
+  const accepted = acceptedByRecall || acceptedByPrecision
+  const via = acceptedByRecall ? 'RECALL' : acceptedByPrecision ? 'PRECISION' : null
+  return { accepted, via, winReps, heldReps, reps: n }
+}
+
 // -------------------------------------------------------------- una ronda
 async function runRound(target, currentFull, cases, reps) {
   const currentBody = deriveBody(currentFull)
@@ -330,27 +361,14 @@ async function runRound(target, currentFull, cases, reps) {
   const candRate = avg(candRates)
   const candFpCount = avg(candFps)
 
-  // pareo por rep: cuantas reps mejoran el catch-rate por MARGIN, y en cuantas no lo degradan.
-  const n = Math.min(baseRates.length, candRates.length)
-  let winReps = 0
-  let heldReps = 0
-  for (let i = 0; i < n; i++) {
-    const d = candRates[i] - baseRates[i]
-    if (d > MARGIN) winReps++
-    if (d >= -1e-9) heldReps++
-  }
-  // Dos vias de aceptacion:
-  //  (A) RECALL: el candidato sube el catch-rate por MARGIN en la mayoria de reps y no empeora FP.
-  //  (B) PRECISION: cuando el recall ya esta al techo (o no puede subir), aceptar si el candidato
-  //      MANTIENE el recall en la mayoria de reps y BAJA los falsos positivos. Sin esta via, una
-  //      mejora real de precision (menos FP a igual catch) quedaba descartada (caso critic del piloto).
-  const fpOk = candFpCount <= baseFpCount + 1e-9
-  const fpImproved = candFpCount < baseFpCount - 1e-9
-  const recallHeld = heldReps > n / 2
-  const acceptedByRecall = winReps > n / 2 && fpOk
-  const acceptedByPrecision = recallHeld && fpImproved
-  const accepted = acceptedByRecall || acceptedByPrecision
-  const via = acceptedByRecall ? 'RECALL' : acceptedByPrecision ? 'PRECISION' : null
+  // pareo por rep + decision de aceptacion: delegado a acceptGate() (funcion pura,
+  // misma semantica, testeada offline en tests/workflows/agent-improver.test.js).
+  const { accepted, via, winReps, heldReps, reps: n } = acceptGate({
+    baseRates,
+    candRates,
+    baseFpCount,
+    candFpCount,
+  })
 
   return {
     accepted,
