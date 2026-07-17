@@ -9,17 +9,24 @@ Diligencia: actualizar doc de release (README + Requisitos + Primeros pasos frie
   Requisitos con Python 3.11+, "Primeros pasos" rehecho (Base + Camino A nuevo/chico + Camino B grande)
   con etiquetas "obligatorio"/(recomendado)/(opcional) + leyenda. /4d-init agregado al Camino B.
 - Bump paraguas: metadata.version 1.0.3 -> **1.0.4** (uv run scripts/bump_suite.py --set 1.0.4, --check OK).
-- Reescritura de historia EN CURSO: speedcodelabb <speedcodelab2@gmail.com> (21 commits, incluye el commit
-  RAIZ 05caefd) -> reasignar a alexissamudio. Alcance: TODAS las refs (main + 8 ramas remotas + 5 tags).
-  Patron mirror + backup + push --force. Usuario confirmo (otra persona, avanzar, todas las refs).
+- speedcodelabb: NO hizo falta reescribir NADA. La verificacion pre-force-push (clone --mirror del remoto)
+  mostro que el REMOTO ya estaba limpio: 0 commits de speedcodelab2@gmail.com en main / feat viva / refs/pull.
+  La reescritura de autoria (speedcodelabb -> alexissamudio) YA se hizo antes con filter-branch: quedaba el
+  backup en refs/original/* (incl. rama "backup-pre-author-rewrite") + 8 remote-tracking stale. Los 21 commits
+  vivian SOLO en esas refs locales. Limpieza hecha: git remote prune + borrar refs/original/* + reflog/gc.
+  Shortlog --all local ahora SIN speedcodelabb. Respaldo: scratchpad/speedcodelabb-original-refs.bundle.
+- CERO force-push, CERO reescritura nueva. El equipo (Luis, Ivan) NO tiene que re-clonar.
 
 ## DECISIONES (esta tanda)
 - speedcodelab != speedcodelabb (doble b). Era CONTRIBUTOR (por commits), no COLLABORATOR (accesos).
-- Contributor solo se saca reescribiendo autoria + force-push (mailmap NO cambia la UI de GitHub).
-- speedcodelab (sin doble b) "is not a user" en GitHub -> el real es speedcodelabb (speedcodelab2@gmail.com).
+- La UI de "Contributors" de GitHub que muestra speedcodelabb es CACHE stale (el remoto ya no tiene sus
+  commits desde la reescritura previa). Se recomputa asincrono; el push de hoy ayuda a gatillarlo. No hay
+  API publica confiable para forzar el refresco.
+- LECCION: ante "sacar a X del historial", VERIFICAR el remoto real (clone --mirror) ANTES de force-pushear.
+  Casi hago un force-push masivo inutil que habria roto los clones del equipo por nada.
 
-## PENDIENTE (post-reescritura)
-- Avisar al equipo (Luis, Ivan) que re-clonen; verificar la UI de Contributors en GitHub.
+## PENDIENTE
+- Verificar en dias que la UI de Contributors deje de mostrar speedcodelabb (es cache; sin accion tecnica).
 - (heredados) restart, case-04 auditor-de-redaccion, candidateFileFull en reporte, venv local.
 
 ---
