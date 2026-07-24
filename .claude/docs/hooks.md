@@ -5,17 +5,18 @@ source: 4d-init
 
 # Hooks en este proyecto
 
-Siete hooks Python autocontenidos (PEP-723, corren con `uv run --script`) en
+Ocho hooks Python autocontenidos (PEP-723, corren con `uv run --script`) en
 `plugins/fluency-4d/hooks/`, registrados en `hooks/hooks.json` (auto-descubierto:
 NUNCA listarlo en plugin.json — causa "Duplicate hooks file").
 
-## Los siete
+## Los ocho
 
 | Hook | Evento | Qué hace |
 |------|--------|----------|
 | `bridge_router.py` | UserPromptSubmit | Inyección de arranque (lecciones/estado) + puentes por tema desde `bridges.json`; dedup por sesión; telemetría vía `bump_stats` |
 | `plan_calibrator.py` | UserPromptSubmit | Al ENTRAR en plan mode (edge-trigger no-plan→plan), inyecta el protocolo de calibración 4D: tarea grande→flujo riguroso (advisor→plan→critic con sentinel-agents), tarea chica→plan liviano. Se re-arma al reingresar |
 | `caveman_injector.py` | UserPromptSubmit | Si el flag `~/.claude/fluency4d/caveman.json` está ON (opt-in vía `/caveman`), reinyecta en CADA turno la directiva del modo Caveman (estilo token-eficiente). Sin edge-trigger: esa reinyección es lo que da la persistencia |
+| `adhd_injector.py` | UserPromptSubmit | Si el flag `~/.claude/fluency4d/adhd.json` está ON (opt-in vía `/adhd`), reinyecta en CADA turno la directiva del modo ADHD/TDAH (estilo accionable y estructurado, niveles `auto\|lite\|full`). Precedencia: cede si `/caveman` está ON (nunca se apilan). Sin edge-trigger, como caveman |
 | `suite_playbook.py` | UserPromptSubmit | Con keywords ESTRECHAS inyecta un NUDGE que sugiere al conductor OFRECER una capacidad de la suite (indexar con el grafo, auditar) en el momento justo; nunca dispara la acción. Dedup por tipo por sesión; no dispara en plan mode (lo cubre `plan_calibrator`) ni en subagentes |
 | `doc_drift.py` | PostToolUse `Edit\|Write\|MultiEdit\|NotebookEdit` | Si se edita bajo las `rutas` de un tema, recuerda revisar su doc; matching por segmento casefolded |
 | `memory_checkpoint.py` | PostToolUse `.*` | Al cruzar `FLUENCY_4D_SAVE_PCT` (50%) instruye guardar estado; re-armado dual (caída de % nativo / intervalo de tokens fallback); anti-redisparo compartido vía el contador `disparos` al togglear modo (F4) |

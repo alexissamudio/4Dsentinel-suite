@@ -39,6 +39,17 @@
         "hooks": [
           {
             "type": "command",
+            "statusMessage": "Modo ADHD...",
+            "command": "uv run --script \"${CLAUDE_PLUGIN_ROOT}/hooks/adhd_injector.py\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
             "statusMessage": "Ofreciendo capacidades de la suite...",
             "command": "uv run --script \"${CLAUDE_PLUGIN_ROOT}/hooks/suite_playbook.py\"",
             "timeout": 5
