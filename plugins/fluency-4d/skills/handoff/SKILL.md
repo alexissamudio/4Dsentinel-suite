@@ -59,7 +59,7 @@ Generá un bloque conciso listo para pegar en la sesión nueva: rutas + estado +
 por hacer + próximo paso. Escribilo a un archivo temporal (en el scratchpad de sesión, no
 en el repo) y copialo al portapapeles con la utilidad de la plataforma; además mostralo en
 el chat. Detección de SO con fallback (si no hay utilidad, avisá y dejá el bloque en el chat):
-- Windows: `cat <tmp> | clip`
+- Windows (PowerShell): `Get-Content -Raw -Encoding UTF8 <tmp> | Set-Clipboard` (NO `cat <tmp> | clip`: `clip.exe` decodifica stdin con la codepage OEM y rompe los acentos UTF-8 → mojibake)
 - macOS: `cat <tmp> | pbcopy`
 - Linux: `wl-copy < <tmp>` (Wayland) o `xclip -selection clipboard < <tmp>`
 
