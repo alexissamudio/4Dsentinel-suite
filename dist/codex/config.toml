@@ -1,0 +1,28 @@
+# config.toml - bundle Codex generado por tools/multiharness/build_harness.py
+# NO editar a mano: regenerar con `uv run --script tools/multiharness/build_harness.py`.
+
+[features]
+hooks = true
+
+# --- Hooks ---
+# El mecanismo REAL de ejecucion de hooks en Codex es `hooks.json` (mismo
+# schema que Claude Code), descubierto en $CODEX_HOME/hooks.json o en
+# <proyecto>/.codex/hooks.json. Este bundle lo emite como `hooks.json`
+# (junto a este archivo). NO se declaran hooks en config.toml: la seccion
+# [hooks] parsea pero NO dispara nada (mecanismo equivocado).
+# Nota: los hooks corren en la sesion interactiva (TUI); `codex exec`
+# headless NO los dispara (ref issue openai/codex#17532).
+
+# --- Subagentes ---
+[agents]
+# Subagentes portados de plugins/sentinel-agents/agents/*.md
+
+[agents.critic]
+description = "Crítico de planes que verifica la ejecutabilidad de un plan contra el código real antes de implementar. Read-only. Úsalo para revisar un plan y dar un veredicto de listo/no-listo con evidencia."
+config_file = "critic.config.toml"
+
+# TODO(PoC): resto de sentinel-agents (advisor, bug-hunter, code-reviewer, ...)
+# mismo patron: [agents.<name>] con config_file dedicado.
+
+# --- MCP: DIFERIDO ---
+# El binario codebase-memory (cbm) no esta instalado -> sin [mcp_servers].

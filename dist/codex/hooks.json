@@ -1,0 +1,87 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Buscando puentes de documentación...",
+            "command": "uv run --script \"C:\\Users\\samud\\dev\\4Dsentinel-suite\\plugins\\fluency-4d/hooks/bridge_router.py\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Calibrando el nivel de plan...",
+            "command": "uv run --script \"C:\\Users\\samud\\dev\\4Dsentinel-suite\\plugins\\fluency-4d/hooks/plan_calibrator.py\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Modo caveman...",
+            "command": "uv run --script \"C:\\Users\\samud\\dev\\4Dsentinel-suite\\plugins\\fluency-4d/hooks/caveman_injector.py\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Ofreciendo capacidades de la suite...",
+            "command": "uv run --script \"C:\\Users\\samud\\dev\\4Dsentinel-suite\\plugins\\fluency-4d/hooks/suite_playbook.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Chequeando docs del tema...",
+            "command": "uv run --script \"C:\\Users\\samud\\dev\\4Dsentinel-suite\\plugins\\fluency-4d/hooks/doc_drift.py\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Checkpoint de memoria...",
+            "command": "uv run --script \"C:\\Users\\samud\\dev\\4Dsentinel-suite\\plugins\\fluency-4d/hooks/memory_checkpoint.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Gate de discernimiento (opt-in)...",
+            "command": "uv run --script \"C:\\Users\\samud\\dev\\4Dsentinel-suite\\plugins\\fluency-4d/hooks/discernment_gate.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

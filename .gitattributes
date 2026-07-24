@@ -10,3 +10,7 @@ plugins/sentinel-agents/references/iso-27000/** text eol=lf
 .claude/workflows/*.js text eol=lf
 # Sus tests tambien: consistencia con el .js que ejercitan
 tests/workflows/*.js text eol=lf
+
+# Bundles multi-harness generados: check_harness.py los compara byte-a-byte
+# contra la regeneracion; un checkout CRLF daria falso drift. LF siempre.
+dist/** text eol=lf
