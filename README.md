@@ -13,7 +13,7 @@ Marco de colaboración humano-IA + agentes de auditoría + memoria de codebase, 
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A63D2)
 ![español](https://img.shields.io/badge/idioma-español-f39c12)
 
-![fluency-4d](https://img.shields.io/badge/fluency--4d-0.19.1-3fb950)
+![fluency-4d](https://img.shields.io/badge/fluency--4d-0.20.0-3fb950)
 ![sentinel-agents](https://img.shields.io/badge/sentinel--agents-0.6.3-58a6ff)
 ![4dsentinel-memory](https://img.shields.io/badge/4dsentinel--memory-0.5.2-bc8cff)
 
@@ -80,6 +80,8 @@ no vienen de un mal prompt, sino de un mal **reparto***. Las cuatro dimensiones:
 - **`/4d-status`** — estado del sistema 4D en el proyecto (puentes, lecciones, métricas). Solo lectura.
 - **`/4d-quiz`** — 24 preguntas de práctica de la certificación AI Fluency, con corrección explicada.
 - **`/caveman`** — modo de respuestas token-eficiente, opt-in (se prende/apaga).
+- **`/adhd`** — modo de respuestas accionables y estructuradas (arranca por la acción, pasos
+  numerados, un next-step concreto), opt-in y mutuamente excluyente con `/caveman`.
 - **`/handoff`** — genera el handoff de cierre de sesión (git + plan activo + estado), **sugiere** el
   commit (no lo ejecuta) y copia un resumen al portapapeles para arrancar limpio en una sesión nueva.
   Es la contraparte de escritura de `/4d-status`.
@@ -91,6 +93,7 @@ no vienen de un mal prompt, sino de un mal **reparto***. Las cuatro dimensiones:
 - **`memory_checkpoint`** — al llenarse el contexto, te recuerda guardar el estado de la sesión.
 - **`doc_drift`** — si editaste código de un tema, te avisa por si su doc quedó desactualizado.
 - **`caveman_injector`** — si prendiste `/caveman`, reinyecta la directiva del modo token-eficiente en cada turno (esa reinyección es lo que la hace persistir).
+- **`adhd_injector`** — si prendiste `/adhd`, reinyecta la directiva del modo accionable en cada turno; si además está `/caveman` activo, caveman tiene precedencia (nunca se apilan).
 - **`suite_playbook`** — con keywords estrechas, sugiere al conductor que OFREZCA una capacidad de la suite (indexar con el grafo, auditar) en el momento justo; nunca dispara la acción, el humano decide.
 - **`discernment_gate`** — opt-in (`FLUENCY_4D_STRICT=1`): al terminar, bloquea una vez con un checklist de discernimiento.
 

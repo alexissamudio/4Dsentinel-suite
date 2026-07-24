@@ -30,6 +30,11 @@ puede no existir todavía — no hace falta crearlo aparte).
   ```json
   {"on": true, "level": "<lvl>"}
   ```
+  Y ADEMÁS, en el mismo paso, escribí `~/.claude/fluency4d/adhd.json` con:
+  ```json
+  {"on": false, "level": "auto"}
+  ```
+  (mutex: activar caveman apaga ADHD — no pueden convivir).
 - Para APAGAR:
   ```json
   {"on": false, "level": "auto"}

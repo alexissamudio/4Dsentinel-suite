@@ -270,6 +270,27 @@ def load_caveman() -> dict[str, Any]:
     return st
 
 
+def load_adhd() -> dict[str, Any]:
+    """Lee el flag global de modo ADHD/TDAH (~/.claude/fluency4d/adhd.json).
+
+    Solo lectura. Devuelve el dict si esta prendido (on=True) y level es valido;
+    ante cualquier error / JSON invalido / OFF / level fuera del set -> {}
+    (pass-through). El writer es la tool Write del skill, no este helper.
+    """
+    path = Path.home() / ".claude" / "fluency4d" / "adhd.json"
+    try:
+        st = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(st, dict):
+        return {}
+    if st.get("on") is not True:
+        return {}
+    if st.get("level") not in ("auto", "lite", "full"):
+        return {}
+    return st
+
+
 def bump_stats(cwd: str, temas_nuevos: list[str], nueva_sesion: bool) -> None:
     """Telemetria de uso de puentes, best-effort y SIN lock.
 
