@@ -1,0 +1,16 @@
+# critic.config.toml - config del subagente critic para Codex CLI.
+# Portado de plugins/sentinel-agents/agents/critic.md (fuente Claude).
+# El cuerpo/instrucciones del agente vive en agents/critic.md.
+
+# model (Claude): inherit
+#   -> 'inherit' en Claude: en Codex se hereda el modelo de la sesion
+#      (sin override). Descomentar para forzar uno:
+# model = "o4-mini"
+
+# maxTurns (Claude) = 20
+# TODO(verificar-schema): confirmar el nombre exacto del campo en el
+# schema [agents] de Codex 0.130 antes de activarlo.
+# max_turns = 20
+
+# tools (Claude): Read, Grep, Glob
+# Read/Grep/Glob = solo-lectura -> mapear a las tools read-only de Codex.

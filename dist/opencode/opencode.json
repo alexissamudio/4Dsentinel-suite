@@ -1,0 +1,5 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "//": "opencode.json - bundle OpenCode generado por tools/multiharness/build_harness.py. NO editar a mano.",
+  "//mcp": "MCP codebase-memory (cbm) DIFERIDO: binario no instalado -> sin bloque 'mcp'. Cuando este, agregar: \"mcp\": { \"codebase-memory\": { \"type\": \"local\", \"command\": [\"cbm\"], \"enabled\": true } }"
+}

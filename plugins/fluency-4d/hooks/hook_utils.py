@@ -270,6 +270,25 @@ def load_caveman() -> dict[str, Any]:
     return st
 
 
+def load_verify() -> dict[str, Any]:
+    """Lee el flag global de verificacion del diff (~/.claude/fluency4d/verify.json).
+
+    Solo lectura. Devuelve el dict si esta prendido (on=True); ante cualquier
+    error / JSON invalido / OFF -> {} (pass-through). El writer es la tool Write
+    del skill verify-diff, no este helper.
+    """
+    path = Path.home() / ".claude" / "fluency4d" / "verify.json"
+    try:
+        st = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(st, dict):
+        return {}
+    if st.get("on") is not True:
+        return {}
+    return st
+
+
 def load_adhd() -> dict[str, Any]:
     """Lee el flag global de modo ADHD/TDAH (~/.claude/fluency4d/adhd.json).
 
