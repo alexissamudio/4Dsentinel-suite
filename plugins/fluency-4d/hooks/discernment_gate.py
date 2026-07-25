@@ -5,8 +5,9 @@
 # ///
 """discernment_gate.py - Hook Stop OPT-IN del plugin fluency-4d.
 
-Apagado por defecto. Con FLUENCY_4D_STRICT=1, bloquea UNA vez por sesion con la
-checklist de discernimiento de las 4D antes de dejar terminar la tarea.
+Apagado por defecto. Con FLUENCY_4D_STRICT=1 o con el flag verify.json ON
+(skill /verify-diff), bloquea UNA vez por sesion con la checklist de
+discernimiento de las 4D antes de dejar terminar la tarea.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import (
     hook_main,
     load_state,
+    load_verify,
     output_empty,
     output_stop_block,
     parse_hook_input,
@@ -36,6 +38,11 @@ CHECKLIST = (
     "2) PROCESS: toda cifra, cita o fuente que no dio el usuario esta "
     "verificada o marcada como NO VERIFICADA. "
     "3) PERFORMANCE: se mantuvo el rol/tono/formato pedido de punta a punta. "
+    "4) VERIFICACION DEL DIFF: si tocaste codigo, verifica el diff antes de cerrar: "
+    "si tenes el plugin sentinel-agents, corre /sentinel-audit tipo=review "
+    "(git diff -> code-reviewer + validator); si no, revisa vos el git diff contra "
+    "el criterio de exito. Si ya verificaste con evidencia o no hubo cambios, cerra "
+    "e inclui 'Verificacion: OK / N-A'. "
     "Si algo no pasa, corregilo ahora; si pasa, termina normalmente e incluye una "
     "linea 'Discernimiento: OK' con lo verificado. Este gate no volvera a bloquear en esta sesion."
 )
@@ -43,7 +50,7 @@ CHECKLIST = (
 
 @hook_main("Stop")
 def main() -> None:
-    if os.environ.get("FLUENCY_4D_STRICT") != "1":
+    if os.environ.get("FLUENCY_4D_STRICT") != "1" and not load_verify():
         return output_empty()
 
     data = parse_hook_input(read_stdin_safe())
