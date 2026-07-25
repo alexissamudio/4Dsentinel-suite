@@ -1,6 +1,6 @@
 # ai-fluency-4d
 
-[![validate](https://github.com/alexissamudio/ai-fluency-4d/actions/workflows/validate.yml/badge.svg)](https://github.com/alexissamudio/ai-fluency-4d/actions/workflows/validate.yml)
+[![validate](https://github.com/alexissamudio/4Dsentinel-suite/actions/workflows/validate.yml/badge.svg)](https://github.com/alexissamudio/4Dsentinel-suite/actions/workflows/validate.yml)
 
 Plugin de Claude Code (en español) que lleva a la práctica el marco **4D de AI Fluency**
 (Rick Dakan · Joseph Feller · Anthropic): **Delegación, Descripción, Discernimiento y Diligencia**.
@@ -17,6 +17,7 @@ Plugin de Claude Code (en español) que lleva a la práctica el marco **4D de AI
 | **Hook `doc_drift`** | Si editás archivos bajo las `rutas` de un tema documentado (p. ej. `src/auth/`), te recuerda revisar el doc del tema al terminar. Una vez por tema por sesión. |
 | **Skill `/4d-status`** | Reporte de solo lectura: temas puenteados, temas sin `rutas`, lecciones vs límite de 30, edad del estado de sesión, convenciones, **puentes nunca usados** (métricas) y **docs que quedaron detrás del código** (por fecha de commit). |
 | **Skill `/4d-quiz`** | Practicá la certificación AI Fluency: 24 preguntas de opción múltiple del marco 4D con corrección explicada, puntaje y detección de secciones débiles. `/4d-quiz [n]` (default 10). |
+| **Skill `/adhd`** | Modo de comunicación accionable y estructurado, opt-in: arranca por la acción, numera pasos, termina con un next-step concreto. Nivel AUTO que calibra por turno (más estructura en tareas multi-paso, mínimo en consultas cortas). Mutuamente excluyente con el modo token-eficiente (`/caveman`); lo reinyecta el hook `adhd_injector` cada turno. |
 | **`convenciones.md`** | `/4d-init` SIEMPRE genera un doc de style guidelines del proyecto (naming, formato, linters); si hay poca evidencia lo marca honestamente (`evidence: low`). |
 | **Reglas-siempre inline** | `/4d-init` separa las **reglas no negociables** (early returns, manejo de errores, prohibiciones de estilo) del conocimiento-por-tema: las reglas van inline en el CLAUDE.md (cargadas en TODA sesión), el detalle a docs con puente. Una regla no negociable nunca queda escondida detrás de un keyword. Clasificación confirmada por vos vía multiSelect. |
 | **Autoaprendizaje** | Las correcciones y errores cazados por el Discernimiento se guardan como lecciones en `.claude/docs/lecciones.md`; al arrancar una sesión nueva, el plugin te recuerda leerlas (y retomar `estado-sesion.md` si existe, avisando su antigüedad). |
@@ -26,8 +27,8 @@ Plugin de Claude Code (en español) que lleva a la práctica el marco **4D de AI
 Requisito: [uv](https://docs.astral.sh/uv/) instalado (los hooks son scripts Python autocontenidos).
 
 ```
-/plugin marketplace add alexissamudio/ai-fluency-4d
-/plugin install fluency-4d@ai-fluency-4d
+/plugin marketplace add alexissamudio/4Dsentinel-suite
+/plugin install fluency-4d@4Dsentinel-suite
 ```
 
 ## Uso
@@ -69,13 +70,13 @@ inactivo hasta re-correr `/4d-init`.
 ## Desarrollo local
 
 ```
-git clone https://github.com/alexissamudio/ai-fluency-4d
+git clone https://github.com/alexissamudio/4Dsentinel-suite
 claude plugin marketplace add <ruta-local-del-repo>
-claude plugin install fluency-4d@ai-fluency-4d
+claude plugin install fluency-4d@4Dsentinel-suite
 ```
 
 Los plugins se copian a la caché de Claude Code: tras cada cambio, corré
-`claude plugin marketplace update ai-fluency-4d` y abrí una sesión nueva.
+`claude plugin marketplace update 4Dsentinel-suite` y abrí una sesión nueva.
 Para releases, sincronizá la versión en los 3 lugares con:
 
 ```

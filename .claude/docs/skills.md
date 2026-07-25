@@ -5,10 +5,11 @@ source: 4d-init
 
 # Skills en este proyecto
 
-Cinco skills en `plugins/fluency-4d/skills/<nombre>/SKILL.md`: `4d` (flujo
+Siete skills en `plugins/fluency-4d/skills/<nombre>/SKILL.md`: `4d` (flujo
 guiado por las 4 dimensiones), `4d-init` (generador de puentes), `4d-status`
-(reporte de solo lectura), `4d-quiz` (práctica de certificación) y `caveman`
-(toggle de estilo token-eficiente).
+(reporte de solo lectura), `4d-quiz` (práctica de certificación), `caveman`
+(toggle de estilo token-eficiente), `adhd` (toggle de estilo accionable) y
+`handoff` (cierre de sesión).
 
 ## Anatomía
 
@@ -58,10 +59,11 @@ universales — todas las cumplen por igual):
   (reporte read-only o utilidad). Triggers SOLO literales para no auto-dispararse.
   `/handoff` es la contraparte de escritura de `/4d-status`: arma el handoff de cierre
   (git + plan + estado), actualiza `estado-sesion.md` y copia el resumen al portapapeles.
-- **Toggle** (`/caveman`): prende/apaga un flag global; el trabajo real lo hace un
-  hook. Opt-in, arranca apagado.
+- **Toggle** (`/caveman`, `/adhd`): prende/apaga un flag global; el trabajo real lo hace
+  un hook. Opt-in, arranca apagado. `/caveman` (token-eficiente) y `/adhd` (accionable)
+  son mutuamente excluyentes.
 
-### Reglas universales (las cumplen las 6 skills)
+### Reglas universales (las cumplen las 7 skills)
 
 1. **`name` == directorio.** El frontmatter lleva `name` y es idéntico al nombre de
    la carpeta de la skill.

@@ -17,8 +17,8 @@
       "author": {
         "name": "Alexis Samudio"
       },
-      "homepage": "https://github.com/alexissamudio/ai-fluency-4d",
-      "repository": "https://github.com/alexissamudio/ai-fluency-4d",
+      "homepage": "https://github.com/alexissamudio/4Dsentinel-suite",
+      "repository": "https://github.com/alexissamudio/4Dsentinel-suite",
       "license": "MIT",
       "keywords": [
         "ai-fluency",
@@ -38,6 +38,7 @@
         "./skills/4d-status",
         "./skills/4d-quiz",
         "./skills/caveman",
+        "./skills/adhd",
         "./skills/handoff",
         "./skills/verify-diff"
       ]
@@ -46,7 +47,7 @@
       "name": "sentinel-agents",
       "source": "./plugins/sentinel-agents",
       "description": "Agentes de auditoria: compliance (ISO 27000), seguridad (OWASP/CWE/CVSS), code-review, riesgo, bug-hunt, y calidad de redaccion; read-only con evidencia dura",
-      "version": "0.6.3",
+      "version": "0.6.4",
       "author": {
         "name": "Alexis Samudio"
       },
