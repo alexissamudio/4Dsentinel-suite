@@ -1,7 +1,7 @@
 ---
 description: "Analista pre-plan que descubre requisitos ocultos, supuestos y riesgo de alcance ANTES de planificar. Read-only. Úsalo antes de escribir un plan para encontrar los huecos."
 mode: subagent
-permission: { edit: deny }
+permission: { edit: deny, bash: deny, webfetch: deny }
 ---
 
 <!-- Portado de plugins/sentinel-agents/agents/advisor.md por tools/multiharness/build_harness.py. Frontmatter reescrito al schema de OpenCode. NO editar a mano. -->

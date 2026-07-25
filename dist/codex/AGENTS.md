@@ -27,6 +27,6 @@
 
 ## Notas de portabilidad
 
-- Hooks: transpilados a `config.toml` (`[features] hooks=true`).
+- Hooks: emitidos como `hooks.json` (schema de Claude Code), descubierto en `$CODEX_HOME/hooks.json` o `<proyecto>/.codex/hooks.json`. `config.toml` solo activa `[features] hooks = true`; su bloque `[hooks]` NO dispara nada.
 - Subagentes: `[agents.<name>]` + `<name>.config.toml`.
 - MCP (codebase-memory): DIFERIDO (binario `cbm` no instalado).

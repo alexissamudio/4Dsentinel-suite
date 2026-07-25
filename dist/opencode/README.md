@@ -5,7 +5,7 @@ Bundle regenerable que porta parte de la suite de plugins de Claude Code a **Ope
 ## Que incluye este PoC
 
 - **Command** `handoff` -> `command/handoff.md` (frontmatter `description` + `agent`; cuerpo que dispara el flujo del skill `handoff`).
-- **Agentes** `critic` y `advisor` -> `agent/*.md` (`mode: subagent`, `permission: { edit: deny }` por ser read-only Read/Grep/Glob).
+- **Agentes** `critic` y `advisor` -> `agent/*.md` (`mode: subagent`, `permission: { edit: deny, bash: deny, webfetch: deny }` derivado del allowlist read-only Read/Grep/Glob del frontmatter fuente).
 - **Hooks** -> `plugin/fluency-hooks.js`: shim que puentea los hooks Python de `UserPromptSubmit` por subprocess (no reescribe la logica).
 - **Config** -> `opencode.json` (MCP diferido).
 
@@ -35,7 +35,7 @@ Copy-Item -Force dist\opencode\opencode.json .\opencode.json
 
 ## Pendiente / no verificado
 
-- **E2E con OpenCode**: NO ejecutado aca (lo valida el humano).
-- **API de plugins de OpenCode**: el shim `fluency-hooks.js` marca `TODO(verificar-API-opencode)` -- falta confirmar el nombre/firma del hook equivalente a `UserPromptSubmit`. Degrada a NO-OP seguro.
+- **E2E con OpenCode**: shim smoke-tested (harness Node que importa `fluency-hooks.js`, simula `chat.message` y verifica la inyeccion en `output.parts` corriendo los hooks Python reales) -> PASS. Falta solo el E2E en runtime real de `opencode` (lo valida el humano).
+- **API de plugins de OpenCode**: VERIFICADA (1.17.11) e implementada. El shim `fluency-hooks.js` usa el hook `chat.message` (equivalente a `UserPromptSubmit`): lee el texto del usuario de `output.parts` e inyecta contexto con `output.parts.push({type:'text', text})`. Degrada a NO-OP seguro ante fallos. Falta solo el E2E (ver arriba).
 - **Resto de skills** (`4d`, `4d-init`, `4d-status`, `4d-quiz`, `caveman`) y **resto de subagentes**: TODO.
 - **MCP** (codebase-memory / `cbm`): DIFERIDO, binario no instalado.

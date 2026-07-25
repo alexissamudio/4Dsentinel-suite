@@ -1,7 +1,7 @@
 ---
 description: "Crítico de planes que verifica la ejecutabilidad de un plan contra el código real antes de implementar. Read-only. Úsalo para revisar un plan y dar un veredicto de listo/no-listo con evidencia."
 mode: subagent
-permission: { edit: deny }
+permission: { edit: deny, bash: deny, webfetch: deny }
 ---
 
 <!-- Portado de plugins/sentinel-agents/agents/critic.md por tools/multiharness/build_harness.py. Frontmatter reescrito al schema de OpenCode. NO editar a mano. -->

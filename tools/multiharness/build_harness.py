@@ -240,8 +240,14 @@ def build_critic_body(agents: dict[str, dict[str, str]]) -> str:
 
 def build_handoff_skill() -> str:
     src = (FLUENCY_ROOT / "skills" / "handoff" / "SKILL.md").read_text(encoding="utf-8")
-    # 1) reescribir ~/.claude -> ~/.codex en todo el doc.
-    out = src.replace("~/.claude", "~/.codex")
+    # 1) reescribir el home del harness (~/.claude -> ~/.codex, y las variantes
+    #    $CLAUDE_HOME/${CLAUDE_HOME}) usando la tabla-fuente mappings.HOME_MAP en
+    #    vez de un literal hardcodeado. El SKILL.md fuente hoy solo contiene
+    #    "~/.claude"; las otras claves no aparecen -> salida identica (sin drift),
+    #    pero la traduccion queda gobernada por la tabla documentada.
+    out = src
+    for src_home, dst_home in M.HOME_MAP.items():
+        out = out.replace(src_home, dst_home)
     # 2) insertar la nota de degradacion en el paso del plan activo.
     #    (la nota no contiene '~/.claude' para no re-mangear en re-generaciones).
     marker = "en `~/.codex/plans/` (por mtime), o el de la tarea."
@@ -339,7 +345,9 @@ def build_agents_md() -> str:
         "",
         "## Notas de portabilidad",
         "",
-        "- Hooks: transpilados a `config.toml` (`[features] hooks=true`).",
+        "- Hooks: emitidos como `hooks.json` (schema de Claude Code), descubierto "
+        "en `$CODEX_HOME/hooks.json` o `<proyecto>/.codex/hooks.json`. `config.toml` "
+        "solo activa `[features] hooks = true`; su bloque `[hooks]` NO dispara nada.",
         "- Subagentes: `[agents.<name>]` + `<name>.config.toml`.",
         "- MCP (codebase-memory): DIFERIDO (binario `cbm` no instalado).",
         "",
@@ -479,6 +487,26 @@ def build_opencode_command_handoff() -> str:
     )
 
 
+def opencode_permission(tools: str) -> str:
+    """Deriva el bloque `permission` de OpenCode desde el allowlist `tools` del
+    frontmatter fuente (Claude Code): deniega lo que el agente NO tiene permitido,
+    para que un agente read-only (tools: Read, Grep, Glob) sea REALMENTE read-only
+    en OpenCode (edit/bash/webfetch denegados, no solo edit)."""
+    allowed = {t.strip().lower() for t in tools.split(",") if t.strip()}
+    if not allowed or "*" in allowed:
+        return ""  # acceso amplio: sin restricciones
+    denies = []
+    if not (allowed & {"write", "edit", "multiedit", "notebookedit"}):
+        denies.append("edit: deny")
+    if "bash" not in allowed:
+        denies.append("bash: deny")
+    if "webfetch" not in allowed:
+        denies.append("webfetch: deny")
+    if not denies:
+        return ""
+    return "permission: { " + ", ".join(denies) + " }\n"
+
+
 def build_opencode_agent(agents: dict[str, dict[str, str]], name: str) -> str:
     meta = agents.get(name, {})
     if not meta:
@@ -486,7 +514,8 @@ def build_opencode_agent(agents: dict[str, dict[str, str]], name: str) -> str:
     desc = meta.get("description", "")
     src = Path(meta["_path"]).read_text(encoding="utf-8")
     body = strip_frontmatter(src).lstrip("\n")
-    # tools Read/Grep/Glob = read-only -> permission edit: deny.
+    # Deniega en OpenCode lo que el allowlist `tools` fuente no permite
+    # (read-only Read/Grep/Glob -> edit/bash/webfetch: deny), no solo edit.
     banner = (
         "<!-- Portado de plugins/sentinel-agents/agents/%s.md por "
         "tools/multiharness/build_harness.py. Frontmatter reescrito al schema "
@@ -494,12 +523,13 @@ def build_opencode_agent(agents: dict[str, dict[str, str]], name: str) -> str:
         "<!-- NOTA(PoC): la referencia a references/agent-contract.md NO esta "
         "incluida en este bundle; portarla es un TODO. -->\n\n" % name
     )
+    perm = opencode_permission(meta.get("tools", ""))
     return (
         "---\n"
         "description: " + yaml_dq(desc) + "\n"
         "mode: subagent\n"
-        "permission: { edit: deny }\n"
-        "---\n\n"
+        + perm
+        + "---\n\n"
         + banner + body
     )
 
@@ -520,10 +550,11 @@ def build_opencode_plugin(hooks: dict) -> str:
         "// (JSON, contrato de Claude) y reinyecta el `additionalContext` que\n"
         "// emite por stdout.\n"
         "//\n"
-        "// TODO(verificar-API-opencode): confirmar el nombre EXACTO del hook de\n"
-        "// OpenCode 1.17.11 equivalente a UserPromptSubmit y su firma\n"
-        "// (input/output). Hasta verificarlo, el shim degrada a NO-OP seguro:\n"
-        "// nunca rompe la sesion.\n"
+        "// API OpenCode 1.17.11 (verificada): el hook `chat.message` se dispara\n"
+        "// cuando el usuario envia un mensaje, ANTES de que el modelo lo procese.\n"
+        "// El texto del usuario vive en output.parts (partes type:text), NO en\n"
+        "// input.prompt; la inyeccion de contexto es por output.parts.push(...).\n"
+        "// Ante cualquier fallo el shim degrada a NO-OP: nunca rompe la sesion.\n"
         "\n"
         'import { spawnSync } from "node:child_process";\n'
         "\n"
@@ -558,23 +589,30 @@ def build_opencode_plugin(hooks: dict) -> str:
         '    return chunks.join("\\n\\n");\n'
         "}\n"
         "\n"
-        "// export: forma de plugin de OpenCode (funcion que recibe el ctx del\n"
-        "// harness y devuelve el mapa de hooks). TODO(verificar-API-opencode).\n"
+        "// export: forma de plugin de OpenCode (funcion async que recibe el ctx\n"
+        "// del harness y devuelve el mapa de hooks).\n"
         "export const FluencyHooks = async ({ project, client, $ } = {}) => {\n"
         "  return {\n"
-        "    // TODO(verificar-API-opencode): mapear al evento real. Placeholder\n"
-        '    // conservador: "chat.message" segun la API de plugins de OpenCode.\n'
+        "    // chat.message = equivalente a UserPromptSubmit (dispara al enviar el\n"
+        "    // mensaje del usuario, antes del modelo).\n"
         '    "chat.message": async (input, output) => {\n'
         "      try {\n"
+        "        // El texto del usuario esta en output.parts (partes type:text),\n"
+        "        // NO en input.prompt.\n"
+        "        const parts = (output && Array.isArray(output.parts)) ? output.parts : [];\n"
+        "        const userText = parts\n"
+        '          .filter((p) => p && p.type === "text" && typeof p.text === "string")\n'
+        "          .map((p) => p.text)\n"
+        '          .join("\\n");\n'
         "        const payload = {\n"
-        '          prompt: (input && input.prompt) || "",\n'
+        "          prompt: userText,\n"
         "          cwd: (project && project.worktree) || process.cwd(),\n"
         "        };\n"
         "        const extra = collectContext(payload);\n"
-        '        if (extra && output && typeof output === "object") {\n'
-        "          // Reinyeccion best-effort del additionalContext.\n"
-        "          output.additionalContext =\n"
-        '            (output.additionalContext ? output.additionalContext + "\\n\\n" : "") + extra;\n'
+        "        // Inyeccion: se MUTA output.parts empujando una parte de texto\n"
+        "        // (output.additionalContext no existe en la API de OpenCode).\n"
+        "        if (extra && output && Array.isArray(output.parts)) {\n"
+        '          output.parts.push({ type: "text", text: extra });\n'
         "        }\n"
         "      } catch (_e) {\n"
         "        // NO-OP seguro.\n"
@@ -618,8 +656,9 @@ def build_opencode_readme() -> str:
         "`description` + `agent`; cuerpo que dispara el flujo del skill "
         "`handoff`).\n"
         "- **Agentes** `critic` y `advisor` -> `agent/*.md` "
-        "(`mode: subagent`, `permission: { edit: deny }` por ser read-only "
-        "Read/Grep/Glob).\n"
+        "(`mode: subagent`, `permission: { edit: deny, bash: deny, webfetch: "
+        "deny }` derivado del allowlist read-only Read/Grep/Glob del "
+        "frontmatter fuente).\n"
         "- **Hooks** -> `plugin/fluency-hooks.js`: shim que puentea los hooks "
         "Python de `UserPromptSubmit` por subprocess (no reescribe la logica).\n"
         "- **Config** -> `opencode.json` (MCP diferido).\n"
@@ -654,10 +693,15 @@ def build_opencode_readme() -> str:
         "\n"
         "## Pendiente / no verificado\n"
         "\n"
-        "- **E2E con OpenCode**: NO ejecutado aca (lo valida el humano).\n"
-        "- **API de plugins de OpenCode**: el shim `fluency-hooks.js` marca "
-        "`TODO(verificar-API-opencode)` -- falta confirmar el nombre/firma del "
-        "hook equivalente a `UserPromptSubmit`. Degrada a NO-OP seguro.\n"
+        "- **E2E con OpenCode**: shim smoke-tested (harness Node que importa "
+        "`fluency-hooks.js`, simula `chat.message` y verifica la inyeccion en "
+        "`output.parts` corriendo los hooks Python reales) -> PASS. Falta solo el "
+        "E2E en runtime real de `opencode` (lo valida el humano).\n"
+        "- **API de plugins de OpenCode**: VERIFICADA (1.17.11) e implementada. El "
+        "shim `fluency-hooks.js` usa el hook `chat.message` (equivalente a "
+        "`UserPromptSubmit`): lee el texto del usuario de `output.parts` e inyecta "
+        "contexto con `output.parts.push({type:'text', text})`. Degrada a NO-OP "
+        "seguro ante fallos. Falta solo el E2E (ver arriba).\n"
         "- **Resto de skills** (`4d`, `4d-init`, `4d-status`, `4d-quiz`, "
         "`caveman`) y **resto de subagentes**: TODO.\n"
         "- **MCP** (codebase-memory / `cbm`): DIFERIDO, binario no instalado.\n"
