@@ -4,7 +4,7 @@ description: Úsalo para reproducir una falla de forma determinista, localizar s
 model: inherit
 tools: Read, Grep, Glob, Bash
 maxTurns: 30
-color: teal
+color: orange
 ---
 
 # Debugger

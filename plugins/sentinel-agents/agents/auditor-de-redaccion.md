@@ -4,7 +4,7 @@ description: Audita la CALIDAD DE LA REDACCION de un texto (spec, doc, politica,
 model: inherit
 tools: Read, Grep, Glob
 maxTurns: 22
-color: magenta
+color: cyan
 ---
 
 # Auditor de redacción

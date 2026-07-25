@@ -4,7 +4,7 @@ description: Úsalo para cazar bugs de correctitud reales (lógica, off-by-one, 
 model: inherit
 tools: Read, Grep, Glob
 maxTurns: 24
-color: magenta
+color: pink
 ---
 
 # Bug Hunter
