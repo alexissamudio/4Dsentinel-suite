@@ -12,3 +12,6 @@ mutants/
 # Artefactos de una auditoria /sentinel-audit (por si se auto-audita este repo);
 # nunca deben commitearse (evidencia real, IPs, nombres). F11 de la auditoria.
 .sentinel/
+# Tipos que escribe el engine de Claude Code al cargar el Panel 4D (se regeneran
+# por build; ver .claude/docs/testing.md "Panel 4D").
+plugins/fluency-4d/.claude-plugin/types/

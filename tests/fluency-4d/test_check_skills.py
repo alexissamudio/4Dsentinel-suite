@@ -35,6 +35,8 @@ def test_repo_real_cumple_el_contrato():
 def test_regex_path_de_maquina():
     check = _load_module()
     assert check.MACHINE_PATH.search(r"C:\Users\alguien\x")
+    assert check.MACHINE_PATH.search("C:/Users/alguien/x")
+    assert check.MACHINE_PATH.search("D:/Users/")  # sin nombre de usuario tambien
     assert check.MACHINE_PATH.search("/home/bob/proyecto")
     assert check.MACHINE_PATH.search("/Users/ana/dev")
     assert not check.MACHINE_PATH.search("un texto sin paths de maquina")

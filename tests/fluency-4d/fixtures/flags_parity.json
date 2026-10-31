@@ -1,0 +1,28 @@
+{
+  "_doc": "Casos de paridad de flags 4D entre los hooks (hook_utils.load_adhd/load_caveman/load_verify + adhd_injector: ADHD cede ante caveman) y la status line (fluencyModes). Lo leen tests/fluency-4d/hooks/test_flags_parity.py y plugins/fluency-4d/statusline/test/parity.test.js. 'flags': contenido de ~/.claude/fluency4d/<flag>.json (objeto = JSON serializado; string = texto crudo; flag ausente = sin archivo). 'expected': modos que muestra la barra, en orden ADHD, caveman, verify; ':nivel' salvo 'auto'.",
+  "cases": [
+    { "name": "sin flags", "flags": {}, "expected": [] },
+    { "name": "adhd auto", "flags": { "adhd": { "on": true, "level": "auto" } }, "expected": ["ADHD"] },
+    { "name": "adhd lite", "flags": { "adhd": { "on": true, "level": "lite" } }, "expected": ["ADHD:lite"] },
+    { "name": "adhd full", "flags": { "adhd": { "on": true, "level": "full" } }, "expected": ["ADHD:full"] },
+    { "name": "adhd off", "flags": { "adhd": { "on": false, "level": "full" } }, "expected": [] },
+    { "name": "adhd on como string no cuenta", "flags": { "adhd": { "on": "true", "level": "lite" } }, "expected": [] },
+    { "name": "adhd sin level", "flags": { "adhd": { "on": true } }, "expected": [] },
+    { "name": "adhd level ultra (solo caveman lo tiene)", "flags": { "adhd": { "on": true, "level": "ultra" } }, "expected": [] },
+    { "name": "adhd JSON corrupto", "flags": { "adhd": "{on: true" }, "expected": [] },
+    { "name": "adhd JSON lista", "flags": { "adhd": "[true]" }, "expected": [] },
+    { "name": "caveman auto", "flags": { "caveman": { "on": true, "level": "auto" } }, "expected": ["caveman"] },
+    { "name": "caveman ultra", "flags": { "caveman": { "on": true, "level": "ultra" } }, "expected": ["caveman:ultra"] },
+    { "name": "caveman off", "flags": { "caveman": { "on": false, "level": "lite" } }, "expected": [] },
+    { "name": "caveman level invalido", "flags": { "caveman": { "on": true, "level": "max" } }, "expected": [] },
+    { "name": "ambos activos: ADHD cede ante caveman", "flags": { "adhd": { "on": true, "level": "full" }, "caveman": { "on": true, "level": "lite" } }, "expected": ["caveman:lite"] },
+    { "name": "caveman invalido no hace ceder a ADHD", "flags": { "adhd": { "on": true, "level": "lite" }, "caveman": { "on": true, "level": "max" } }, "expected": ["ADHD:lite"] },
+    { "name": "caveman off no hace ceder a ADHD", "flags": { "adhd": { "on": true, "level": "auto" }, "caveman": { "on": false, "level": "full" } }, "expected": ["ADHD"] },
+    { "name": "verify on", "flags": { "verify": { "on": true } }, "expected": ["verify"] },
+    { "name": "verify off", "flags": { "verify": { "on": false } }, "expected": [] },
+    { "name": "verify con level no lo muestra", "flags": { "verify": { "on": true, "level": "full" } }, "expected": ["verify"] },
+    { "name": "verify JSON corrupto", "flags": { "verify": "no es json" }, "expected": [] },
+    { "name": "todo activo", "flags": { "adhd": { "on": true, "level": "lite" }, "caveman": { "on": true, "level": "full" }, "verify": { "on": true } }, "expected": ["caveman:full", "verify"] },
+    { "name": "adhd y verify", "flags": { "adhd": { "on": true, "level": "full" }, "verify": { "on": true } }, "expected": ["ADHD:full", "verify"] }
+  ]
+}

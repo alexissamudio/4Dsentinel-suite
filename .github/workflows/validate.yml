@@ -28,6 +28,12 @@ jobs:
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
+      # Barra de estado (statusline.js): Node LTS fijo + sus tests `node --test`.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Node tests de la barra (statusline)
+        run: node --test "plugins/fluency-4d/statusline/test/*.test.js"
       - name: Ruff (lint + format check, todo el Python)
         run: |
           uvx ruff@0.15.21 check plugins/fluency-4d/hooks/ scripts/ tests/ plugins/memory/scripts/
@@ -60,6 +66,12 @@ jobs:
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
+      # Barra de estado (statusline.js): Node LTS fijo + sus tests `node --test`.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Node tests de la barra (statusline)
+        run: node --test "plugins/fluency-4d/statusline/test/*.test.js"
       - name: Pytest (Windows)
         run: >
           uv run
@@ -103,7 +115,9 @@ jobs:
         run: uv run scripts/check_commit_trailer.py "$BASE"
       - name: metadata.version == git tag (solo en push de tag)
         if: github.ref_type == 'tag'
-        run: uv run scripts/bump_suite.py --check-tag "${{ github.ref_name }}"
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: uv run scripts/bump_suite.py --check-tag "$REF_NAME"
       - name: Bump de version en todo cambio de plugin (F17)
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
