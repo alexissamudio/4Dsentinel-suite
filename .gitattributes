@@ -14,3 +14,8 @@ tests/workflows/*.js text eol=lf
 # Bundles multi-harness generados: check_harness.py los compara byte-a-byte
 # contra la regeneracion; un checkout CRLF daria falso drift. LF siempre.
 dist/** text eol=lf
+
+# Barra (statusline.js + sus tests node) y Panel 4D (.tsx) del plugin fluency-4d: LF fijo,
+# para que el hash de status (copia fija vs plugin) y los tests no dependan del checkout.
+plugins/fluency-4d/**/*.js text eol=lf
+plugins/fluency-4d/**/*.tsx text eol=lf

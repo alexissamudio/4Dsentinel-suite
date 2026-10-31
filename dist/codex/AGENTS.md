@@ -8,7 +8,7 @@
 - SIEMPRE ASCII en los `.py`; NUNCA acentos en strings de hooks (cp1252 en Windows).
 - Los hooks NUNCA escriben dentro del proyecto: solo temp o `~/.claude/fluency4d/`.
 - Commits convencionales: subject ≤50 chars; NUNCA atribución de IA.
-- Versión sincronizada en los 3 lugares vía `fluency_bump_version.py`; NUNCA a mano.
+- Versión sincronizada en los 2 lugares vía `fluency_bump_version.py`; NUNCA a mano.
 - Tag/release SOLO tras CI verde.
 
 ## Puentes de documentacion
@@ -21,7 +21,7 @@
 | Skills | frontmatter, triggers, references, registro doble | .claude/docs/skills.md |
 | Testing | pytest, conftest, aislamiento, cómo correr | .claude/docs/testing.md |
 | PSS | teoría de pruebas (triángulo, V&V, mutation, property, flaky) + gaps de la suite | .claude/docs/pss.md |
-| Release | versión en 3 lugares, caché, CI antes de tag | .claude/docs/release.md |
+| Release | versión en 2 lugares, caché, CI antes de tag | .claude/docs/release.md |
 | Filosofía | qué es / qué no es el plugin, criterio de decisión para features/ports | .claude/docs/filosofia.md |
 | Persistencia | qué pasa con planes/estado-sesion/puentes/memoria al cambiar requisitos (flow-back/forward/living) | .claude/docs/persistencia.md |
 

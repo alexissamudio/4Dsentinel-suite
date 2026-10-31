@@ -49,13 +49,56 @@ SENTINEL_ROOT = PLUGINS / "sentinel-agents"
 DEFAULT_DIST = REPO_ROOT / "dist" / "codex"
 DEFAULT_OPENCODE_DIST = REPO_ROOT / "dist" / "opencode"
 
+# ---------------------------------------------------------------------------
+# Exclusion "solo Claude Code"
+# ---------------------------------------------------------------------------
+# Piezas de fluency-4d que dependen del engine de mods de Claude Code (Panel 4D,
+# hooks module TSX) o de su status line / temas. NO se emiten a Codex ni a
+# OpenCode. Rutas relativas a plugins/fluency-4d (se nombran aunque todavia no
+# existan: la lista es el contrato, no un reflejo del arbol actual).
+CLAUDE_CODE_ONLY: tuple[str, ...] = (
+    "hooks/register.tsx",      # hooks module del Panel 4D
+    "tests",                   # tests del panel (claude plugin test)
+    "types",                   # contrato $.state del panel
+    "tsconfig.json",           # typecheck del panel
+    ".claude-plugin/types",    # tipos que escribe el engine
+    "statusline",              # status line (Node)
+    "themes",                  # temas de Claude Code
+    "skills/barra",
+    "skills/statusline",
+)
+# Claves de hooks/hooks.json que solo entiende Claude Code (`modules` = hooks
+# modules del engine de mods). Se quitan antes de transpilar.
+CLAUDE_CODE_ONLY_HOOK_KEYS: tuple[str, ...] = ("modules",)
+
+
+def is_claude_code_only(path: Path) -> bool:
+    """True si `path` (abs o relativo a fluency-4d) cae bajo CLAUDE_CODE_ONLY."""
+    p = Path(path)
+    if p.is_absolute():
+        try:
+            p = p.relative_to(FLUENCY_ROOT)
+        except ValueError:
+            return False
+    rel = p.as_posix()
+    return any(rel == x or rel.startswith(x + "/") for x in CLAUDE_CODE_ONLY)
+
+
+def strip_claude_only_keys(hooks: dict) -> dict:
+    """Copia de hooks.json sin las claves CLAUDE_CODE_ONLY_HOOK_KEYS."""
+    return {k: v for k, v in hooks.items() if k not in CLAUDE_CODE_ONLY_HOOK_KEYS}
+
 
 # ---------------------------------------------------------------------------
 # Descubrimiento
 # ---------------------------------------------------------------------------
 def discover_skills() -> list[Path]:
-    """Globea plugins/*/skills/*/SKILL.md (NO lee el campo skills de plugin.json)."""
-    return sorted(PLUGINS.glob("*/skills/*/SKILL.md"))
+    """Globea plugins/*/skills/*/SKILL.md (NO lee el campo skills de plugin.json).
+
+    Excluye las skills CLAUDE_CODE_ONLY de fluency-4d (barra, statusline).
+    """
+    return sorted(p for p in PLUGINS.glob("*/skills/*/SKILL.md")
+                  if not is_claude_code_only(p.parent))
 
 
 def parse_frontmatter(text: str) -> dict[str, str]:
@@ -91,8 +134,9 @@ def discover_agents() -> dict[str, dict[str, str]]:
 
 
 def load_hooks() -> dict:
-    """Lee plugins/fluency-4d/hooks/hooks.json."""
-    return json.loads((FLUENCY_ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))
+    """Lee plugins/fluency-4d/hooks/hooks.json sin las claves solo-Claude-Code."""
+    raw = json.loads((FLUENCY_ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))
+    return strip_claude_only_keys(raw)
 
 
 # ---------------------------------------------------------------------------
@@ -138,9 +182,10 @@ def build_hooks_json(hooks: dict) -> str:
     de plugins/fluency-4d. Codex descubre este archivo en $CODEX_HOME/hooks.json
     o en <proyecto>/.codex/hooks.json (mecanismo verificado por E2E) -- NO por
     config.toml [hooks]. Incluye UserPromptSubmit (4), PostToolUse (doc_drift,
-    memory_checkpoint) y Stop (discernment_gate), tal cual la fuente.
+    memory_checkpoint) y Stop (discernment_gate), tal cual la fuente. Sin
+    `modules` (hooks module del Panel 4D, solo Claude Code).
     """
-    resolved = resolve_plugin_root(hooks)
+    resolved = resolve_plugin_root(strip_claude_only_keys(hooks))
     return json.dumps(resolved, indent=2, ensure_ascii=False) + "\n"
 
 

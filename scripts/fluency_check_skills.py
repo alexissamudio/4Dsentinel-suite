@@ -43,8 +43,8 @@ NAME_KEY = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
 DESC_KEY = re.compile(r"^description:\s*(.+?)\s*$", re.MULTILINE)
 H1 = re.compile(r"^#\s+\S", re.MULTILINE)
 REF = re.compile(r"references/([A-Za-z0-9._/-]+\.md)")
-# Paths de maquina: home de Windows (cualquier unidad), de Linux y de macOS.
-MACHINE_PATH = re.compile(r"[A-Za-z]:\\Users\\|/home/[A-Za-z0-9._-]+|/Users/[A-Za-z0-9._-]+")
+# Paths de maquina: home de Windows (cualquier unidad, con \ o con /), de Linux y de macOS.
+MACHINE_PATH = re.compile(r"[A-Za-z]:[\\/]Users[\\/]|/home/[A-Za-z0-9._-]+|/Users/[A-Za-z0-9._-]+")
 
 
 def _strip_quotes(value: str) -> str:

@@ -103,3 +103,65 @@ def test_state_dir_symlink_rechazado(tmp_path, monkeypatch):
     monkeypatch.setattr(hook_utils.tempfile, "tempdir", str(base))
     with pytest.raises(OSError):
         hook_utils._state_path("k")
+
+
+# --- atomic_write_json (helper compartido con statusline_setup) ---------------
+
+
+def test_atomic_write_json_roundtrip_y_sin_temporales(tmp_path):
+    dst = tmp_path / "sub" / "x.json"  # crea el dir padre si falta
+    hook_utils.atomic_write_json(dst, {"a": 1, "b": "ñ"})
+    assert json.loads(dst.read_text(encoding="utf-8")) == {"a": 1, "b": "ñ"}
+    assert "\\u00f1" in dst.read_text(encoding="utf-8")  # ASCII por defecto
+    assert [p.name for p in dst.parent.iterdir()] == ["x.json"]
+
+
+def test_atomic_write_json_formato_de_usuario(tmp_path):
+    dst = tmp_path / "settings.json"
+    obj = {"env": {"K": "ñ"}, "x": [1]}
+    hook_utils.atomic_write_json(dst, obj, indent=2, ensure_ascii=False, trailing_newline=True)
+    esperado = json.dumps(obj, indent=2, ensure_ascii=False) + "\n"
+    assert dst.read_bytes() == esperado.encode("utf-8")  # sin CRLF en Windows
+
+
+def test_atomic_write_json_falla_no_pisa_destino(tmp_path, monkeypatch):
+    """Si el replace falla, el destino previo queda intacto, no queda temporal
+    y el OSError se propaga (el llamador decide)."""
+    dst = tmp_path / "y.json"
+    dst.write_text('{"viejo": true}', encoding="utf-8")
+
+    def boom(src, dstp):
+        raise OSError("replace fallo")
+
+    monkeypatch.setattr(hook_utils.os, "replace", boom)
+    with pytest.raises(OSError):
+        hook_utils.atomic_write_json(dst, {"nuevo": True})
+    assert dst.read_text(encoding="utf-8") == '{"viejo": true}'
+    assert [p.name for p in tmp_path.iterdir()] == ["y.json"]
+
+
+def test_atomic_write_text_surrogate_borra_tmp(tmp_path):
+    """Un surrogate suelto (utf-8 no lo codifica) re-lanza UnicodeError SIN dejar
+    el .tmp huerfano y sin tocar el destino."""
+    dst = tmp_path / "s.json"
+    dst.write_text("{}", encoding="utf-8")
+    with pytest.raises(UnicodeError):
+        hook_utils.atomic_write_text(dst, '{"x": "\ud800"}')
+    assert dst.read_text(encoding="utf-8") == "{}"
+    assert [p.name for p in tmp_path.iterdir()] == ["s.json"]
+
+
+def test_atomic_write_text_symlink_escribe_en_destino(tmp_path):
+    """os.replace sobre un symlink lo reemplazaria por un archivo comun: el helper
+    resuelve el path y escribe en el DESTINO, dejando el link intacto."""
+    target = tmp_path / "real" / "settings.json"
+    target.parent.mkdir()
+    target.write_text("{}", encoding="utf-8")
+    link = tmp_path / "settings.json"
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("sin permiso para crear symlinks")
+    hook_utils.atomic_write_text(link, '{"a": 1}')
+    assert link.is_symlink()
+    assert target.read_text(encoding="utf-8") == '{"a": 1}'

@@ -1,0 +1,29 @@
+{
+  "name": "Templado",
+  "base": "dark",
+  "overrides": {
+    "text": "#E8E6DC",
+    "inverseText": "#141414",
+    "inactive": "#A8A49A",
+    "subtle": "#8C877D",
+    "promptBorder": "#4A4640",
+    "suggestion": "#a3a8b8",
+    "remember": "#a3a8b8",
+    "success": "#8fb08f",
+    "error": "#d08a8a",
+    "warning": "#c8ad74",
+    "merged": "#a89fc0",
+    "claude": "#D97757",
+    "permission": "#9fabc0",
+    "planMode": "#8fa8ad",
+    "autoAccept": "#ab9fc0",
+    "bashBorder": "#8c7a8c",
+    "ide": "#8c9eb0",
+    "diffAdded": "#1a2a1d",
+    "diffRemoved": "#2e1b1b",
+    "diffAddedDimmed": "#162019",
+    "diffRemovedDimmed": "#231818",
+    "diffAddedWord": "#2a4530",
+    "diffRemovedWord": "#4a2a2a"
+  }
+}

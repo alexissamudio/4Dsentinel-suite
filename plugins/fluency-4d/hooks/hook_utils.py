@@ -258,7 +258,7 @@ def load_caveman() -> dict[str, Any]:
     """
     path = Path.home() / ".claude" / "fluency4d" / "caveman.json"
     try:
-        st = json.loads(path.read_text(encoding="utf-8"))
+        st = json.loads(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, json.JSONDecodeError):
         return {}
     if not isinstance(st, dict):
@@ -279,7 +279,7 @@ def load_verify() -> dict[str, Any]:
     """
     path = Path.home() / ".claude" / "fluency4d" / "verify.json"
     try:
-        st = json.loads(path.read_text(encoding="utf-8"))
+        st = json.loads(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, json.JSONDecodeError):
         return {}
     if not isinstance(st, dict):
@@ -298,7 +298,7 @@ def load_adhd() -> dict[str, Any]:
     """
     path = Path.home() / ".claude" / "fluency4d" / "adhd.json"
     try:
-        st = json.loads(path.read_text(encoding="utf-8"))
+        st = json.loads(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, json.JSONDecodeError):
         return {}
     if not isinstance(st, dict):
@@ -350,29 +350,64 @@ def bump_stats(cwd: str, temas_nuevos: list[str], nueva_sesion: bool) -> None:
         log_debug(f"stats no disponibles: {exc}")
 
 
+def atomic_write_text(path: Path | str, text: str) -> None:
+    """Escribe `text` en `path` de forma ATOMICA (temporal en el mismo dir + replace).
+
+    Se escribe a un temporal en el MISMO directorio y luego os.replace(tmp, dst),
+    atomico en Windows y POSIX: un lector concurrente nunca ve un archivo a medio
+    escribir (torn-write). Si algo falla, borra el temporal y RE-LANZA el OSError:
+    el llamador decide si degradar (save_state) o abortar (statusline_setup).
+    Un UnicodeError (p. ej. un surrogate suelto que utf-8 no codifica) tambien
+    borra el temporal y se re-lanza. Si `path` es un symlink se escribe en su
+    DESTINO (Path.resolve): os.replace sobre el link lo reemplazaria por un
+    archivo comun. Crea el directorio padre si falta.
+    """
+    dst = Path(path).resolve()
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(dst.parent), prefix=dst.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+        os.replace(tmp, dst)
+    except (OSError, UnicodeError):
+        try:
+            os.unlink(tmp)  # limpieza best-effort si el write/replace fallo
+        except OSError:
+            pass
+        raise
+
+
+def atomic_write_json(
+    path: Path | str,
+    obj: Any,
+    *,
+    indent: int | str | None = None,
+    ensure_ascii: bool = True,
+    trailing_newline: bool = False,
+) -> None:
+    """Serializa `obj` a JSON y lo escribe atomicamente (ver atomic_write_text).
+
+    Por defecto compacto y ASCII (estado interno). Para archivos del usuario
+    (settings.json, keybindings.json) el llamador pasa indent, ensure_ascii=False
+    y trailing_newline para respetar el formato que ya tenian.
+    """
+    payload = json.dumps(obj, ensure_ascii=ensure_ascii, indent=indent)
+    if trailing_newline:
+        payload += "\n"
+    atomic_write_text(path, payload)
+
+
 def save_state(key: str, state: dict[str, Any]) -> None:
     state["_ts"] = time.time()
     path = _state_path(key)
-    payload = json.dumps(state, ensure_ascii=True)
     try:
-        # Escritura ATOMICA: se escribe a un temporal en el MISMO directorio y
-        # luego os.replace(tmp, dst) (atomico en Windows y POSIX). Asi un
-        # load_state concurrente (memory_checkpoint y doc_drift disparan en
-        # PostToolUse casi a la vez) nunca ve un JSON a medio escribir -> no hay
-        # torn-write ni JSONDecodeError espurio que devuelva {} y pierda el
-        # dedup. El lost-update residual (dos writes solapados, gana el ultimo)
-        # es benigno y equivalente al ya aceptado en bump_stats: el estado es
-        # senal de dedup best-effort, no contabilidad.
-        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                fh.write(payload)
-            os.replace(tmp, path)
-        except OSError:
-            try:
-                os.unlink(tmp)  # limpieza best-effort si el replace fallo
-            except OSError:
-                pass
-            raise
+        # Escritura ATOMICA (atomic_write_json): un load_state concurrente
+        # (memory_checkpoint y doc_drift disparan en PostToolUse casi a la vez)
+        # nunca ve un JSON a medio escribir -> no hay torn-write ni
+        # JSONDecodeError espurio que devuelva {} y pierda el dedup. El
+        # lost-update residual (dos writes solapados, gana el ultimo) es benigno
+        # y equivalente al ya aceptado en bump_stats: el estado es senal de dedup
+        # best-effort, no contabilidad.
+        atomic_write_json(path, state)
     except OSError as exc:
         log_debug(f"no se pudo guardar estado: {exc}")

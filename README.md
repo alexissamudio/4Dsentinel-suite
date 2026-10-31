@@ -85,6 +85,10 @@ no vienen de un mal prompt, sino de un mal **reparto***. Las cuatro dimensiones:
 - **`/handoff`** — genera el handoff de cierre de sesión (git + plan activo + estado), **sugiere** el
   commit (no lo ejecuta) y copia un resumen al portapapeles para arrancar limpio en una sesión nueva.
   Es la contraparte de escritura de `/4d-status`.
+- **`/statusline setup|remove|status`** — instala (con backup y sin pisar lo ajeno), quita o
+  revisa la barra de estado. Requiere Node.js. Solo Claude Code.
+- **`/barra`** — modo (`simple`/`normal`/`experto`), avisos y tema de la barra de estado.
+- **`/fluency-4d:panel`** — Panel 4D al lado del chat (solo Claude Code).
 
 **Hooks (corren solos, en segundo plano):**
 - **`plan_calibrator`** — al entrar en *plan mode*, clasifica la tarea (grande vs chica) y calibra

@@ -45,6 +45,47 @@ Requisito: [uv](https://docs.astral.sh/uv/) instalado (los hooks son scripts Pyt
 4. Trabajá normal: al cruzar el 50% de contexto el plugin dispara el checkpoint de
    memoria (estado + lecciones), y en la próxima sesión te recuerda retomarlos.
 
+## Barra de estado y Panel 4D
+
+> **Solo Claude Code.** La barra, `/barra`, `/statusline` y el panel no existen en los
+> bundles de Codex ni OpenCode (`dist/`).
+
+Requisito extra: **[Node.js](https://nodejs.org) LTS** en el `PATH` (solo para la barra
+y el panel; el resto del plugin sigue necesitando únicamente uv).
+
+- **`/statusline setup`** — chequea Node, copia el script a la ruta fija
+  `~/.claude/fluency4d/statusline.js` y configura `statusLine` con la ruta absoluta.
+  Antes hace backup fechado de `settings.json` y `keybindings.json`
+  (`~/.claude/fluency4d/backups/`, quedan los 3 más recientes). Si ya tenés otro
+  `statusLine`, no lo pisa: te pregunta antes de reemplazarlo (y guarda el previo).
+  Si `CLAUDE_CODE_PLUGIN_DIRS` apunta a un mod `panel-4d` local, lo quita para que el
+  panel no quede registrado dos veces. Opcionales: `--keybinding` (atajo
+  `ctrl+x ctrl+p` → panel, solo si la tecla está libre; experimental) y
+  `--copy-theme`. Todo queda anotado en `~/.claude/fluency4d/setup.json`.
+- **`/statusline remove`** — revierte exactamente lo que agregó el setup (restaura el
+  `statusLine` y el `CLAUDE_CODE_PLUGIN_DIRS` previos, quita el atajo si sigue siendo
+  el nuestro, borra la copia fija, el tema copiado con `--copy-theme` si no lo
+  editaste, y los `.orig.bak` que creó esa instalación). Si cambiaste el `statusLine`
+  después del setup, no lo toca y conserva la copia fija. Los backups fechados y los
+  `.orig.<fecha>.bak` de instalaciones anteriores quedan. Si usás `CLAUDE_CONFIG_DIR`,
+  setup y remove editan los archivos de esa carpeta.
+- **`/statusline status`** — qué está instalado y si la copia fija quedó desactualizada
+  respecto del plugin (después de actualizarlo, corré `setup` de nuevo para re-sincronizar).
+- **`/barra`** — cambia el modo (`simple` · `normal` · `experto`), silencia o reactiva
+  los avisos (`silencio` · `avisos`) o el tema de la barra. No hace falta reiniciar.
+- **`/fluency-4d:panel`** — abre el Panel 4D al lado del chat.
+- **Tema Templado** — el plugin trae `themes/templado.json` (grises cálidos, color solo
+  para el estado). Elegilo con `/theme`; en la barra, `/barra templado`.
+- **Dos umbrales de "charla larga", a propósito distintos** — la barra marca la charla
+  como larga desde `cutFraction` de la ventana (por defecto la mitad; `0.25`/`0.5`/`0.75`
+  en `statusline.json`, o `STATUSLINE_CUT_TOKENS`): es un aviso visual de cuánto
+  contexto ocupa la charla ahora. El checkpoint de memoria (`FLUENCY_4D_SAVE_PCT`,
+  default 50) es otro mecanismo: decide cuándo pedirle a Claude que guarde
+  `estado-sesion.md`, y se re-arma tras cada disparo o compactación. Pueden coincidir
+  con los defaults, pero cambiar uno no mueve el otro.
+
+Después de `/statusline setup`, reiniciá Claude Code.
+
 ## Variables de entorno
 
 | Variable | Default | Efecto |
