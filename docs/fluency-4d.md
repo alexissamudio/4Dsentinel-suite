@@ -73,7 +73,12 @@ y el panel; el resto del plugin sigue necesitando únicamente uv).
   respecto del plugin (después de actualizarlo, corré `setup` de nuevo para re-sincronizar).
 - **`/barra`** — cambia el modo (`simple` · `normal` · `experto`), silencia o reactiva
   los avisos (`silencio` · `avisos`) o el tema de la barra. No hace falta reiniciar.
-- **`/fluency-4d:panel`** — abre el Panel 4D al lado del chat.
+  Sin `statusline.json` (o sin la clave), la barra y el panel arrancan en modo
+  `experto`, en `silencio` y con el tema `templado`.
+- **`/panel`** — abre el Panel 4D al lado del chat. Ojo: los comandos de un mod no llevan
+  el prefijo del plugin (es `/panel`, sin `fluency-4d:` delante). Mientras el mod local `panel-4d`
+  esté cargado (vía `CLAUDE_CODE_PLUGIN_DIRS`), los dos compiten por `/panel` y gana el
+  último registrado; por eso `/statusline setup` quita ese mod (y `remove` lo restaura).
 - **Tema Templado** — el plugin trae `themes/templado.json` (grises cálidos, color solo
   para el estado). Elegilo con `/theme`; en la barra, `/barra templado`.
 - **Dos umbrales de "charla larga", a propósito distintos** — la barra marca la charla
@@ -84,7 +89,8 @@ y el panel; el resto del plugin sigue necesitando únicamente uv).
   `estado-sesion.md`, y se re-arma tras cada disparo o compactación. Pueden coincidir
   con los defaults, pero cambiar uno no mueve el otro.
 
-Después de `/statusline setup`, reiniciá Claude Code.
+Después de `/statusline setup`, reiniciá Claude Code. La barra se refresca cada 5 s
+(`refreshInterval` del `statusLine`) y además con cada mensaje.
 
 ## Variables de entorno
 

@@ -43,7 +43,8 @@ for (const [name, input] of [
 ]) {
   for (const mode of MODES) {
     test(`${name} en modo ${mode}: no rompe y renderiza algo`, () => {
-      const r = run({ input, mode });
+      // Con avisos: en silencio el modo simple sin datos no tiene nada que mostrar.
+      const r = run({ input, mode, avisos: true });
       assert.strictEqual(r.status, 0, r.stderr);
       assert.strictEqual(r.stderr, '');
       assert.ok(r.plain.trim().length > 0);
@@ -59,9 +60,57 @@ test('sin datos en experto: ctx sin numero', () => {
 
 test('contexto al 95%: porcentaje, tokens y aviso de charla larga', () => {
   const input = { context_window: { context_window_size: 200000, current_usage: { input_tokens: 150000, cache_read_input_tokens: 40000 } } };
-  const r = run({ input });
+  const r = run({ input, avisos: true });
   assert.strictEqual(r.status, 0, r.stderr);
   assert.match(r.plain, /ctx \S+ 95% 190\.0k\/200\.0k charla larga/);
-  const simple = run({ input, mode: 'simple' });
+  const simple = run({ input, mode: 'simple', avisos: true });
   assert.match(simple.plain, /Charla larga/);
+});
+
+test('defaults sin statusline.json: modo experto, colores de templado y ningun consejo', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { tempHome } = require('./helpers');
+  const home = tempHome();
+  const file = path.join(home, '.claude', 'fluency4d', 'statusline.json');
+  // Contexto al 95% y cache fria: con avisos habria "charla larga" y un consejo.
+  const input = {
+    model: { display_name: 'Opus' },
+    context_window: { context_window_size: 200000, current_usage: { input_tokens: 150000, cache_read_input_tokens: 40000 } },
+    prompt_cache: { warm: false, hit_ratio: 0.5, recache_tokens_if_cold: 83100, ttl: 300 },
+  };
+  const r = run({ home, input, mode: null });
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.ok(!fs.existsSync(file));
+  assert.match(r.plain, /ctx \S+ 95% 190\.0k\/200\.0k/); // experto
+  assert.ok(r.stdout.includes('\x1b[38;2;232;230;220m'), r.stdout); // templado (e8e6dc)
+  assert.ok(!r.stdout.includes('\x1b[38;2;122;162;247m'), r.stdout); // no tokyo-night
+  assert.doesNotMatch(r.plain, /charla larga|→|Todo bien/i);
+
+  // mode avisos escribe quiet:false y el consejo aparece; el mensaje dice el estado real.
+  const on = run({ home, mode: null, args: ['mode', 'avisos'] });
+  assert.match(on.plain, /modo "experto" \(avisos, tema templado\)/);
+  assert.strictEqual(JSON.parse(fs.readFileSync(file, 'utf8')).quiet, false);
+  assert.match(run({ home, input, mode: null }).plain, /charla larga/);
+
+  // mode silencio escribe quiet:true y vuelve a callar.
+  const off = run({ home, mode: null, args: ['mode', 'silencio'] });
+  assert.match(off.plain, /modo "experto" \(silencio, tema templado\)/);
+  assert.strictEqual(JSON.parse(fs.readFileSync(file, 'utf8')).quiet, true);
+  assert.doesNotMatch(run({ home, input, mode: null }).plain, /charla larga|→/);
+
+  // STATUSLINE_MODE y STATUSLINE_THEME siguen ganandole al default.
+  const env = run({ home: tempHome(), input, mode: 'normal' });
+  assert.doesNotMatch(env.plain, /ctx \S+ 95%/);
+  // run() borra STATUSLINE_THEME del env: aca se lanza a mano. nord: modelo 88c0d0 = 136;192;208.
+  const { spawnSync } = require('node:child_process');
+  const { SCRIPT } = require('./helpers');
+  const h = tempHome();
+  const themed = spawnSync(process.execPath, [SCRIPT], {
+    input: JSON.stringify(input),
+    encoding: 'utf8',
+    env: { ...process.env, HOME: h, USERPROFILE: h, STATUSLINE_THEME: 'nord' },
+    timeout: 20000,
+  });
+  assert.ok(themed.stdout.includes('\x1b[38;2;136;192;208m'), themed.stdout);
 });

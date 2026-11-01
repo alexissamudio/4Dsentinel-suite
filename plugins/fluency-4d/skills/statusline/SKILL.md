@@ -53,8 +53,9 @@ Antes de correrlo, explicá en pocas líneas qué va a tocar:
 
 Opcionales (preguntá si los quiere, no los actives solos):
 
-- `--keybinding`: atajo `ctrl+x ctrl+p` → `/fluency-4d:panel` (solo si la tecla
-  está libre). Experimental: avisá que todavía no se probó en vivo.
+- `--keybinding`: atajo `ctrl+x ctrl+p` → `/panel` (solo si la tecla
+  está libre; si ya apunta a `/panel`, avisa "ya estaba configurado" y no la
+  toca). Experimental: avisá que todavía no se probó en vivo.
 - `--copy-theme`: copia el tema Templado a `~/.claude/themes/`. Normalmente no
   hace falta porque el plugin ya lo trae.
 
@@ -63,8 +64,9 @@ Corré `setup` con los flags elegidos, en este orden: `setup [--keybinding] [--c
 que Claude Code le pide permiso al usuario). Leé el código de salida:
 
 - **0**: listo. Decí que **reinicie Claude Code**, que el tema se elige con
-  `/theme` (Templado) y que el panel se abre con `/fluency-4d:panel`. El modo de
-  la barra se cambia con `/barra`.
+  `/theme` (Templado) y que el panel se abre con `/panel` (o con `ctrl+x ctrl+p`
+  si se configuró el atajo). El modo de la barra se cambia con `/barra`. La barra
+  se refresca cada 5 s (`refreshInterval`) y además con cada mensaje.
 - **2**: ya hay un `statusLine` que no es el de fluency-4d. Mostrale el valor que
   imprimió el script y PREGUNTÁ si quiere reemplazarlo. Solo con un sí explícito,
   repetí con `--force` (el valor previo queda guardado y `remove` lo restaura).

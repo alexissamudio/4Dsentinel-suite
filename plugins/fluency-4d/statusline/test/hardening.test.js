@@ -32,7 +32,7 @@ for (const key of ['toString', '__proto__', 'valueOf', 'constructor']) {
   });
 }
 
-test('STATUSLINE_THEME=valueOf se ignora (tokyo-night)', () => {
+test('STATUSLINE_THEME=valueOf se ignora (templado)', () => {
   // run() borra STATUSLINE_THEME del env: aca se lanza a mano.
   const home = tempHome();
   const r = spawnSync(process.execPath, [SCRIPT], {
@@ -43,8 +43,8 @@ test('STATUSLINE_THEME=valueOf se ignora (tokyo-night)', () => {
   });
   assert.strictEqual(r.status, 0, r.stderr);
   assert.doesNotMatch(r.stdout, /undefined/);
-  // tokyo-night: modelo en 7aa2f7 = 122;162;247
-  assert.ok(r.stdout.includes('\x1b[38;2;122;162;247m'), r.stdout);
+  // templado: modelo en e8e6dc = 232;230;220
+  assert.ok(r.stdout.includes('\x1b[38;2;232;230;220m'), r.stdout);
 });
 
 test('theme "toString" en statusline.json se ignora', () => {
@@ -52,7 +52,7 @@ test('theme "toString" en statusline.json se ignora', () => {
   fs.writeFileSync(path.join(flagsDir(home), 'statusline.json'), '{"theme":"toString","mode":"normal"}');
   const r = run({ home, mode: null, input: {} });
   assert.strictEqual(r.status, 0, r.stderr);
-  assert.ok(r.stdout.includes('\x1b[38;2;122;162;247m'));
+  assert.ok(r.stdout.includes('\x1b[38;2;232;230;220m'), r.stdout);
 });
 
 // --- 4. Caracteres de control ---

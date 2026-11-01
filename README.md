@@ -87,8 +87,9 @@ no vienen de un mal prompt, sino de un mal **reparto***. Las cuatro dimensiones:
   Es la contraparte de escritura de `/4d-status`.
 - **`/statusline setup|remove|status`** — instala (con backup y sin pisar lo ajeno), quita o
   revisa la barra de estado. Requiere Node.js. Solo Claude Code.
-- **`/barra`** — modo (`simple`/`normal`/`experto`), avisos y tema de la barra de estado.
-- **`/fluency-4d:panel`** — Panel 4D al lado del chat (solo Claude Code).
+- **`/barra`** — modo (`simple`/`normal`/`experto`), avisos y tema de la barra de estado
+  (por defecto: `experto`, en silencio y con el tema `templado`).
+- **`/panel`** — Panel 4D al lado del chat (solo Claude Code).
 
 **Hooks (corren solos, en segundo plano):**
 - **`plan_calibrator`** — al entrar en *plan mode*, clasifica la tarea (grande vs chica) y calibra

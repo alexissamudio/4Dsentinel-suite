@@ -61,7 +61,7 @@ El env del subprocess redirige TODO lo persistente a `tmp_path`:
 
 ## Panel 4D (hooks module TSX, gate local)
 
-El panel (`/fluency-4d:panel`) es un hooks module del engine de mods de Claude
+El panel (`/panel`) es un hooks module del engine de mods de Claude
 Code, declarado en `plugins/fluency-4d/hooks/hooks.json` bajo `"modules"` junto
 a los hooks Python. Archivos (todos relativos a `plugins/fluency-4d/`):
 

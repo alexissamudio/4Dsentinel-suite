@@ -92,5 +92,5 @@ test('mode invalido: muestra Uso, sale 1 y no escribe', () => {
   assert.ok(!fs.existsSync(path.join(home, '.claude', 'fluency4d', 'statusline.json')));
   const bare = run({ home, mode: null, args: ['mode'] });
   assert.strictEqual(bare.status, 0);
-  assert.match(bare.plain, /Modo actual: normal/);
+  assert.match(bare.plain, /Modo actual: experto \(silencio, tema templado\)/);
 });
