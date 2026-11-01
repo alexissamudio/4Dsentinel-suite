@@ -3,7 +3,7 @@ import type { Color, EngineInterface, Register, RenderChildren } from 'claude-co
 
 import type { Panel4dLive, Panel4dPrefs, Panel4dTab, Panel4dUi } from '../types'
 
-// Panel 4D (parte de fluency-4d): /fluency-4d:panel abre un pane lateral (dock
+// Panel 4D (parte de fluency-4d): /panel abre un pane lateral (dock
 // en fullscreen, inline arriba del prompt si no) con pestañas. El comando se
 // registra como 'panel'; el namespace lo pone el plugin. Los ajustes se editan
 // en un BORRADOR ($.state) y
@@ -667,8 +667,9 @@ async function loadPrefs($: $): Promise<Panel4dPrefs> {
 
 // --- Lecturas para mostrar ---
 
-const barMode = (st: Json) => (BAR_MODES.some(m => m === st.mode) ? String(st.mode) : 'normal')
-const barTheme = (st: Json) => (THEMES.some(t => t === st.theme) ? String(st.theme) : 'tokyo-night')
+// Mismos defaults que statusline.js: experto, templado y silencio (salvo quiet:false).
+const barMode = (st: Json) => (BAR_MODES.some(m => m === st.mode) ? String(st.mode) : 'experto')
+const barTheme = (st: Json) => (THEMES.some(t => t === st.theme) ? String(st.theme) : 'templado')
 
 function modeValue(st: Json, levels: readonly string[]): string {
   // Igual que la barra y hook_utils: sin un nivel válido el modo cuenta como apagado.
@@ -769,7 +770,7 @@ async function loadSnapshot(
   const cur: Record<string, string> = {
     'bar.mode': barMode(st),
     'bar.theme': barTheme(st),
-    'bar.quiet': st.quiet === true ? 'silencio' : 'avisos',
+    'bar.quiet': st.quiet === false ? 'avisos' : 'silencio',
     // ADHD cede ante caveman (adhd_injector.py): con caveman activo, ADHD no corre.
     'mode.adhd': cavemanValue === 'off' ? modeValue(adhd, ADHD_LEVELS) : 'off',
     'mode.caveman': cavemanValue,
@@ -1056,7 +1057,7 @@ async function save($: $): Promise<boolean> {
 
     const back = await readSoft($, 'statusline')
     const note =
-      'cutFraction' in bar && back.quiet === true
+      'cutFraction' in bar && back.quiet !== false
         ? ' (en silencio no se ve el aviso de charla larga)'
         : ''
     $.ui.toast(
@@ -1140,12 +1141,15 @@ export const register: Register = on => {
         argumentHint: `[${TABS.map(([id]) => id).join('|')}]`,
       })
     } catch (err) {
-      $.ui.log(`fluency-4d: no pude registrar /fluency-4d:panel: ${errText(err)}`, { to: 'debug' })
+      $.ui.log(`fluency-4d: no pude registrar /panel: ${errText(err)}`, { to: 'debug' })
     }
     await loadPrefs($).catch(() => undefined)
     // Aviso de caché por vencer: con TTL de 1 h avisa a 5 min; con 5 min, al último minuto.
     $.clock.every(30_000, () => {
       void (async () => {
+        // Releer el TTL del archivo: tras recargar el mod, `prefs` puede volver
+        // al default (5 min) y session.start no se repite -> aviso falso.
+        await loadPrefs($).catch(() => undefined)
         const p = await read($, prefs)
         const { lastTurnAt } = await read($, live)
         if (!p.notify || lastTurnAt === undefined || cacheToastFor === lastTurnAt) return
@@ -1161,7 +1165,7 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // /fluency-4d:panel [pestaña]: abre (o enfoca) el pane. Si no estaba abierto, el
+  // /panel [pestaña]: abre (o enfoca) el pane. Si no estaba abierto, el
   // borrador arranca vacío = valores reales.
   on('command.run', { command: 'panel' }, async ($, e) => {
     const wanted = (e.args ?? '').trim()
@@ -1219,7 +1223,7 @@ export const register: Register = on => {
   }).catch(($, e, next) => {
     // Falló leer o escribir el estado del pane. El cierre nunca queda colgado:
     // con next ya corrido el pane se cerró y next(e) repite ese resultado (solo
-    // faltó limpiar el borrador, que el próximo /fluency-4d:panel descarta).
+    // faltó limpiar el borrador, que el próximo /panel descarta).
     // Sin next no se pudo ver si había cambios sin guardar: se cierra igual y
     // se avisa, para que un borrador no se pierda en silencio.
     if (!next.called) {

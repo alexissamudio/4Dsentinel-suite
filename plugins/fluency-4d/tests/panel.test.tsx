@@ -10,7 +10,7 @@ const PLUGIN = 'fluency-4d'
 // puede llegar con letra de unidad); se normalizan para que el home falso sea neutro.
 const slash = (path: string) => path.replace(/\\/g, '/').replace(/^[A-Za-z]:(?=\/)/, '')
 
-// /fluency-4d:panel como si lo tipeara la persona (el evento trae el nombre
+// /panel como si lo tipeara la persona (el evento trae el nombre
 // registrado, sin namespace).
 const panel = (args = '') => ({
   command: 'panel',
@@ -168,7 +168,7 @@ function engine(
 
 const SURFACES = ['terminal', 'desktop'] as const
 
-test('/fluency-4d:panel abre el pane con pestañas, filas alineadas y pie de 3 botones', async ($, on) => {
+test('/panel abre el pane con pestañas, filas alineadas y pie de 3 botones', async ($, on) => {
   const eng = engine(on)
   await $.command.run(panel())
 
@@ -208,6 +208,46 @@ test('/fluency-4d:panel abre el pane con pestañas, filas alineadas y pie de 3 b
     expect(await ui.find({ type: 'Text', text: /^Sin cambios/ })).toBeDefined()
     await ui.unmount()
   }
+})
+
+test('sin statusline.json el panel muestra los defaults de la barra (experto, templado, silencio) y no escribe de más', async ($, on) => {
+  const eng = engine(on)
+  delete eng.files[`${DIR}/statusline.json`]
+  await $.command.run(panel('barra'))
+  const ui = await $.ui.mount({
+    plugin: PLUGIN,
+    component: 'Pane',
+    requestId: PANE_ID,
+    surface: 'terminal',
+    props: paneProps(),
+  })
+  expect((await ui.find({ type: 'Button', key: 'bar.mode' }))?.text).toMatch(/‹ experto › *$/)
+  expect((await ui.find({ type: 'Button', key: 'bar.theme' }))?.text).toMatch(/‹ templado › *$/)
+  expect((await ui.find({ type: 'Button', key: 'bar.quiet' }))?.text).toMatch(/‹ silencio › *$/)
+  expect(await ui.find({ type: 'Text', text: /^Sin cambios/ })).toBeDefined()
+  // Guardar sin cambios no crea el archivo.
+  await ui.press({ key: 'save' })
+  expect(`${DIR}/statusline.json` in eng.files).toBe(false)
+  // Cambiar solo el modo escribe solo el modo (los defaults no se materializan).
+  await ui.press({ key: 'bar.mode' }) // experto -> simple
+  await ui.press({ key: 'save' })
+  expect(eng.json('statusline')).toEqual({ mode: 'simple' })
+  await ui.unmount()
+
+  // Archivo con claves faltantes: cada una cae a su default.
+  eng.files[`${DIR}/statusline.json`] = '{"cutFraction":0.25}'
+  await $.command.run(panel('barra'))
+  const ui2 = await $.ui.mount({
+    plugin: PLUGIN,
+    component: 'Pane',
+    requestId: PANE_ID,
+    surface: 'terminal',
+    props: paneProps(),
+  })
+  expect((await ui2.find({ type: 'Button', key: 'bar.mode' }))?.text).toMatch(/‹ experto › *$/)
+  expect((await ui2.find({ type: 'Button', key: 'bar.theme' }))?.text).toMatch(/‹ templado › *$/)
+  expect((await ui2.find({ type: 'Button', key: 'bar.quiet' }))?.text).toMatch(/‹ silencio › *$/)
+  await ui2.unmount()
 })
 
 test('cambiar un valor NO escribe hasta Guardar; Guardar escribe y preserva claves ajenas', async ($, on) => {
@@ -299,7 +339,7 @@ test('Salir con pendientes pide confirmación; Descartar no escribe', async ($, 
   await ui.unmount()
 })
 
-test('sin pendientes, Salir cierra directo y el próximo /fluency-4d:panel arranca limpio', async ($, on) => {
+test('sin pendientes, Salir cierra directo y el próximo /panel arranca limpio', async ($, on) => {
   const eng = engine(on)
   await $.command.run(panel())
   const ui = await $.ui.mount({
@@ -1286,3 +1326,33 @@ for (const c of HOME_CASES) {
     await ui.unmount()
   })
 }
+
+// Recarga del mod: el atom `prefs` queda en el default (TTL 5 min) aunque
+// panel4d.json diga 60, y session.start no se repite. El timer del aviso tiene
+// que releer el archivo; si no, avisa en falso ~4 min después del último turno.
+test('aviso de caché: tras recargar el mod usa el TTL real del archivo (60 min), no el default', async ($, on) => {
+  const eng = engine(on)
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('turn.complete', () => ({ text: '' }))
+  // session.start con el archivo vacío deja el atom en el default (5 min)...
+  await $.session.start({ cwd: HOME, surface: 'terminal', isInteractive: true })
+  // ...y el TTL real aparece en el archivo sin que session.start se repita.
+  eng.files[`${DIR}/panel4d.json`] = '{"notify":true,"cacheTtlMin":60}'
+  await $.turn.complete({
+    answer: 'ok',
+    durationMs: 1,
+    isAborted: false,
+    turnId: 't1',
+    reason: 'answer',
+  } as never)
+  const cacheToasts = () => eng.toasts.filter(t => /La caché vence/.test(t))
+
+  await eng.clock.advance(4.5 * 60_000)
+  expect(cacheToasts()).toEqual([])
+
+  await eng.clock.advance(56 * 60_000 - 4.5 * 60_000)
+  expect(cacheToasts().length).toBe(1)
+  const mins = Number(/~(\d+) min/.exec(cacheToasts()[0] ?? '')?.[1])
+  expect(mins).toBeGreaterThanOrEqual(1)
+  expect(mins).toBeLessThanOrEqual(4)
+})

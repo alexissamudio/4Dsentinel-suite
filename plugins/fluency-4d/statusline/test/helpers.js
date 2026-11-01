@@ -20,8 +20,10 @@ function flagsDir(home) {
 }
 
 // Corre la barra. input: string crudo para stdin (objeto -> JSON.stringify).
-function run({ home, input = '', mode = 'experto', args = [], env = {} } = {}) {
+// avisos: true escribe statusline.json con quiet:false (el default es silencio).
+function run({ home, input = '', mode = 'experto', args = [], env = {}, avisos = false } = {}) {
   const h = home || tempHome();
+  if (avisos) fs.writeFileSync(path.join(flagsDir(h), 'statusline.json'), '{"quiet":false}');
   const childEnv = { ...process.env, HOME: h, USERPROFILE: h, ...env };
   delete childEnv.STATUSLINE_THEME;
   delete childEnv.STATUSLINE_CUT_TOKENS;

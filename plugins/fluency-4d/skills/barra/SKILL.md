@@ -3,7 +3,6 @@ name: barra
 description: "Cambia el modo de la barra de estado de fluency-4d (simple | normal | experto), silencia o reactiva sus avisos (silencio | avisos) o cambia su tema (templado | tokyo-night | catppuccin | nord | gruvbox). Requiere la barra instalada con /statusline setup. Triggers on: '/barra', '/barra experto', '/barra silencio', 'modo de la barra'."
 argument-hint: "[simple|normal|experto|silencio|avisos|templado|tokyo-night|catppuccin|nord|gruvbox]"
 allowed-tools:
-  - 'Bash(test -f "$HOME/.claude/fluency4d/statusline.js")'
   - 'Bash(node "$HOME/.claude/fluency4d/statusline.js" mode)'
   - 'Bash(node "$HOME/.claude/fluency4d/statusline.js" mode simple)'
   - 'Bash(node "$HOME/.claude/fluency4d/statusline.js" mode normal)'
@@ -35,19 +34,7 @@ Del texto del usuario, resolvé UNA opción de esta lista cerrada:
 Sin argumento, o con algo fuera de la lista → no pases nada (el script muestra el
 estado actual y el uso). NUNCA pases texto libre del usuario al comando.
 
-## 2. Verificá la copia fija
-
-La ruta es `<home>/.claude/fluency4d/statusline.js`, con el home del usuario
-resuelto (en Bash: `$HOME`). Comprobá que exista:
-
-```bash
-test -f "$HOME/.claude/fluency4d/statusline.js"
-```
-
-Si NO existe: decí en 1 línea que la barra no está instalada y que corra
-`/statusline setup`. No sigas.
-
-## 3. Ejecutá
+## 2. Ejecutá
 
 ```bash
 node "$HOME/.claude/fluency4d/statusline.js" mode <opcion>
@@ -55,20 +42,24 @@ node "$HOME/.claude/fluency4d/statusline.js" mode <opcion>
 
 (sin `<opcion>` si en el paso 1 no hubo una válida).
 
-Escribí los comandos de los pasos 2 y 3 EXACTAMENTE así: una línea, `$HOME` sin
+Escribí el comando EXACTAMENTE así: una línea, `$HOME` sin
 expandir, comillas dobles en la ruta, un espacio entre palabras y nada antes ni
 después (sin `cd`, `&&`, pipes ni redirecciones). `allowed-tools` aprueba solo
 esas formas, una por opción de la lista cerrada; cualquier otra pide permiso.
 
-## 4. Confirmá
+## 3. Confirmá
 
+- Si la salida dice `Cannot find module` (la copia fija `~/.claude/fluency4d/statusline.js`
+  no existe): decí en 1 línea que la barra no está instalada y que corra
+  `/statusline setup`. No reintentes.
 - Si la salida dice "Status line en modo ...": confirmá en UNA línea corta el
-  modo, el estado de avisos y el tema activos, sin explicar nada más.
+  modo, el estado de avisos y el tema activos, y que el cambio se ve en la barra en
+  unos segundos (se refresca cada 5 s), sin explicar nada más.
 - Si dice "Uso:" (sin opción o inválida): mostrá el modo actual y las opciones:
   simple (semáforo y una acción), normal (barras con palabras), experto (todos
-  los números); silencio (oculta consejos y etiquetas de aviso, los números siguen) y
-  avisos (los vuelve a mostrar); temas: templado (grises, color solo para el
-  estado), tokyo-night (default), catppuccin, nord, gruvbox.
+  los números, default); silencio (oculta consejos y etiquetas de aviso, los números
+  siguen; default) y avisos (los muestra); temas: templado (grises, color solo para el
+  estado; default), tokyo-night, catppuccin, nord, gruvbox.
 
 ## Reglas
 

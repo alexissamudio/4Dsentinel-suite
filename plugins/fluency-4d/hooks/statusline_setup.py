@@ -10,8 +10,9 @@ Vive en hooks/ para compartir hook_utils (escritura atomica) y quedar bajo
 ruff, mypy y coverage igual que los hooks.
 
 - setup: chequea node (>= 18), copia statusline/statusline.js a la ruta fija
-  ~/.claude/fluency4d/statusline.js y agrega SOLO lo que falta: statusLine (si no
-  hay otro; un statusLine ajeno sale con codigo 2 salvo --force), quita
+  ~/.claude/fluency4d/statusline.js y agrega SOLO lo que falta: statusLine con
+  refreshInterval (si no hay otro; un statusLine ajeno sale con codigo 2 salvo
+  --force; al nuestro de una version previa le agrega el refreshInterval), quita
   env.CLAUDE_CODE_PLUGIN_DIRS si apunta a un mod panel-4d local, y opcionalmente
   el atajo (--keybinding) y el tema (--copy-theme). ANTES de tocar nada escribe
   ~/.claude/fluency4d/setup.json con la intencion, los valores previos y el texto
@@ -72,8 +73,20 @@ EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_CONFLICT = 2
 
+# refreshInterval del statusLine (segundos): Claude Code re-ejecuta la barra cada N s
+# ademas de con cada mensaje. Compromiso entre feedback rapido (el modo elegido en el
+# Panel 4D, "vence en Nm" de la cache, "vuelve HH:MM" del plan) y costo: un proceso
+# node cada 5 s. Si el usuario lo cambia a mano, setup no lo pisa.
+REFRESH_INTERVAL_S = 5
+
 KEYBINDING_KEY = "ctrl+x ctrl+p"
-KEYBINDING_CMD = "command:fluency-4d:panel"
+KEYBINDING_CMD = "command:panel"
+# Compatibilidad: el setup de 0.22.0 registraba el atajo como command:fluency-4d:panel,
+# un comando que no existe (los comandos de un mod no llevan el prefijo del plugin).
+# remove lo sigue quitando y setup lo migra a KEYBINDING_CMD. No borrar mientras
+# puedan quedar setup.json de 0.22.0.
+LEGACY_KEYBINDING_CMD = "command:fluency-4d:panel"
+KNOWN_KEYBINDING_CMDS = (KEYBINDING_CMD, LEGACY_KEYBINDING_CMD)
 KEYBINDING_CONTEXT = "Chat"
 KEYBINDINGS_SCHEMA = "https://www.schemastore.org/claude-code-keybindings.json"
 PLUGIN_DIRS_KEY = "CLAUDE_CODE_PLUGIN_DIRS"
@@ -213,12 +226,15 @@ def _legacy_command(copy: Path) -> str:
 
 
 def points_to_ours(value: object, copy: Path) -> bool:
-    """True solo si el comando es EXACTAMENTE el que generamos (barras normalizadas).
+    """True solo si es `type: command` y el comando es EXACTAMENTE el que generamos.
 
-    Un wrapper ajeno que mencione la ruta (p. ej. `bash -c "node ... | otro"`) NO
-    es nuestro: setup no lo pisa sin --force y remove no lo borra.
+    Compara solo `type` y `command` (barras normalizadas): el resto de las claves
+    (p. ej. refreshInterval, presente o no, con nuestro valor o el del usuario) no
+    cambia que sea nuestro. Un wrapper ajeno que mencione la ruta (p. ej.
+    `bash -c "node ... | otro"`) NO es nuestro: setup no lo pisa sin --force y remove
+    no lo borra.
     """
-    if not isinstance(value, dict):
+    if not isinstance(value, dict) or value.get("type") != "command":
         return False
     command = value.get("command")
     if not isinstance(command, str):
@@ -625,7 +641,10 @@ def add_keybinding(kb: JsonDoc) -> dict[str, Any] | None:
         if block.get("context") not in (KEYBINDING_CONTEXT, "Global"):
             continue
         bound = block["bindings"].get(KEYBINDING_KEY)
-        if bound == KEYBINDING_CMD and block.get("context") == KEYBINDING_CONTEXT:
+        if bound == KEYBINDING_CMD:
+            # Ya apunta al panel (p. ej. lo dejo el mod local panel-4d): no es conflicto,
+            # pero tampoco es nuestro, asi que remove no lo borra.
+            print(f"El atajo {KEYBINDING_KEY} -> /panel ya estaba configurado; no se toca.")
             return {"block_created": False, "file_created": False, "preexisting": True}
         if bound is not None:
             print(f"AVISO: el atajo {KEYBINDING_KEY} ya esta ocupado ({bound}); no se toca.")
@@ -641,14 +660,27 @@ def add_keybinding(kb: JsonDoc) -> dict[str, Any] | None:
     return {"block_created": True, "file_created": not kb.existed}
 
 
+def migrate_keybinding(kb: JsonDoc) -> bool:
+    """Pasa el atajo de 0.22.0 (LEGACY_KEYBINDING_CMD) a KEYBINDING_CMD. True si cambio."""
+    for block in _chat_blocks(kb):
+        if block.get("context") != KEYBINDING_CONTEXT:
+            continue
+        if block["bindings"].get(KEYBINDING_KEY) == LEGACY_KEYBINDING_CMD:
+            block["bindings"][KEYBINDING_KEY] = KEYBINDING_CMD
+            return True
+    return False
+
+
 def remove_keybinding(kb: JsonDoc, rec: dict[str, Any]) -> str:
     """Devuelve "removed", "already" (la tecla ya no esta) o "conflict"."""
+    ours = rec.get("command")
+    expected = ours if ours in KNOWN_KEYBINDING_CMDS else KEYBINDING_CMD
     bindings = kb.data.get("bindings")
     blocks = [b for b in _chat_blocks(kb) if b.get("context") == KEYBINDING_CONTEXT]
     if not any(KEYBINDING_KEY in b["bindings"] for b in blocks):
         return "already"
     for block in blocks:
-        if block["bindings"].get(KEYBINDING_KEY) != KEYBINDING_CMD:
+        if block["bindings"].get(KEYBINDING_KEY) != expected:
             continue
         del block["bindings"][KEYBINDING_KEY]
         if not block["bindings"] and rec.get("block_created") and isinstance(bindings, list):
@@ -727,7 +759,10 @@ def cmd_setup(args: argparse.Namespace) -> int:
     owned_raw = record.get("orig_backups")
     owned_before = [n for n in owned_raw if n in ORIG_NAMES] if isinstance(owned_raw, list) else []
     settings = load_doc(settings_path())
-    kb = load_doc(keybindings_path()) if args.keybinding else None
+    old_kb = record.get("keybinding")
+    legacy_kb = isinstance(old_kb, dict) and old_kb.get("command") == LEGACY_KEYBINDING_CMD
+    kb_wanted = args.keybinding or (legacy_kb and keybindings_path().exists())
+    kb = load_doc(keybindings_path()) if kb_wanted else None
     copy = copy_path()
     command = our_command(copy)
     had_key = "statusLine" in settings.data
@@ -746,12 +781,29 @@ def cmd_setup(args: argparse.Namespace) -> int:
             "had_previous": current is not None,
             "previous": current,
         }
-        settings.data["statusLine"] = {"type": "command", "command": command}
-        msgs.append(f"statusLine -> {command}")
+        settings.data["statusLine"] = {
+            "type": "command",
+            "command": command,
+            "refreshInterval": REFRESH_INTERVAL_S,
+        }
+        msgs.append(f"statusLine -> {command} (refresco cada {REFRESH_INTERVAL_S} s)")
     else:
-        record.setdefault("statusline", {"had_key": False, "had_previous": False, "previous": None})
-        if isinstance(current, dict) and current.get("command") != command:
-            settings.data["statusLine"] = {**current, "command": command}  # migra la forma vieja
+        sl_rec = record.setdefault(
+            "statusline", {"had_key": False, "had_previous": False, "previous": None}
+        )
+        if isinstance(current, dict):
+            migrated = dict(current)
+            if current.get("command") != command:
+                migrated["command"] = command  # migra la forma vieja (comillas dobles)
+            if "refreshInterval" not in current:
+                # Instalacion previa (<= 0.22.0) sin refresco: se agrega. Si el usuario
+                # ya puso su propio valor, se respeta. El cambio queda en settings_doc
+                # (remove vuelve al texto original byte a byte).
+                migrated["refreshInterval"] = REFRESH_INTERVAL_S
+                if isinstance(sl_rec, dict):
+                    sl_rec["refresh_added"] = True
+                msgs.append(f"statusLine: agregado refreshInterval {REFRESH_INTERVAL_S} s.")
+            settings.data["statusLine"] = migrated
 
     pd_rec = strip_panel_mod(settings)
     if pd_rec is not None:
@@ -766,15 +818,19 @@ def cmd_setup(args: argparse.Namespace) -> int:
         if not settings.existed:
             record["settings_created"] = True
     kb_changed = False
-    if kb is not None:
+    if kb is not None and legacy_kb and isinstance(old_kb, dict):
+        if migrate_keybinding(kb):
+            record.setdefault("keybindings_doc", kb.snapshot())
+            kb_changed = True
+            msgs.append(f"Atajo {KEYBINDING_KEY} migrado a /panel (el de 0.22.0 no existia).")
+            old_kb["command"] = KEYBINDING_CMD
+    if kb is not None and args.keybinding:
         kb_rec = add_keybinding(kb)
         if kb_rec is not None and not kb_rec.pop("preexisting", False):
             record["keybinding"] = {"key": KEYBINDING_KEY, "command": KEYBINDING_CMD, **kb_rec}
             record.setdefault("keybindings_doc", kb.snapshot())
             kb_changed = True
-            msgs.append(
-                f"Atajo {KEYBINDING_KEY} -> /fluency-4d:panel (contexto {KEYBINDING_CONTEXT})."
-            )
+            msgs.append(f"Atajo {KEYBINDING_KEY} -> /panel (contexto {KEYBINDING_CONTEXT}).")
 
     # .orig.bak: solo los que crea ESTA instalacion quedan anotados (remove borra esos).
     owned = list(owned_before)
@@ -973,7 +1029,12 @@ def cmd_status(args: argparse.Namespace) -> int:
         if current is None:
             print("statusLine: sin configurar")
         elif points_to_ours(current, copy):
-            print("statusLine: apunta a la copia fija de fluency-4d")
+            interval = current.get("refreshInterval")
+            if interval is None:
+                refresco = "sin refreshInterval: solo con cada mensaje; corre setup"
+            else:
+                refresco = f"refresco cada {json.dumps(interval, ensure_ascii=True)} s"
+            print(f"statusLine: apunta a la copia fija de fluency-4d ({refresco})")
         else:
             print("statusLine: otro comando -> " + json.dumps(current, ensure_ascii=True))
     except SetupError as exc:

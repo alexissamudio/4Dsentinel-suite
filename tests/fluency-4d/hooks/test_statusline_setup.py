@@ -125,12 +125,13 @@ def test_setup_status_remove_ciclo_limpio(run, home):
     assert s["statusLine"] == {
         "type": "command",
         "command": "node " + shlex.quote(copy.resolve().as_posix()),
+        "refreshInterval": 5,
     }
     assert "\\" not in s["statusLine"]["command"]
     assert "CLAUDE_CODE_PLUGIN_DIRS" not in s["env"] and s["env"]["FOO"] == "bar"
     assert s["nota"] == "acentos: canción"
     chat = read(kb(home))["bindings"][0]["bindings"]
-    assert chat["ctrl+x ctrl+p"] == "command:fluency-4d:panel"
+    assert chat["ctrl+x ctrl+p"] == "command:panel"
     assert (home / ".claude" / "themes" / "templado.json").is_file()
     rec = read(fdir(home) / "setup.json")
     assert rec["version"] == read(PLUGIN_DIR / ".claude-plugin" / "plugin.json")["version"]
@@ -141,6 +142,7 @@ def test_setup_status_remove_ciclo_limpio(run, home):
     st = run("status")
     assert st.returncode == 0
     assert "sincronizada" in st.stdout and "apunta a la copia fija" in st.stdout
+    assert "refresco cada 5 s" in st.stdout
     assert "SUGERENCIA" not in st.stdout
 
     r = run("remove")
@@ -503,7 +505,69 @@ def test_comando_legacy_con_comillas_dobles_se_reconoce_y_migra(run, home):
     )
     r = run("setup")
     assert r.returncode == 0, r.stdout
-    assert read(settings(home))["statusLine"]["command"] == "node " + shlex.quote(copy)
+    assert read(settings(home))["statusLine"] == {
+        "type": "command",
+        "command": "node " + shlex.quote(copy),
+        "refreshInterval": 5,
+    }
+
+
+# --- refreshInterval: setup limpio, migracion de 0.22.0 y valor del usuario -------------
+
+
+def _ours(home: Path) -> dict:
+    copy = (fdir(home) / "statusline.js").resolve().as_posix()
+    return {"type": "command", "command": "node " + shlex.quote(copy)}
+
+
+def test_setup_migra_statusline_propio_sin_refresh_y_remove_lo_revierte(run, home):
+    # Instalacion de 0.22.0: statusLine nuestro sin refreshInterval y su setup.json.
+    settings(home).write_bytes(dump(USER_SETTINGS))
+    before = settings(home).read_bytes()
+    assert run("setup").returncode == 0
+    data = read(settings(home))
+    del data["statusLine"]["refreshInterval"]
+    settings(home).write_bytes(dump(data))
+    r = run("setup")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "agregado refreshInterval 5" in r.stdout
+    assert read(settings(home))["statusLine"] == {**_ours(home), "refreshInterval": 5}
+    assert read(fdir(home) / "setup.json")["statusline"]["refresh_added"] is True
+    assert run("setup").returncode == 0  # idempotente tras migrar
+    assert run("remove").returncode == 0
+    assert settings(home).read_bytes() == before
+
+
+def test_setup_migra_statusline_propio_sin_registro(run, home):
+    # statusLine nuestro sin refreshInterval y sin setup.json: se agrega y se registra.
+    settings(home).write_bytes(dump({**USER_SETTINGS, "statusLine": _ours(home)}))
+    before = settings(home).read_bytes()
+    r = run("setup")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert read(settings(home))["statusLine"]["refreshInterval"] == 5
+    rec = read(fdir(home) / "setup.json")
+    assert rec["settings_doc"]["text"] == before.decode("utf-8")
+    st = run("status")
+    assert "refresco cada 5 s" in st.stdout
+
+
+def test_refresh_personalizado_del_usuario_se_respeta(run, home):
+    custom = {**_ours(home), "refreshInterval": 2}
+    settings(home).write_bytes(dump({"model": "opus", "statusLine": custom}))
+    before = settings(home).read_bytes()
+    r = run("setup")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert settings(home).read_bytes() == before  # el refreshInterval 2 no se pisa
+    assert "CONFLICTO" not in r.stdout
+    st = run("status")
+    assert "apunta a la copia fija" in st.stdout and "refresco cada 2 s" in st.stdout
+
+
+def test_status_avisa_statusline_propio_sin_refresh(run, home):
+    settings(home).write_bytes(dump({"statusLine": _ours(home)}))
+    st = run("status")
+    assert st.returncode == 0
+    assert "sin refreshInterval" in st.stdout
 
 
 # --- Fix 12: allowed-tools de la skill no autoriza --force -------------------------------
@@ -540,8 +604,73 @@ def test_skill_allowed_tools_no_cubre_force():
         assert not any(_rule_matches(r, f"{base} {sub}") for r in rules), sub
 
 
+def test_atajo_tecla_libre_se_agrega_y_remove_la_quita(run, home):
+    kb(home).write_bytes(dump(USER_KB))
+    before = kb(home).read_bytes()
+    r = run("setup", "--keybinding")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "-> /panel" in r.stdout
+    assert read(kb(home))["bindings"][0]["bindings"]["ctrl+x ctrl+p"] == "command:panel"
+    assert read(fdir(home) / "setup.json")["keybinding"]["command"] == "command:panel"
+    assert run("remove").returncode == 0
+    assert kb(home).read_bytes() == before
+
+
+def test_atajo_ya_en_command_panel_no_es_conflicto_ni_nuestro(run, home):
+    # El caso real: el mod local panel-4d ya dejo ctrl+x ctrl+p -> command:panel.
+    ya = {"bindings": [{"context": "Chat", "bindings": {"ctrl+x ctrl+p": "command:panel"}}]}
+    kb(home).write_bytes(dump(ya))
+    before = kb(home).read_bytes()
+    r = run("setup", "--keybinding")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "ya estaba configurado" in r.stdout and "ocupado" not in r.stdout
+    assert kb(home).read_bytes() == before
+    assert "keybinding" not in read(fdir(home) / "setup.json")
+    assert run("remove").returncode == 0
+    assert kb(home).read_bytes() == before  # no es nuestro: remove no lo borra
+
+
+def _instalacion_022(run, home) -> bytes:
+    """Simula un setup de 0.22.0: atajo y registro con command:fluency-4d:panel.
+
+    El string viejo sigue en los tests a proposito: cubre la compatibilidad con los
+    setup.json que dejo 0.22.0 (ver LEGACY_KEYBINDING_CMD en statusline_setup.py).
+    """
+    kb(home).write_bytes(dump(USER_KB))
+    before = kb(home).read_bytes()
+    assert run("setup", "--keybinding").returncode == 0
+    legacy = "command:fluency-4d:panel"
+    data = read(kb(home))
+    data["bindings"][0]["bindings"]["ctrl+x ctrl+p"] = legacy
+    kb(home).write_bytes(dump(data))
+    rec = read(fdir(home) / "setup.json")
+    rec["keybinding"]["command"] = legacy
+    (fdir(home) / "setup.json").write_bytes(dump(rec))
+    return before
+
+
+def test_remove_quita_el_atajo_de_022(run, home):
+    before = _instalacion_022(run, home)
+    r = run("remove")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "ya no es el de fluency-4d" not in r.stdout
+    assert kb(home).read_bytes() == before
+
+
+def test_setup_migra_el_atajo_de_022(run, home):
+    before = _instalacion_022(run, home)
+    r = run("setup")  # migra aunque no se pase --keybinding
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "migrado" in r.stdout
+    assert read(kb(home))["bindings"][0]["bindings"]["ctrl+x ctrl+p"] == "command:panel"
+    assert read(fdir(home) / "setup.json")["keybinding"]["command"] == "command:panel"
+    assert run("setup", "--keybinding").returncode == 0  # idempotente tras migrar
+    assert run("remove").returncode == 0
+    assert kb(home).read_bytes() == before
+
+
 def test_atajo_no_pisa_tecla_ocupada(run, home):
-    ocupado = {"bindings": [{"context": "Chat", "bindings": {"ctrl+x ctrl+p": "command:panel"}}]}
+    ocupado = {"bindings": [{"context": "Chat", "bindings": {"ctrl+x ctrl+p": "command:otro"}}]}
     kb(home).write_bytes(dump(ocupado))
     before = kb(home).read_bytes()
     r = run("setup", "--keybinding")

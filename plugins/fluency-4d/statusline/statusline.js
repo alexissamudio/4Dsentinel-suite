@@ -6,13 +6,13 @@
 // Recibe por stdin el JSON de sesion que manda Claude Code.
 //
 // Cambiar de modo:  node statusline.js mode simple|normal|experto
-// Avisos:           node statusline.js mode silencio|avisos  (silencio = sin consejos ni etiquetas de aviso; los numeros siguen)
+// Avisos:           node statusline.js mode silencio|avisos  (silencio = sin consejos ni etiquetas de aviso; los numeros siguen; default silencio)
 //   (escribe ~/.claude/fluency4d/statusline.json; se lee en cada render, sin reiniciar)
 // Env opcionales:
-//   STATUSLINE_MODE        modo si no hay archivo (default normal)
+//   STATUSLINE_MODE        modo si no hay archivo (default experto)
 //   STATUSLINE_CUT_TOKENS  desde cuantos tokens la charla es "larga" (default: cutFraction del archivo, o mitad de la ventana)
 //   (statusline.json puede traer "cutFraction": 0.25|0.5|0.75 = fraccion de la ventana; el env tiene prioridad)
-//   STATUSLINE_THEME       tokyo-night (default) | catppuccin | nord | gruvbox | templado
+//   STATUSLINE_THEME       templado (default) | tokyo-night | catppuccin | nord | gruvbox
 //                          (tambien: node statusline.js mode <tema>, que tiene prioridad)
 const fs = require('fs');
 const os = require('os');
@@ -58,8 +58,8 @@ const hex = (h) => `\x1b[38;2;${parseInt(h.slice(0, 2), 16)};${parseInt(h.slice(
 // statusline.json se lee una sola vez por proceso (un render o un `mode`) y se
 // pasa a quien lo necesita.
 const STATE = readState();
-// Prioridad: /barra <tema> (archivo de estado) > STATUSLINE_THEME > tokyo-night.
-const THEME = [STATE.theme, process.env.STATUSLINE_THEME].find(isTheme) || 'tokyo-night';
+// Prioridad: /barra <tema> (archivo de estado) > STATUSLINE_THEME > templado.
+const THEME = [STATE.theme, process.env.STATUSLINE_THEME].find(isTheme) || 'templado';
 const palette = THEMES[THEME];
 const S = { reset: '\x1b[0m', bold: '\x1b[1m' };
 for (const [k, v] of Object.entries(palette)) S[k] = hex(v);
@@ -128,7 +128,7 @@ function sumTokens(u) {
 
 function readMode(st) {
   if (MODES.includes(st.mode)) return st.mode;
-  return MODES.includes(process.env.STATUSLINE_MODE) ? process.env.STATUSLINE_MODE : 'normal';
+  return MODES.includes(process.env.STATUSLINE_MODE) ? process.env.STATUSLINE_MODE : 'experto';
 }
 
 // Fraccion de la ventana para "charla larga": cutFraction del archivo (0 < f < 1), si no la mitad.
@@ -373,7 +373,8 @@ function advice(d, { skipHeavy = false } = {}) {
 
 const LEVEL = { ok: [glyph('ok'), () => S.ok], warn: [glyph('warn'), () => S.warn], bad: [glyph('bad'), () => S.bad] };
 
-const QUIET = STATE.quiet === true;
+// Silencio por default: los avisos se ven solo con quiet:false (`mode avisos`).
+const QUIET = STATE.quiet !== false;
 
 function adviceLines(a, { withOk }) {
   if (QUIET || (a.level === 'ok' && !withOk)) return [];
@@ -486,7 +487,7 @@ const RENDER = { simple: renderSimple, normal: renderNormal, experto: renderExpe
 if (process.argv[2] === 'mode') {
   const m = process.argv[3];
   const st = STATE;
-  const avisos = () => (st.quiet === true ? 'silencio' : 'avisos');
+  const avisos = () => (st.quiet === false ? 'avisos' : 'silencio');
   if (m === 'silencio' || m === 'avisos') {
     st.quiet = m === 'silencio';
   } else if (MODES.includes(m)) {
