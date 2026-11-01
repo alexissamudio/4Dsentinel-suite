@@ -12,6 +12,18 @@ terminar la tarea. Temas sin `rutas` no se trackean (proyectos v0.2: re-correr
 
 Matching por segmento: `src/auth` matchea `src/auth/x.py` y el archivo exacto
 `src/auth`, pero NO `src/authentication/x.py`. Case-insensitive (NTFS).
+
+Evento: PostToolUse con matcher Edit|Write|MultiEdit|NotebookEdit (hooks.json).
+Stdin: payload del evento; usa `cwd`, `tool_input.file_path` (o
+`tool_input.notebook_path`), `agent_type` y `session_id` para la clave.
+Stdout: {"hookSpecificOutput": {"hookEventName": "PostToolUse",
+"additionalContext": ...}} con el recordatorio de UN tema (el primero que
+matchea; otro tema del mismo archivo avisa en una edicion posterior).
+Lee .claude/docs/bridges.json del proyecto. Estado: <temp>/fluency4d/
+<clave>-drift.json con `temas_avisados`.
+Pass-through: payload vacio o invalido, subagente, sin cwd o sin ruta, archivo
+fuera del proyecto o bajo .claude/, sin bridges.json (o ilegible), ningun tema
+con `rutas` que matchee, o el tema ya se aviso en esta sesion.
 """
 
 from __future__ import annotations
@@ -38,6 +50,12 @@ from hook_utils import (
 
 
 def prefix_matches(rel_posix: str, prefix: str) -> bool:
+    """True si `rel_posix` es `prefix` o cuelga de el, comparando por segmento.
+
+    Args:
+        rel_posix: ruta relativa al proyecto, en POSIX y YA casefolded.
+        prefix: una entrada de `rutas` de bridges.json; se normaliza aca.
+    """
     prefix = prefix.strip().casefold().rstrip("/")
     if not prefix:
         return False
@@ -58,6 +76,8 @@ def main() -> None:
     if not cwd_raw or not file_raw:
         return output_empty()
 
+    # resolve() en ambos lados: symlinks y `..` no deben hacer que un archivo de
+    # adentro parezca de afuera (ni al reves) en el relative_to de abajo.
     cwd = Path(cwd_raw).resolve()
     file_path = Path(file_raw)
     if not file_path.is_absolute():

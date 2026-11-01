@@ -42,6 +42,13 @@
       "keywords": ["pss", "mutation", "flaky", "cobertura", "oraculo", "property-based", "verificacion y validacion"],
       "rutas": [],
       "relaciones": [{"verbo": "va_con", "tema": "testing"}]
+    },
+    {
+      "tema": "arquitectura",
+      "archivo": "docs/fluency-4d-arquitectura.md",
+      "keywords": ["arquitectura", "statusline", "barra", "panel", "fluency4d", "mod"],
+      "rutas": ["plugins/fluency-4d/statusline/", "plugins/fluency-4d/hooks/register.tsx", "plugins/fluency-4d/hooks/statusline_setup.py", "plugins/fluency-4d/types/"],
+      "relaciones": [{"verbo": "va_con", "tema": "hooks"}]
     }
   ]
 }
