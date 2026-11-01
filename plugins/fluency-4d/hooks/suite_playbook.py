@@ -19,6 +19,16 @@ el humano decide. Guardarrailes (filosofia #3/#6):
 Reusa normalize/keyword_matches de bridge_router (mismo patron de matcheo con
 lookarounds y sin acentos) y load_state/save_state/session_key de hook_utils.
 ASCII puro: cp1252 en Windows, sin acentos en strings.
+
+Evento: UserPromptSubmit (matcher .*), registrado en hooks/hooks.json.
+Stdin: payload del evento; usa `prompt`, `permission_mode`, `agent_type` y
+`session_id` (o `cwd`) para la clave de estado.
+Stdout: additionalContext con los nudges que matchearon (uno por tipo) mas una
+linea final aclarando que es una sugerencia.
+Estado: <temp>/fluency4d/<clave>-playbook.json con `nudges_dados`; solo se
+escribe cuando sale algun nudge.
+Pass-through: payload vacio o invalido, subagente, plan mode, prompt vacio, o
+ninguna frase matchea un tipo todavia no dado en la sesion.
 """
 
 from __future__ import annotations

@@ -16,6 +16,21 @@ Dos responsabilidades, ambas con dedup por sesion:
 Estructura de punto de emision unico: las dos fuentes de lineas se calculan
 por separado y se emiten juntas al final; save_state se llama exactamente
 una vez cuando el estado cambio.
+
+Evento: UserPromptSubmit (matcher .*), registrado en hooks/hooks.json.
+Stdin: payload del evento; usa `prompt`, `cwd`, `agent_type` y `session_id`
+(o `cwd`) para la clave de estado.
+Stdout: un unico additionalContext con las lineas de arranque y de temas, mas
+un trailer "(inyectado por fluency-4d; no se repetira en esta sesion)".
+Lee (solo lectura) del proyecto: .claude/docs/lecciones.md, estado-sesion.md
+(su mtime) y bridges.json. Estado: <temp>/fluency4d/<clave>-bridge.json con
+`arranque_inyectado` y `temas_inyectados`. Telemetria: ~/.claude/fluency4d/
+stats.json via bump_stats (sesion nueva y temas nuevos).
+Pass-through: payload vacio o invalido, subagente, `prompt` o `cwd` vacios, o
+nada nuevo que inyectar (en ese caso el estado igual se guarda si cambio).
+
+Lo importa tambien suite_playbook (normalize y keyword_matches): cambiar su
+firma rompe ese hook.
 """
 
 from __future__ import annotations
@@ -59,13 +74,24 @@ VERBOS = {
 
 
 def normalize(text: str) -> str:
-    """casefold + sin acentos, para que 'autenticacion' matchee 'autenticacion'."""
+    """casefold + sin acentos (NFKD sin marcas combinantes).
+
+    Se aplica a la keyword Y al prompt, asi un prompt con tildes o mayusculas
+    matchea una keyword escrita sin ellas, y viceversa.
+    """
     decomposed = unicodedata.normalize("NFKD", text)
     stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
     return stripped.casefold()
 
 
 def keyword_matches(keyword: str, norm_prompt: str) -> bool:
+    """True si `keyword` aparece como palabra (o frase) completa en el prompt.
+
+    Args:
+        keyword: keyword cruda de bridges.json (o frase de suite_playbook); se
+            normaliza aca.
+        norm_prompt: el prompt YA pasado por normalize (se hace una vez por prompt).
+    """
     kw = normalize(keyword.strip())
     if not kw:
         return False
@@ -121,7 +147,13 @@ def arranque_lines(cwd: Path, state: dict[str, Any]) -> list[str]:
 
 
 def tema_lines(cwd: Path, prompt: str, state: dict[str, Any]) -> list[str]:
-    """Puentes por tema segun bridges.json; puede devolver vacio por cualquier motivo."""
+    """Puentes por tema segun bridges.json; puede devolver vacio por cualquier motivo.
+
+    Muta `state["temas_inyectados"]` con los hits de este prompt (a lo sumo
+    MAX_TEMAS_POR_PROMPT). Ademas puede sugerir hasta MAX_RELACIONADOS temas
+    relacionados, que NO se marcan como inyectados. Temas con `archivo` inseguro
+    (ver safe_doc_path) se descartan enteros.
+    """
     bridges_path = cwd / ".claude" / "docs" / "bridges.json"
     if not bridges_path.is_file():
         return []
@@ -242,11 +274,15 @@ def main() -> None:
     if not prompt or not cwd_raw:
         return output_empty()
     cwd = Path(cwd_raw)
+    # NO agregar early-returns despues de este punto: cortarian la inyeccion de
+    # arranque, que no depende de que haya bridges.json ni hits de temas.
 
     # Sufijo -bridge: aisla el estado del router del resto de los hooks
     # (-ckpt/-drift/-calib/-playbook/-gate) que comparten el mismo session_key.
     key = session_key(data) + "-bridge"
     state = load_state(key)
+    # Foto serializada del estado: permite saber si arranque_lines/tema_lines lo
+    # mutaron sin rastrear cada cambio, y asi guardar solo cuando hace falta.
     state_before = json.dumps(state, sort_keys=True, ensure_ascii=True)
     arranque_previo = bool(state.get("arranque_inyectado"))
     temas_previos = set(state.get("temas_inyectados", []))

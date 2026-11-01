@@ -39,6 +39,24 @@ Rutas: settings.json, keybindings.json y themes/ son de Claude Code y se resuelv
 desde CLAUDE_CONFIG_DIR si esta definido (si no, ~/.claude). La copia fija,
 setup.json, los backups y el lock viven SIEMPRE en ~/.claude/fluency4d/ (igual que
 los flags de hook_utils), que es donde la barra los busca.
+
+Stdin: no lo lee. Stdout: mensajes de texto para el usuario (los muestra la skill).
+
+setup.json (registro de la instalacion; lo escribe setup, lo consume remove):
+- pending: True mientras setup esta escribiendo. Se guarda ANTES de la primera
+  escritura con todo lo necesario para revertir y se quita al final; si queda
+  (proceso muerto a mitad), status avisa y remove revierte igual.
+- statusline: {had_key, had_previous, previous[, refresh_added]}. `had_key`
+  distingue "la clave statusLine no existia" (remove la borra) de "existia con
+  valor null" (remove la vuelve a null); `had_previous` es el campo de
+  versiones viejas y remove lo usa si falta had_key. `previous` es el valor
+  ajeno que se piso con --force.
+- settings_doc / keybindings_doc: snapshot del texto ORIGINAL (existed, text,
+  sha256), guardado con setdefault: un segundo setup no pisa el original de la
+  primera instalacion con un texto que ya tiene lo nuestro.
+- settings_created, plugin_dirs, keybinding, theme: lo que hizo cada paso.
+- orig_backups: nombres de .orig.bak que creo ESTA instalacion.
+- copy, version, node: informativos (remove y status no confian en `copy`).
 """
 
 from __future__ import annotations
@@ -107,13 +125,23 @@ class SetupError(Exception):
 
 
 def claude_dir() -> Path:
-    """Config de Claude Code: CLAUDE_CONFIG_DIR si esta definido, si no ~/.claude."""
+    """Config de Claude Code: CLAUDE_CONFIG_DIR si esta definido, si no ~/.claude.
+
+    Se respeta porque Claude Code (y el panel en register.tsx) leen settings.json,
+    keybindings.json y themes/ desde ahi: escribir en ~/.claude dejaria la barra
+    instalada en una config que nadie lee. Vacio o solo espacios = no definido;
+    se expande `~` por si el usuario lo puso literal en la variable.
+    """
     raw = os.environ.get("CLAUDE_CONFIG_DIR", "").strip()
     return Path(os.path.expanduser(raw)) if raw else Path.home() / ".claude"
 
 
 def fluency_dir() -> Path:
-    """Siempre ~/.claude/fluency4d (como hook_utils y la barra), aun con CLAUDE_CONFIG_DIR."""
+    """Siempre ~/.claude/fluency4d (como hook_utils y la barra), aun con CLAUDE_CONFIG_DIR.
+
+    statusline.js y los hooks buscan sus flags en esa ruta fija sin mirar
+    CLAUDE_CONFIG_DIR; mover la copia o el registro con la variable los separaria.
+    """
     return Path.home() / ".claude" / "fluency4d"
 
 
@@ -160,6 +188,7 @@ def plugin_root(arg: str | None) -> Path:
 
 
 def plugin_version(root: Path) -> str:
+    """Version de .claude-plugin/plugin.json, o "desconocida" si no se puede leer."""
     try:
         data = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -172,6 +201,7 @@ def plugin_version(root: Path) -> str:
 
 
 def sha256_of(path: Path) -> str | None:
+    """Hash hex del contenido, o None si no se puede leer (p. ej. no existe)."""
     try:
         return hashlib.sha256(path.read_bytes()).hexdigest()
     except OSError:
@@ -179,6 +209,7 @@ def sha256_of(path: Path) -> str | None:
 
 
 def norm(path_text: str) -> str:
+    """Normaliza para comparar rutas/comandos: barras `/` y, en Windows, casefold."""
     unified = path_text.replace("\\", "/")
     return unified.casefold() if os.name == "nt" else unified
 
@@ -190,6 +221,20 @@ def our_command(copy: Path) -> str:
     hay Git Bash): en ambos las comillas simples son literales, asi que `$` y
     backtick en HOME no se expanden. El escape de una comilla simple embebida
     ('"'"') solo vale en bash: en Windows esa ruta se rechaza con un mensaje.
+
+    Por que shlex.quote y no comillas dobles (la forma vieja, _legacy_command): en
+    bash las dobles expanden `$`, backtick y la barra invertida, asi que un HOME raro
+    cambiaba el comando. shlex.quote deja la ruta sin comillas si solo tiene chars
+    seguros y si no la envuelve en simples.
+
+    Por que la lista blanca en Windows (_safe_win_char): el mismo texto lo puede
+    interpretar Git Bash o PowerShell, que difieren en escapes y metacaracteres
+    (`%`, `;`, `&`, parentesis...). Restringiendo la ruta a chars inertes en ambos
+    el comando significa lo mismo en los dos. Las letras Unicode se aceptan: shlex
+    las rodea de comillas simples, que ambos shells toman literal.
+
+    Raises:
+        SetupError: en Windows, si la ruta tiene un char fuera de la lista blanca.
     """
     posix = copy.resolve().as_posix()
     if os.name == "nt":
@@ -210,6 +255,8 @@ _WIN_SAFE_ASCII = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXY
 
 def _safe_win_char(char: str) -> bool:
     """Lista blanca de Windows: ASCII seguro o letra Unicode (L*/M*, p. ej. acentos).
+
+    Ver our_command para el motivo.
 
     Las comillas tipograficas (U+2018-U+201B) son Pi/Pf, no letras: se rechazan.
     """
@@ -233,6 +280,10 @@ def points_to_ours(value: object, copy: Path) -> bool:
     cambia que sea nuestro. Un wrapper ajeno que mencione la ruta (p. ej.
     `bash -c "node ... | otro"`) NO es nuestro: setup no lo pisa sin --force y remove
     no lo borra.
+
+    Acepta la forma actual (our_command) y la vieja con comillas dobles
+    (_legacy_command), para que un setup nuevo migre y un remove nuevo quite lo
+    que dejo una version anterior.
     """
     if not isinstance(value, dict) or value.get("type") != "command":
         return False
@@ -243,7 +294,7 @@ def points_to_ours(value: object, copy: Path) -> bool:
     try:
         accepted.add(norm(our_command(copy)))
     except SetupError:
-        pass
+        pass  # ruta rechazada en Windows: la forma nueva no pudo haberse instalado
     return norm(command.strip()) in accepted
 
 
@@ -277,6 +328,11 @@ def insert_at(data: dict[str, Any], key: str, value: Any, index: int) -> dict[st
 
 
 def copy_atomic(src: Path, dst: Path) -> None:
+    """Copia `src` a `dst` via temporal en el mismo dir + os.replace (atomico).
+
+    Un lector (Claude Code ejecutando la barra cada pocos segundos) nunca ve la
+    copia a medio escribir. Si falla, borra el temporal y re-lanza el OSError.
+    """
     dst = dst.resolve()  # symlink: se escribe en su destino, no se reemplaza el link
     dst.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(dst.parent), prefix=dst.name + ".", suffix=".tmp")
@@ -293,6 +349,7 @@ def copy_atomic(src: Path, dst: Path) -> None:
 
 
 def _copy_backup(path: Path, dst: Path) -> None:
+    """Copia `path` a `dst` con metadatos, dejando `dst` escribible por el usuario."""
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(path, dst)  # conserva permisos restrictivos (secretos en env)
     try:  # ...pero el backup tiene que poder podarse/borrarse (solo lectura en Windows)
@@ -353,6 +410,10 @@ def ensure_orig_backup(path: Path) -> Path | None:
 
 
 def _unstash(stashed: Path, orig: Path) -> None:
+    """Undo de stash_foreign_orig: devuelve el .orig.bak ajeno a su nombre.
+
+    Solo si el lugar esta libre, para no pisar un .orig.bak que haya aparecido.
+    """
     if not orig.exists():
         os.replace(stashed, orig)
 
@@ -371,6 +432,19 @@ def setup_lock(wait_s: float | None = None) -> Iterator[None]:
     Si existe y tiene menos de LOCK_STALE_S segundos se espera con reintentos
     cortos; si es mas viejo es huerfano (proceso muerto) y se retoma. Se libera
     siempre en finally. FLUENCY_4D_LOCK_WAIT acota la espera (tests).
+
+    O_CREAT|O_EXCL hace la toma atomica en Windows y POSIX sin depender de fcntl
+    ni msvcrt. El archivo guarda un token unico (pid + uuid): al liberar solo se
+    borra si el token sigue siendo el nuestro, porque si la operacion tardo mas de
+    LOCK_STALE_S otro proceso pudo retomarlo como huerfano y borrarlo seria
+    soltar el lock AJENO.
+
+    Args:
+        wait_s: segundos maximos de espera; None = FLUENCY_4D_LOCK_WAIT o 65 s
+            (un poco mas que LOCK_STALE_S, para alcanzar a retomar un huerfano).
+
+    Raises:
+        SetupError: si vence la espera con el lock tomado por otro proceso vivo.
     """
     if wait_s is None:
         wait_s = float(os.environ.get("FLUENCY_4D_LOCK_WAIT", LOCK_STALE_S + 5))
@@ -395,6 +469,8 @@ def setup_lock(wait_s: float | None = None) -> Iterator[None]:
             except OSError:
                 continue  # se libero entre el open y el stat: reintentar ya
             if time.time() - st.st_mtime > LOCK_STALE_S:
+                # Se pasa lo observado (mtime + bytes) para que _take_stale_lock
+                # pueda detectar si lo que renombro ya no es este lock viejo.
                 _take_stale_lock(path, st.st_mtime_ns, seen)
                 continue
             if time.monotonic() >= deadline:
@@ -428,6 +504,11 @@ def _take_stale_lock(path: Path, mtime_ns: int, seen: bytes) -> None:
     Se renombra atomicamente a un nombre unico: de varios procesos solo uno logra
     el rename. Despues se compara con lo observado (mtime y contenido); si no es el
     mismo lock viejo (otro proceso lo retomo entre medio), se devuelve a su lugar.
+
+    Por que rename y no unlink: entre el stat que lo vio viejo y un unlink, otro
+    proceso puede haber retomado el huerfano y creado uno NUEVO; el unlink borraria
+    ese lock vivo y dos procesos quedarian adentro. El rename mueve lo que haya en
+    ese instante a un nombre propio, donde se puede inspeccionar sin carrera.
     """
     grave = path.with_name(f"{path.name}.stale.{uuid.uuid4().hex}")
     try:
@@ -455,6 +536,13 @@ def _take_stale_lock(path: Path, mtime_ns: int, seen: bytes) -> None:
 
 @dataclass
 class JsonDoc:
+    """Un JSON objeto del usuario en memoria, con el formato con que se leyo.
+
+    `original` es el texto tal cual estaba en disco ("" si no existia); `indent`,
+    `newline` (CRLF/LF) y `trailing_newline` se detectan en load_doc para que al
+    reescribir el diff contra el original sea minimo.
+    """
+
     path: Path
     data: dict[str, Any]
     existed: bool
@@ -472,6 +560,7 @@ class JsonDoc:
         return out.replace("\n", self.newline) if self.newline != "\n" else out
 
     def changed(self) -> bool:
+        """True si `data` difiere del original (o el archivo no existia)."""
         if not self.existed:
             return True
         try:
@@ -482,6 +571,7 @@ class JsonDoc:
         return json.dumps(before, ensure_ascii=False, indent=self.indent) != self.dumps()
 
     def save(self) -> None:
+        """Escribe `text()` atomicamente (respetando FLUENCY_4D_FAIL_WRITE)."""
         write_user_text(self.path, self.text())
 
     def snapshot(self) -> dict[str, Any]:
@@ -506,6 +596,8 @@ def load_doc(path: Path, default: dict[str, Any] | None = None) -> JsonDoc:
         raise SetupError(f"{path} no es JSON valido ({exc}); no se toca. Arreglalo y reintenta.")
     if not isinstance(data, dict):
         raise SetupError(f"{path} no es un objeto JSON; no se toca.")
+    # Indentacion detectada de la primera linea indentada (tabs o N espacios);
+    # default 2 si el archivo esta en una sola linea.
     indent: int | str = 2
     match = re.search(r"\n([ \t]+)\S", text)
     if match:
@@ -521,6 +613,17 @@ def revert_target(doc: JsonDoc, snap: object, *, delete_if_created: bool) -> str
     Si el JSON resultante es semanticamente igual al original registrado, devuelve
     el texto ORIGINAL exacto (CRLF, formato inline, claves duplicadas, newline
     final). Si no (el usuario edito entre medio), la reversion minima con su estilo.
+
+    Por que comparar semantica y no texto: re-serializar con json.dumps nunca
+    reproduce del todo el archivo del usuario (formato inline, claves duplicadas,
+    espacios, escapes). Si los datos quedaron iguales al original, el texto
+    original es la reversion perfecta; si el usuario cambio otra cosa en el medio,
+    devolver el texto viejo borraria su cambio, asi que se serializa lo actual.
+
+    Args:
+        snap: el snapshot de setup.json (settings_doc / keybindings_doc); puede
+            faltar o venir malformado, y entonces se cae a la reversion minima.
+        delete_if_created: el archivo lo creo setup y quedo vacio -> borrarlo.
     """
     if isinstance(snap, dict):
         if snap.get("existed"):
@@ -540,6 +643,7 @@ def revert_target(doc: JsonDoc, snap: object, *, delete_if_created: bool) -> str
 
 
 def read_record_text() -> str | None:
+    """Texto crudo de setup.json (None si no existe), para el undo de setup."""
     try:
         return record_path().read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -547,6 +651,7 @@ def read_record_text() -> str | None:
 
 
 def load_record() -> dict[str, Any] | None:
+    """setup.json parseado, o None si no existe. Corrupto -> SetupError (no se pisa)."""
     path = record_path()
     if not path.exists():
         return None
@@ -560,6 +665,7 @@ def load_record() -> dict[str, Any] | None:
 
 
 def save_record(record: dict[str, Any]) -> None:
+    """Escribe setup.json atomicamente (indentado, para que el usuario lo pueda leer)."""
     atomic_write_json(record_path(), record, indent=2, trailing_newline=True)
 
 
@@ -568,12 +674,17 @@ def save_record(record: dict[str, Any]) -> None:
 
 def _split_dirs(value: str) -> tuple[list[str], str]:
     """Separa SOLO por os.pathsep (';' en Windows, ':' en POSIX), nunca por ','
-    (una coma es un caracter valido dentro de una ruta)."""
+    (una coma es un caracter valido dentro de una ruta).
+
+    Descarta entradas vacias y devuelve tambien el separador, para volver a unir
+    las que quedan con el mismo que se uso al partir.
+    """
     sep = os.pathsep
     return [e for e in value.split(sep) if e.strip()], sep
 
 
 def _is_panel_mod(entry: str) -> bool:
+    """True si la ultima carpeta de `entry` es panel-4d (el mod local reemplazado)."""
     return norm(entry.strip()).rstrip("/").rsplit("/", 1)[-1] == norm(PANEL_MOD_NAME)
 
 
@@ -626,6 +737,7 @@ def restore_panel_mod(settings: JsonDoc, rec: dict[str, Any]) -> str:
 
 
 def _chat_blocks(kb: JsonDoc) -> list[dict[str, Any]]:
+    """Bloques bien formados de `bindings` (dicts con un dict `bindings`)."""
     bindings = kb.data.get("bindings")
     if not isinstance(bindings, list):
         return []
@@ -674,6 +786,8 @@ def migrate_keybinding(kb: JsonDoc) -> bool:
 def remove_keybinding(kb: JsonDoc, rec: dict[str, Any]) -> str:
     """Devuelve "removed", "already" (la tecla ya no esta) o "conflict"."""
     ours = rec.get("command")
+    # El comando que se registro (actual o el legado de 0.22.0); un valor raro en
+    # setup.json no decide que se borra: cae al comando actual.
     expected = ours if ours in KNOWN_KEYBINDING_CMDS else KEYBINDING_CMD
     bindings = kb.data.get("bindings")
     blocks = [b for b in _chat_blocks(kb) if b.get("context") == KEYBINDING_CONTEXT]
@@ -694,6 +808,7 @@ def remove_keybinding(kb: JsonDoc, rec: dict[str, Any]) -> str:
 
 
 def _restore_record(before: str | None) -> None:
+    """Undo de save_record: vuelve setup.json al texto previo (o lo borra)."""
     if before is None:
         record_path().unlink(missing_ok=True)
     else:
@@ -701,6 +816,7 @@ def _restore_record(before: str | None) -> None:
 
 
 def _restore_doc(doc: JsonDoc) -> None:
+    """Undo de doc.save(): reescribe el texto original (o borra si no existia)."""
     if doc.existed:
         atomic_write_text(doc.path, doc.original)
     else:
@@ -723,6 +839,7 @@ def _rollback(undo: list[tuple[str, Callable[[], None]]]) -> list[str]:
 
 
 def _node_ok(nv: str | None) -> bool:
+    """True si hay node >= MIN_NODE_MAJOR; si no, imprime como resolverlo."""
     if nv is None:
         print(
             "ERROR: no se encontro Node.js (node --version fallo). La barra y el panel lo\n"
@@ -745,6 +862,18 @@ def _node_ok(nv: str | None) -> bool:
 
 
 def cmd_setup(args: argparse.Namespace) -> int:
+    """Instala la barra en dos fases: planificar en memoria y despues escribir.
+
+    Fase 1 lee todo lo que puede abortar (setup.json, settings.json,
+    keybindings.json) y arma el registro sin tocar disco. Fase 2 escribe con un
+    undo por paso; ante OSError/UnicodeError deshace (_rollback) y lanza
+    SetupError. Re-correrlo es idempotente: si el statusLine ya es nuestro solo
+    migra el comando viejo y agrega refreshInterval si falta.
+
+    Returns:
+        EXIT_OK, EXIT_ERROR (node ausente/viejo) o EXIT_CONFLICT (statusLine
+        ajeno sin --force).
+    """
     root = plugin_root(args.plugin_root)
     src = root / "statusline" / "statusline.js"
     if not src.is_file():
@@ -776,6 +905,8 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
     msgs: list[str] = []
     if not ours:
+        # had_key separa "sin clave" de "clave con null": remove tiene que dejar
+        # settings.json exactamente igual, incluida una clave explicita en null.
         record["statusline"] = {
             "had_key": had_key,
             "had_previous": current is not None,
@@ -788,6 +919,9 @@ def cmd_setup(args: argparse.Namespace) -> int:
         }
         msgs.append(f"statusLine -> {command} (refresco cada {REFRESH_INTERVAL_S} s)")
     else:
+        # Ya es nuestro: se conserva el registro de la primera instalacion (que
+        # tiene el `previous` real). Si setup.json se perdio, el default hace que
+        # remove simplemente borre la clave.
         sl_rec = record.setdefault(
             "statusline", {"had_key": False, "had_previous": False, "previous": None}
         )
@@ -814,6 +948,8 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
     settings_changed = settings.changed()
     if settings_changed:
+        # setdefault: en un re-setup se queda el snapshot de la PRIMERA instalacion
+        # (el original del usuario), no el texto actual que ya tiene lo nuestro.
         record.setdefault("settings_doc", settings.snapshot())
         if not settings.existed:
             record["settings_created"] = True
@@ -843,7 +979,10 @@ def cmd_setup(args: argparse.Namespace) -> int:
     record["copy"] = str(copy)
     record["version"] = plugin_version(root)
     record["node"] = nv
-    record["pending"] = True  # intencion: si el proceso muere, remove igual revierte
+    # intencion: si el proceso muere, remove igual revierte. Se guarda con todo lo
+    # de arriba ANTES de la primera escritura, asi el registro ya tiene `previous`
+    # y los snapshots de cualquier cosa que se llegue a tocar.
+    record["pending"] = True
 
     # 2) Escrituras, cada una con su undo. setup.json va PRIMERO.
     undo: list[tuple[str, Callable[[], None]]] = []
@@ -883,7 +1022,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
                 record["theme"] = {"path": str(dst), "sha256": sha256_of(dst)}
                 msgs.append(f"Tema copiado a {dst}.")
 
-        record.pop("pending", None)
+        record.pop("pending", None)  # todo escrito: el registro queda "confirmado"
         save_record(record)
     except (OSError, UnicodeError) as exc:
         failed = _rollback(undo)
@@ -904,6 +1043,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 
 def _write_reverted(doc: JsonDoc, snap: object, *, delete_if_created: bool) -> None:
+    """Respalda `doc` y lo reemplaza por su reversion (ver revert_target)."""
     target = revert_target(doc, snap, delete_if_created=delete_if_created)
     backup(doc.path)
     if target is None:
@@ -913,6 +1053,13 @@ def _write_reverted(doc: JsonDoc, snap: object, *, delete_if_created: bool) -> N
 
 
 def cmd_remove(args: argparse.Namespace) -> int:
+    """Revierte lo registrado en setup.json y lo borra.
+
+    Cada pieza se revierte solo si sigue como la dejo setup; si el usuario la
+    cambio, avisa y no la toca (y entonces no borra los .orig.bak, que quedan
+    como unica copia del original). No mira `pending`: un setup interrumpido se
+    revierte igual que uno completo. Siempre devuelve EXIT_OK si no lanza.
+    """
     record = load_record()
     if record is None:
         print("No hay instalacion registrada (setup.json): nada que revertir.")
@@ -928,6 +1075,7 @@ def cmd_remove(args: argparse.Namespace) -> int:
     changed = False
     sl = record.get("statusline")
     if isinstance(sl, dict):
+        # Registros viejos no tienen had_key: se infiere de had_previous.
         had_key = bool(sl.get("had_key", sl.get("had_previous")))
         previous = sl.get("previous")
         current = settings.data.get("statusLine")
@@ -937,6 +1085,8 @@ def cmd_remove(args: argparse.Namespace) -> int:
             else:
                 del settings.data["statusLine"]
             changed = True
+        # No es nuestro: si ya esta como antes del setup no hay nada que hacer
+        # (limpio); si es otra cosa, el usuario lo cambio y no se toca.
         elif ("statusLine" in settings.data) != had_key or current != previous:
             print("AVISO: statusLine cambio desde el setup; no se toca.")
             clean = False
@@ -987,6 +1137,11 @@ def cmd_remove(args: argparse.Namespace) -> int:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
+    """Muestra el estado de la instalacion. Solo lectura, sin lock; siempre EXIT_OK.
+
+    Sugiere re-correr setup si la copia fija difiere del script del plugin o la
+    version registrada no es la del plugin.
+    """
     root = plugin_root(args.plugin_root)
     src = root / "statusline" / "statusline.js"
     record_err = None
@@ -1069,6 +1224,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI: setup | remove | status. Devuelve el codigo de salida (EXIT_*)."""
     reconfigure = getattr(sys.stdout, "reconfigure", None)
     if callable(reconfigure):
         reconfigure(errors="replace")  # rutas con chars fuera de cp1252

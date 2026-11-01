@@ -12,6 +12,20 @@ import type { Panel4dLive, Panel4dPrefs, Panel4dTab, Panel4dUi } from '../types'
 // de Claude (tema) y a los comandos integrados (/effort, /model, /fast,
 // /autocompact). Las acciones de sesión (/compact, /clear, /handoff, atajos)
 // corren al toque.
+//
+// Cómo se invoca: es un hooks module del engine de mods de Claude Code,
+// declarado en hooks/hooks.json bajo "modules". El engine importa este archivo
+// y llama a `register(on)` una vez por carga (y de nuevo en cada reload del
+// mod, que pierde las variables del módulo). Todo pasa por los
+// hooks que registra `on(...)`: session.start, command.run (/panel), ui.close,
+// ui.focus, ui.render, turn.step y turn.complete.
+//
+// Lee: ~/.claude/fluency4d/{statusline,adhd,caveman,verify,panel4d}.json, los
+// settings (effortLevel, modelSettings, autoCompactWindow, model), /config
+// (theme), <config>/themes/*.json y el uso/modelo de la sesión.
+// Escribe (solo al Guardar): esos mismos JSON de fluency4d (merge, preservando
+// claves ajenas), el tema por /config y los comandos integrados. El estado del
+// pane (borrador, foco, pestaña) vive en atoms ($.state), nunca en disco.
 
 type $ = EngineInterface
 type Json = Record<string, unknown>
@@ -46,6 +60,7 @@ type Setting = {
 type ProfileName = 'foco' | 'pesado' | 'ahorro'
 
 const PANE = 'panel-4d'
+// Pedido de apertura del pane (se reusa al reabrir tras un Esc con cambios).
 const OPEN = {
   id: PANE,
   title: 'Panel 4D',
@@ -68,8 +83,15 @@ const AUTOCOMPACT: readonly Opt[] = [
   ['600000', '600k'],
   ['auto', 'Default'],
 ]
+// Opción cuyo texto visible es el mismo valor.
 const same = (v: string): Opt => [v, v]
 
+/**
+ * Tabla de ajustes del panel: una fila por entrada, en este orden, dentro de su
+ * pestaña. Enter cicla `options`; `about` es la ayuda por valor. Las opciones de
+ * 'claude.theme' son dinámicas (salen de /config y de los temas custom, ver
+ * optionsOf); por eso acá van vacías.
+ */
 const SETTINGS: readonly Setting[] = [
   {
     id: 'bar.mode',
@@ -263,6 +285,7 @@ const firstFocus = (tab: Tab): string =>
 // Rótulo corto en la fila (la sección ya dice de qué es); el largo va en los toasts.
 const ROW_LABEL: Partial<Record<SettingId, string>> = { 'bar.theme': 'Tema' }
 
+// Pestañas: [id, rótulo, rótulo corto para panes angostos (W < 47)].
 const TABS: readonly (readonly [Tab, string, string])[] = [
   ['barra', 'Barra', 'Barra'],
   ['modelo', 'Modelo', 'Modelo'],
@@ -270,6 +293,7 @@ const TABS: readonly (readonly [Tab, string, string])[] = [
   ['sesion', 'Sesión', 'Sesión'],
   ['perfiles', 'Perfiles', 'Perfiles'],
 ]
+// Ayuda de respaldo de cada pestaña (cuando el foco no está en nada con ayuda propia).
 const TAB_HINT: Record<Tab, string> = {
   barra: 'Nada se aplica hasta Guardar',
   modelo: 'Al Guardar corren /effort, /model y /fast',
@@ -295,12 +319,17 @@ const INDENT = 2
 const TAB_COL = 11
 const VERTICAL_MIN = 58
 
+// Perfiles: atajos que cargan varios valores en el borrador (los valores, en
+// loadProfile). `desc` se parte por " · " para el wrap de la descripción.
 const PROFILES: Record<ProfileName, { label: string; desc: string }> = {
   foco: { label: 'Foco', desc: 'barra simple en silencio · ADHD · esfuerzo medium' },
   pesado: { label: 'Trabajo pesado', desc: 'barra experto con avisos · esfuerzo high' },
   ahorro: { label: 'Ahorro', desc: 'esfuerzo low · fast off · auto-compact 400k' },
 }
 
+// Acciones inmediatas y atajos de la pestaña Sesión (no pasan por el borrador).
+// `strict`: el comando es de otro plugin; si no está listado no se intenta
+// (ver runCmd). Los integrados (/compact, /clear) se corren aunque no figuren.
 const ACTIONS: Record<string, { label: string; command: string; strict: boolean; hint: string }> = {
   'act-compact': {
     label: 'Compactar',
@@ -524,6 +553,12 @@ const packSegments = (segs: readonly string[], width: number): string[] =>
 const DEFAULT_PREFS: Panel4dPrefs = { notify: true, cacheTtlMin: 5 }
 const DEFAULT_UI: Panel4dUi = { tab: 'barra', draft: {}, current: {}, themeOptions: [] }
 
+// Atoms del engine ($.state; contrato en types/index.d.ts), con su default y
+// una etiqueta de forma (`shape`). Tras un reload pueden volver al default (ver
+// el reloj de session.start), así que lo que importa se relee del disco.
+// - live: datos de la sesión (uso, modelo, esfuerzo, último turno).
+// - prefs: preferencias del panel (copia de panel4d.json).
+// - ui: el pane (pestaña, borrador, valores reales, foco, confirmaciones).
 const live = atom({ plugin: 'fluency-4d', key: 'live' } as const, {}, { shape: 'live-1' })
 const prefs = atom({ plugin: 'fluency-4d', key: 'prefs' } as const, DEFAULT_PREFS, {
   shape: 'prefs-1',
@@ -556,6 +591,11 @@ function serialized<T>(key: string, fn: () => Promise<T>): Promise<T> {
 // El home como os.homedir() / Path.home(): en Windows USERPROFILE y después HOME;
 // en el resto HOME (USERPROFILE solo de respaldo). El módulo no ve la plataforma:
 // la deduce de OS=Windows_NT, que Windows define siempre y POSIX no.
+/**
+ * Home del usuario, resuelto igual que statusline.js (os.homedir) y los hooks
+ * Python (Path.home), para que los tres lean y escriban los mismos archivos.
+ * @throws si no hay ni USERPROFILE ni HOME
+ */
 async function homeDir($: $): Promise<string> {
   const isWin = (await $.env.get('OS')) === 'Windows_NT'
   const profile = await $.env.get('USERPROFILE')
@@ -565,6 +605,7 @@ async function homeDir($: $): Promise<string> {
   return home
 }
 
+// ~/.claude/fluency4d/<name>.json con barras `/` (sirven en Windows y POSIX).
 async function flagPath($: $, name: string): Promise<string> {
   const home = await homeDir($)
   return `${home.replace(/\\/g, '/').replace(/\/$/, '')}/.claude/fluency4d/${name}.json`
@@ -657,6 +698,11 @@ async function setMode($: $, name: FlagName, patch: Json): Promise<void> {
   }
 }
 
+/**
+ * Carga panel4d.json en el atom `prefs` y devuelve lo cargado. Lectura blanda:
+ * sin archivo o roto quedan los defaults (avisos on, TTL 5 min); cualquier TTL
+ * que no sea 60 cuenta como 5.
+ */
 async function loadPrefs($: $): Promise<Panel4dPrefs> {
   const p = await readSoft($, 'panel4d')
   return update($, prefs, () => ({
@@ -668,9 +714,17 @@ async function loadPrefs($: $): Promise<Panel4dPrefs> {
 // --- Lecturas para mostrar ---
 
 // Mismos defaults que statusline.js: experto, templado y silencio (salvo quiet:false).
+// Tienen que coincidir: el panel muestra como "actual" lo que la barra aplica
+// de verdad; si no, un archivo sin `mode` se vería distinto en cada lado.
 const barMode = (st: Json) => (BAR_MODES.some(m => m === st.mode) ? String(st.mode) : 'experto')
 const barTheme = (st: Json) => (THEMES.some(t => t === st.theme) ? String(st.theme) : 'templado')
 
+/**
+ * Valor de un modo 4D (ADHD/Caveman) para el panel, a partir de su flag.
+ * @param st contenido del flag (adhd.json / caveman.json)
+ * @param levels niveles válidos de ese modo
+ * @returns el nivel si on === true y el nivel es válido; si no, 'off'
+ */
 function modeValue(st: Json, levels: readonly string[]): string {
   // Igual que la barra y hook_utils: sin un nivel válido el modo cuenta como apagado.
   if (st.on !== true) return 'off'
@@ -695,7 +749,14 @@ function hhmm(iso: string | undefined): string | undefined {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}hs`
 }
 
-// Minutos que le quedan a la caché, estimados desde el fin del último turno y el TTL.
+/**
+ * Minutos que le quedan a la caché, estimados desde el fin del último turno y
+ * el TTL (el engine no expone el vencimiento real). Negativo = ya venció.
+ * @param lastTurnAt epoch ms del último turno del hilo principal
+ * @param ttlMin TTL configurado en el panel (5 o 60)
+ * @param now epoch ms actual
+ * @returns undefined si todavía no hubo turno
+ */
 function cacheMinsLeft(lastTurnAt: number | undefined, ttlMin: number, now: number) {
   if (lastTurnAt === undefined) return undefined
   return Math.floor((lastTurnAt + ttlMin * 60_000 - now) / 60_000)
@@ -754,7 +815,14 @@ async function readSettingsHints($: $): Promise<void> {
   }
 }
 
-// Los valores REALES de cada ajuste (lo que hay hoy en archivos, settings y sesión).
+/**
+ * Los valores REALES de cada ajuste (lo que hay hoy en archivos, settings y
+ * sesión), contra los que se compara el borrador. Solo lee; lecturas blandas
+ * (un archivo roto = default). Ajustes sin dato (p. ej. esfuerzo antes del
+ * primer turno) quedan fuera de `current` y se muestran como "—".
+ * @returns current, el tema de la barra para pintar el pane y las opciones y
+ *   nombres del tema de Claude (de /config + temas custom)
+ */
 async function loadSnapshot(
   $: $,
 ): Promise<Pick<Panel4dUi, 'current' | 'paneTheme' | 'themeOptions' | 'themeNames'>> {
@@ -772,6 +840,9 @@ async function loadSnapshot(
     'bar.theme': barTheme(st),
     'bar.quiet': st.quiet === false ? 'avisos' : 'silencio',
     // ADHD cede ante caveman (adhd_injector.py): con caveman activo, ADHD no corre.
+    // Se muestra 'off' porque es lo que el usuario recibe de verdad, igual que
+    // la barra (statusline.js fluencyModes); si los dos flags quedaron on (p. ej.
+    // editados a mano), gana caveman.
     'mode.adhd': cavemanValue === 'off' ? modeValue(adhd, ADHD_LEVELS) : 'off',
     'mode.caveman': cavemanValue,
     'mode.verify': verify.on === true ? 'on' : 'off',
@@ -949,6 +1020,15 @@ async function runAction($: $, key: string): Promise<void> {
 // que falló (o no se llegó a aplicar) queda en el borrador.
 // Cuenta los guardados, para que una foto leída antes de uno no lo pise.
 let saveSeq = 0
+/**
+ * Guarda el borrador. `busy` se toma dentro de un único update (claimed), así
+ * dos pulsaciones seguidas de Guardar nunca corren dos guardados. Cada grupo de
+ * ajustes es un `step` independiente: uno que falla no frena a los demás. Al
+ * final (siempre, en el finally) se relee la foto real y el borrador conserva
+ * solo lo que no se aplicó.
+ * @returns true si se aplicó todo (o no había nada); false si otro guardado
+ *   estaba en curso o algún paso falló
+ */
 async function save($: $): Promise<boolean> {
   let claimed = false
   const u = await update($, ui, (x): Panel4dUi => {
@@ -1100,6 +1180,8 @@ async function closePane($: $): Promise<void> {
   }
 }
 
+// Botón Salir: con cambios pendientes abre la confirmación (una sola, en el
+// pie); sin cambios cierra directo. Durante un guardado no hace nada.
 async function exitPane($: $): Promise<void> {
   const u = await read($, ui)
   if (u.busy) return
@@ -1112,6 +1194,8 @@ async function exitPane($: $): Promise<void> {
   await closePane($)
 }
 
+// Pestaña pedida en `/panel <texto>`: alias, id exacto o prefijo (sin acentos ni
+// mayúsculas). undefined si no hay texto o no coincide.
 function tabOf(text: string): Tab | undefined {
   const t = norm(text)
   if (t === '') return undefined
@@ -1128,11 +1212,19 @@ function tabOf(text: string): Tab | undefined {
   return alias[t] ?? TABS.map(([id]) => id).find(id => id === t || id.startsWith(t))
 }
 
+/**
+ * Punto de entrada del hooks module: el engine lo llama con `on` para registrar
+ * los hooks. Cada hook recibe `$` (la API del engine), el evento `e` y `next`
+ * (el siguiente handler de la cadena: llamarlo deja seguir el comportamiento
+ * por defecto; no llamarlo lo intercepta).
+ */
 export const register: Register = on => {
   // Marcas para no repetir el mismo aviso (se pierden con un reload, a propósito).
   let cacheToastFor: number | undefined
   let planToastFor: string | undefined
 
+  // Al arrancar la sesión: registra /panel, carga las preferencias y arma el
+  // reloj del aviso de caché. Nunca bloquea el arranque (siempre llama a next).
   on('session.start', async ($, e, next) => {
     try {
       await $.command.register({
@@ -1149,6 +1241,8 @@ export const register: Register = on => {
       void (async () => {
         // Releer el TTL del archivo: tras recargar el mod, `prefs` puede volver
         // al default (5 min) y session.start no se repite -> aviso falso.
+        // También recoge un panel4d.json editado desde otra sesión. Es un
+        // archivo chico, y cada 30 s el costo de leerlo es despreciable.
         await loadPrefs($).catch(() => undefined)
         const p = await read($, prefs)
         const { lastTurnAt } = await read($, live)
@@ -1191,6 +1285,11 @@ export const register: Register = on => {
   })
 
   // Esc / la marca de cierre con cambios sin guardar: no cierra, pide confirmación.
+  // Una sola confirmación: el segundo Esc la retira (Volver) en vez de cerrar o
+  // preguntar de nuevo, así nunca hay un bucle de diálogos ni un descarte por
+  // un Esc de más; descartar es siempre un botón explícito. Solo se interceptan
+  // los cierres de una persona (origin 'person'); los demás, y el de closePane
+  // (marcado con `closing`), pasan directo.
   on('ui.close', { id: PANE }, async ($, e, next) => {
     if (e.origin.kind === 'person') {
       const u = await read($, ui)
@@ -1221,6 +1320,9 @@ export const register: Register = on => {
     }))
     return closed
   }).catch(($, e, next) => {
+    // Por qué un .catch: este hook decide si el pane se cierra; si tirara, el
+    // cierre dependería de cómo el engine trata el error. Acá siempre termina
+    // en next(e), así un Esc nunca deja el panel trabado.
     // Falló leer o escribir el estado del pane. El cierre nunca queda colgado:
     // con next ya corrido el pane se cerró y next(e) repite ese resultado (solo
     // faltó limpiar el borrador, que el próximo /panel descarta).
@@ -1234,7 +1336,8 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // Dónde está el foco, para la línea de ayuda contextual.
+  // Dónde está el foco, para la línea de ayuda contextual. Solo se anota si el
+  // engine aceptó el cambio de foco; un error al anotar no frena el foco.
   on('ui.focus', { requestId: PANE }, async ($, e, next) => {
     const r = await next(e)
     if (r.deny === undefined) {
@@ -1243,6 +1346,9 @@ export const register: Register = on => {
     return r
   }).catch(($, e, next) => next(e))
 
+  // Dibuja el pane entero en cada render: pestañas, secciones con sus filas,
+  // ayuda, nota y pie, a partir de `ui`. No escribe estado; los efectos van en
+  // los onPress (fire).
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const u = await read($, ui)
@@ -1310,7 +1416,7 @@ export const register: Register = on => {
           {t}
         </Text>
       ))
-    // Texto partido por palabra en líneas de hasta W (nunca se trunca).
+    // Texto partido por palabra en líneas de hasta C (nunca se trunca).
     const lines = (text: string, color: Color, prefix: string) =>
       wrapWords(text, C).map((t, i) => (
         <Text key={`${prefix}-${i}`} color={color}>
@@ -1384,7 +1490,10 @@ export const register: Register = on => {
 
     // Fila de ajuste: "▌ Etiqueta      ‹ valor › •" con sangría de 2 y el valor
     // en una columna fija de la pestaña (la etiqueta más larga + 2), no contra
-    // el borde; el resto se rellena hasta W para que el fondo de foco cubra la fila.
+    // el borde; el resto se rellena hasta C para que el fondo de foco cubra la fila.
+    // Presupuesto de la fila: INDENT + col (etiqueta) + tail, donde tail =
+    // "‹ " + valor + " ›" (4 + valor) + la marca de pendiente. El valor se
+    // trunca con "…" solo si ni con la columna mínima entra.
     const labelOf = (s: Setting) => ROW_LABEL[s.id] ?? s.label
     const tabSettings = SETTINGS.filter(x => x.tab === u.tab)
     const labelCol = Math.max(0, ...tabSettings.map(s => labelOf(s).length)) + 2
@@ -1742,7 +1851,9 @@ export const register: Register = on => {
     )
   })
 
-  // Esfuerzo y modelo en uso, tal como sale cada pedido del hilo principal.
+  // Esfuerzo y modelo en uso, tal como sale cada pedido del hilo principal
+  // (los subagentes, con agentId, se ignoran: tienen su propio modelo). Solo
+  // escribe el atom si algo cambió, no en cada paso.
   on('turn.step', async function* ($, e, next) {
     if (e.agentId === undefined) {
       const effort = e.effort === undefined ? undefined : String(e.effort)

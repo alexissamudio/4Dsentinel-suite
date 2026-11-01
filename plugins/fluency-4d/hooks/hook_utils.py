@@ -8,6 +8,22 @@
 Basado en el patron de hook_utils.py de oh-my-claude
 (https://github.com/TechDufus/oh-my-claude, licencia MIT).
 
+NO es un hook: ningun evento de hooks.json lo dispara. Lo importan los hooks
+(sys.path.insert del dir hooks/) y statusline_setup.py (escritura atomica).
+Reune:
+- Entrada: read_stdin_safe (stdin con timeout, apto Windows) y parse_hook_input
+  (payload JSON del evento; cualquier cosa que no sea un objeto -> {}).
+- Salida: output_empty / output_context / output_stop_block, siempre JSON ASCII.
+- hook_main: decorador que convierte toda excepcion en pass-through.
+- Estado por sesion: <temp>/fluency4d/<session_key>[-sufijo].json con TTL de
+  4 h (load_state / save_state). Cada hook usa su propio sufijo (-bridge,
+  -calib, -ckpt, -drift, -gate, -playbook) para no pisar el estado ajeno.
+- Flags globales de solo lectura en ~/.claude/fluency4d/ (caveman, adhd, verify)
+  que escriben las skills, y la telemetria stats.json (bump_stats).
+- Sanitizacion de lo que viene de bridges.json (sanitize_field, safe_doc_path).
+
+Nunca escribe dentro del proyecto del usuario: solo en temp y ~/.claude/fluency4d/.
+
 Contrato de salida:
 - Pass-through: exit 0 sin stdout.
 - Contexto adicional (SessionStart/UserPromptSubmit):
@@ -112,7 +128,11 @@ def safe_doc_path(archivo: object) -> str | None:
 
 def read_stdin_safe(timeout: float = 5.0) -> str:
     """Lee stdin con timeout. En Windows no hay select/SIGALRM sobre pipes,
-    asi que se usa un hilo daemon con join(timeout)."""
+    asi que se usa un hilo daemon con join(timeout).
+
+    Lee como maximo MAX_STDIN_BYTES. Devuelve "" si vence el timeout o la lectura
+    falla: el hilo daemon queda colgado pero no impide que el proceso termine.
+    """
     result = {"data": ""}
 
     def _read() -> None:
@@ -128,6 +148,10 @@ def read_stdin_safe(timeout: float = 5.0) -> str:
 
 
 def parse_hook_input(raw: str) -> dict[str, Any]:
+    """Parsea el payload JSON del evento. Vacio, invalido o no-objeto -> {}.
+
+    Los hooks tratan {} como "sin datos" y hacen pass-through.
+    """
     try:
         data = json.loads(raw) if raw else {}
     except json.JSONDecodeError:
@@ -147,10 +171,12 @@ def output_empty() -> None:
 
 
 def output_context(event: str, text: str) -> None:
+    """Emite `text` como additionalContext del evento `event` (lo lee Claude)."""
     _emit({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}})
 
 
 def output_stop_block(reason: str) -> None:
+    """Bloquea el Stop con `reason` (formato top-level, no hookSpecificOutput)."""
     _emit({"decision": "block", "reason": reason})
 
 
@@ -183,7 +209,16 @@ def log_debug(message: str) -> None:
 
 
 def hook_main(event: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R | None]]:
-    """Decorador: cualquier excepcion degrada a pass-through (nunca romper la sesion)."""
+    """Decorador: cualquier excepcion degrada a pass-through (nunca romper la sesion).
+
+    Envuelve el `main` de cada hook. Si `fn` lanza una Exception, la registra con
+    log_debug (solo con HOOK_DEBUG=1), no emite nada y devuelve None: el hook sale
+    con exit 0 y Claude Code sigue como si no existiera. No atrapa BaseException
+    (SystemExit / KeyboardInterrupt).
+
+    Args:
+        event: nombre del evento, solo para el mensaje de log.
+    """
 
     def decorator(fn: Callable[_P, _R]) -> Callable[_P, _R | None]:
         @functools.wraps(fn)
@@ -204,6 +239,11 @@ def hook_main(event: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R | None
 
 
 def session_key(data: dict[str, Any]) -> str:
+    """Clave de estado de la sesion: hash de session_id, o del cwd si falta.
+
+    Se hashea para que el nombre de archivo sea seguro (sin separadores ni chars
+    raros) cualquiera sea el valor recibido. Los hooks le agregan su sufijo.
+    """
     sid = data.get("session_id")
     if sid:
         return "sid-" + hashlib.sha256(str(sid).encode()).hexdigest()[:16]
@@ -213,6 +253,7 @@ def session_key(data: dict[str, Any]) -> str:
 
 
 def _state_path(key: str) -> Path:
+    """Ruta <temp>/fluency4d/<key>.json; crea y endurece el directorio (ver abajo)."""
     directory = Path(tempfile.gettempdir()) / "fluency4d"
     # CWE-377: en un /tmp compartido (POSIX) el subdir de estado no debe ser
     # world-accesible ni un symlink pre-creado por un atacante. Se crea con
@@ -237,6 +278,13 @@ def _state_path(key: str) -> Path:
 
 
 def load_state(key: str) -> dict[str, Any]:
+    """Lee el estado de `key`. Ausente, ilegible, no-objeto o vencido -> {}.
+
+    Vencido = su `_ts` (lo pone save_state) tiene mas de STATE_TTL_SECONDS: una
+    sesion retomada al otro dia arranca como nueva (vuelve la inyeccion de
+    arranque). Puede lanzar OSError desde _state_path (dir inseguro); hook_main
+    lo convierte en pass-through.
+    """
     path = _state_path(key)
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
@@ -249,12 +297,24 @@ def load_state(key: str) -> dict[str, Any]:
     return state
 
 
+# --- Flags globales (~/.claude/fluency4d/*.json) -------------------------------
+# Los escriben las skills (/caveman, /adhd, /verify-diff) con la tool Write; los
+# hooks solo los leen. La barra de estado (statusline/statusline.js) lee los
+# mismos archivos con Node y ambos lados tienen que dar el MISMO veredicto
+# (fixture compartido tests/fluency-4d/fixtures/flags_parity.json). Por eso los
+# loaders leen con errors="replace": Node (readFileSync con 'utf8') no falla
+# ante bytes UTF-8 invalidos, los reemplaza por U+FFFD. Con el decode estricto
+# Python lanzaria UnicodeDecodeError (que no esta en el except) y el hook haria
+# pass-through donde la barra muestra el modo prendido.
+
+
 def load_caveman() -> dict[str, Any]:
     """Lee el flag global de modo caveman (~/.claude/fluency4d/caveman.json).
 
     Solo lectura. Devuelve el dict si esta prendido (on=True) y level es valido;
     ante cualquier error / JSON invalido / OFF / level fuera del set -> {}
     (pass-through). El writer es la tool Write del skill, no este helper.
+    Niveles validos: auto, lite, full, ultra.
     """
     path = Path.home() / ".claude" / "fluency4d" / "caveman.json"
     try:
@@ -295,6 +355,7 @@ def load_adhd() -> dict[str, Any]:
     Solo lectura. Devuelve el dict si esta prendido (on=True) y level es valido;
     ante cualquier error / JSON invalido / OFF / level fuera del set -> {}
     (pass-through). El writer es la tool Write del skill, no este helper.
+    Niveles validos: auto, lite, full (sin ultra, a diferencia de caveman).
     """
     path = Path.home() / ".claude" / "fluency4d" / "adhd.json"
     try:
@@ -398,6 +459,12 @@ def atomic_write_json(
 
 
 def save_state(key: str, state: dict[str, Any]) -> None:
+    """Persiste `state` (lo muta: le pone `_ts` = ahora, que renueva el TTL).
+
+    Best-effort: un OSError al escribir solo se loguea; el hook sigue y emite lo
+    que tenga que emitir (a lo sumo se pierde el dedup de esta sesion). Un OSError
+    de _state_path (dir inseguro) se propaga a hook_main.
+    """
     state["_ts"] = time.time()
     path = _state_path(key)
     try:
