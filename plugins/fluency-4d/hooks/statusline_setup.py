@@ -66,6 +66,7 @@ import datetime
 import functools
 import hashlib
 import json
+import math
 import os
 import re
 import shlex
@@ -425,6 +426,24 @@ def write_user_text(path: Path, text: str) -> None:
     atomic_write_text(path, text)
 
 
+def lock_wait_seconds() -> float:
+    """Espera maxima del lock: FLUENCY_4D_LOCK_WAIT o el default de 65 s.
+
+    65 s es un poco mas que LOCK_STALE_S, para alcanzar a retomar un huerfano.
+    Un valor que no es un numero finito >= 0 ("abc", "", "nan", "inf", "-1") se
+    ignora y vale el default, en vez de abortar con ValueError.
+    """
+    default = float(LOCK_STALE_S + 5)
+    raw = os.environ.get("FLUENCY_4D_LOCK_WAIT")
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if math.isfinite(value) and value >= 0 else default
+
+
 @contextmanager
 def setup_lock(wait_s: float | None = None) -> Iterator[None]:
     """Lock exclusivo fluency4d/.setup.lock que cubre toda la operacion.
@@ -440,14 +459,14 @@ def setup_lock(wait_s: float | None = None) -> Iterator[None]:
     soltar el lock AJENO.
 
     Args:
-        wait_s: segundos maximos de espera; None = FLUENCY_4D_LOCK_WAIT o 65 s
-            (un poco mas que LOCK_STALE_S, para alcanzar a retomar un huerfano).
+        wait_s: segundos maximos de espera; None = lock_wait_seconds()
+            (FLUENCY_4D_LOCK_WAIT o 65 s).
 
     Raises:
         SetupError: si vence la espera con el lock tomado por otro proceso vivo.
     """
     if wait_s is None:
-        wait_s = float(os.environ.get("FLUENCY_4D_LOCK_WAIT", LOCK_STALE_S + 5))
+        wait_s = lock_wait_seconds()
     directory = fluency_dir()
     created_dir = not directory.exists()
     path = lock_path()

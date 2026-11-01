@@ -63,6 +63,7 @@ from hook_utils import (
     read_stdin_safe,
     save_state,
     session_key,
+    state_num,
 )
 
 DEFAULT_THRESHOLD = 50
@@ -193,7 +194,9 @@ def main() -> None:
         # El re-arme por compactacion (abajo) lo vuelve a armar si corresponde.
         if "last_seen_pct" not in state and state.get("disparos"):
             state["fired"] = True
-        last_seen = float(state.get("last_seen_pct", 0))
+        # state_num: un campo de tipo raro (last_seen_pct = "abc") hacia
+        # lanzar float() antes de save_state -> pass-through hasta vencer el TTL.
+        last_seen = state_num(state.get("last_seen_pct"))
         if pct < last_seen - NATIVE_DROP_POINTS:
             state["fired"] = False  # compactacion detectada: re-armar
         state["last_seen_pct"] = pct
@@ -204,8 +207,8 @@ def main() -> None:
     else:
         tokens = value
         interval = _checkpoint_interval_tokens()  # cadencia absoluta, no % de ventana
-        last_seen = float(state.get("last_seen_tokens", 0))
-        last_fired = float(state.get("last_fired_tokens", 0))
+        last_seen = state_num(state.get("last_seen_tokens"))
+        last_fired = state_num(state.get("last_fired_tokens"))
         # Migracion desde estado v0.2 (flag viejo sin ancla) O un disparo previo
         # del OTRO modo (nativo): sembrar el ancla de tokens en la PRIMERA
         # observacion fallback para no duplicar al togglear. Tras el primer fire
@@ -225,7 +228,7 @@ def main() -> None:
         display_value = tokens
 
     if fire:
-        state["disparos"] = int(state.get("disparos", 0)) + 1
+        state["disparos"] = int(state_num(state.get("disparos"))) + 1
     save_state(key, state)  # last_seen se persiste SIEMPRE, en ambos modos
 
     if fire:
