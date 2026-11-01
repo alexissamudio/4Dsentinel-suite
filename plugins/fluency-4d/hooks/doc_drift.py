@@ -22,13 +22,13 @@ matchea; otro tema del mismo archivo avisa en una edicion posterior).
 Lee .claude/docs/bridges.json del proyecto. Estado: <temp>/fluency4d/
 <clave>-drift.json con `temas_avisados`.
 Pass-through: payload vacio o invalido, subagente, sin cwd o sin ruta, archivo
-fuera del proyecto o bajo .claude/, sin bridges.json (o ilegible), ningun tema
-con `rutas` que matchee, o el tema ya se aviso en esta sesion.
+fuera del proyecto o bajo .claude/, sin bridges.json (o ilegible, invalido o
+por encima de los topes MAX_BRIDGES_BYTES / MAX_BRIDGES_TEMAS de hook_utils),
+ningun tema con `rutas` que matchee, o el tema ya se aviso en esta sesion.
 """
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -36,8 +36,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from hook_utils import (
     hook_main,
+    load_bridges_temas,
     load_state,
-    log_debug,
     output_context,
     output_empty,
     parse_hook_input,
@@ -46,6 +46,7 @@ from hook_utils import (
     sanitize_field,
     save_state,
     session_key,
+    str_list,
 )
 
 
@@ -90,24 +91,21 @@ def main() -> None:
         return output_empty()
 
     rel_posix = rel.as_posix().casefold()
-    if ".claude/" in rel_posix + "/":  # nunca avisar por ediciones bajo .claude/
+    # Nunca avisar por ediciones bajo .claude/ (en cualquier nivel). Se compara
+    # por SEGMENTO: un substring ".claude/" excluia tambien `my.claude/`.
+    if ".claude" in rel_posix.split("/"):
         return output_empty()
 
-    bridges_path = cwd / ".claude" / "docs" / "bridges.json"
-    if not bridges_path.is_file():
-        return output_empty()
-    try:
-        bridges = json.loads(bridges_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        log_debug(f"bridges.json ilegible: {exc}")
-        return output_empty()
-    temas = bridges.get("temas")
-    if not isinstance(temas, list):
+    # load_bridges_temas: ausente, ilegible, invalido (incluso anidado profundo
+    # -> RecursionError), no-objeto o sin `temas` lista -> []; BOM tolerado y
+    # mismos topes de tamano/temas que bridge_router (timeout del hook).
+    temas = load_bridges_temas(cwd)
+    if not temas:
         return output_empty()
 
     key = session_key(data) + "-drift"
     state = load_state(key)
-    avisados = set(state.get("temas_avisados", []))
+    avisados = set(str_list(state.get("temas_avisados")))  # tipo raro -> []
 
     for entry in temas:
         if not isinstance(entry, dict):

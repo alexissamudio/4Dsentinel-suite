@@ -389,3 +389,30 @@ def test_stats_poda_entradas_viejas(run_hook, project, tmp_path):
     run_hook(HOOK, payload(project, "m5"))
     todo = _json.loads(stats_path.read_text(encoding="utf-8"))
     assert "c:\\proyecto\\muerto" not in todo and len(todo) == 1
+
+
+# --- bridges.json valido pero con otra forma ---------------------------------
+
+
+def test_bridges_no_objeto_no_pierde_arranque(run_hook, project, state_of):
+    # JSON valido pero lista: antes `.get` lanzaba AttributeError, hook_main lo
+    # tragaba y el arranque se perdia en este prompt y en los siguientes.
+    write_bridges(project, data='[{"tema": "auth"}]')
+    (project / ".claude" / "docs" / "lecciones.md").write_text("# L", encoding="utf-8")
+    out = run_hook(HOOK, payload(project, "nobj1", "login"))
+    assert "lecciones.md" in out
+    assert state_of("nobj1", "-bridge")["arranque_inyectado"] is True
+
+
+def test_bridges_entradas_malformadas_se_ignoran(run_hook, project):
+    data = {
+        "temas": [
+            "texto suelto",
+            None,
+            {"tema": "x", "archivo": ".claude/docs/x.md", "keywords": "login"},
+            {"tema": "auth", "archivo": ".claude/docs/auth.md", "keywords": ["login"]},
+        ]
+    }
+    write_bridges(project, data=data)
+    out = run_hook(HOOK, payload(project, "nobj2", "login"))
+    assert "auth.md" in out and "x.md" not in out

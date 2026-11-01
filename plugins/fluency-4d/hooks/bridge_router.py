@@ -26,8 +26,10 @@ Lee (solo lectura) del proyecto: .claude/docs/lecciones.md, estado-sesion.md
 (su mtime) y bridges.json. Estado: <temp>/fluency4d/<clave>-bridge.json con
 `arranque_inyectado` y `temas_inyectados`. Telemetria: ~/.claude/fluency4d/
 stats.json via bump_stats (sesion nueva y temas nuevos).
-Pass-through: payload vacio o invalido, subagente, `prompt` o `cwd` vacios, o
-nada nuevo que inyectar (en ese caso el estado igual se guarda si cambio).
+Pass-through: payload vacio o invalido, subagente, `prompt` o `cwd` vacios (o
+`cwd` que no es string), o nada nuevo que inyectar (en ese caso el estado igual
+se guarda si cambio). Un `prompt` no vacio que no es string (123, lista, dict)
+cuenta como "" para las keywords, pero el arranque se inyecta igual.
 
 Lo importa tambien suite_playbook (normalize y keyword_matches): cambiar su
 firma rompe ese hook.
@@ -48,6 +50,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from hook_utils import (
     bump_stats,
     hook_main,
+    load_bridges_temas,
     load_state,
     log_debug,
     output_context,
@@ -58,6 +61,7 @@ from hook_utils import (
     sanitize_field,
     save_state,
     session_key,
+    str_list,
 )
 
 MAX_TEMAS_POR_PROMPT = 2
@@ -152,18 +156,21 @@ def tema_lines(cwd: Path, prompt: str, state: dict[str, Any]) -> list[str]:
     Muta `state["temas_inyectados"]` con los hits de este prompt (a lo sumo
     MAX_TEMAS_POR_PROMPT). Ademas puede sugerir hasta MAX_RELACIONADOS temas
     relacionados, que NO se marcan como inyectados. Temas con `archivo` inseguro
-    (ver safe_doc_path) se descartan enteros.
+    (ver safe_doc_path) se descartan enteros. Un bridges.json que no es un objeto
+    con `temas` lista se trata como sin puentes, y las entradas malformadas se
+    ignoran: nada de esto lanza.
+
+    La lectura va por load_bridges_temas (hook_utils): BOM UTF-8 tolerado, JSON
+    invalido / anidado profundo (RecursionError) / no-objeto -> sin puentes, y
+    topes MAX_BRIDGES_BYTES (archivo mas pesado: se ignora) y MAX_BRIDGES_TEMAS
+    (solo los primeros temas) para no pasarse del timeout de 5 s del hook, que
+    se llevaria puesta tambien la inyeccion de arranque. Un `state` con
+    `temas_inyectados` de tipo raro se trata como lista vacia (str_list).
     """
-    bridges_path = cwd / ".claude" / "docs" / "bridges.json"
-    if not bridges_path.is_file():
-        return []
-    try:
-        bridges = json.loads(bridges_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        log_debug(f"bridges.json ilegible: {exc}")
-        return []
-    temas = bridges.get("temas")
-    if not isinstance(temas, list):
+    if not prompt:
+        return []  # sin texto (o prompt no-string, ver main): ninguna keyword matchea
+    temas = load_bridges_temas(cwd)
+    if not temas:
         return []
 
     # Indice tema -> entry en una pasada COMPLETA y separada del loop de hits.
@@ -195,7 +202,7 @@ def tema_lines(cwd: Path, prompt: str, state: dict[str, Any]) -> list[str]:
             continue
         entry_por_tema[tema] = {**entry, "archivo": safe_archivo}
 
-    injected = set(state.get("temas_inyectados", []))
+    injected = set(str_list(state.get("temas_inyectados")))
     norm_prompt = normalize(prompt)
     hits: list[tuple[str, str]] = []
     for tema, entry in entry_por_tema.items():
@@ -269,10 +276,14 @@ def main() -> None:
     if data.get("agent_type"):  # subagentes: no inyectar
         return output_empty()
 
-    prompt = data.get("prompt") or ""
+    prompt_raw = data.get("prompt")
     cwd_raw = data.get("cwd") or ""
-    if not prompt or not cwd_raw:
+    if not prompt_raw or not cwd_raw or not isinstance(cwd_raw, str):
         return output_empty()
+    # Prompt no vacio pero que no es string (123, lista, dict): normalize()
+    # lanzaba TypeError y hook_main se llevaba puesto el arranque. Se trata como
+    # "" (sin keywords) y el arranque sigue.
+    prompt = prompt_raw if isinstance(prompt_raw, str) else ""
     cwd = Path(cwd_raw)
     # NO agregar early-returns despues de este punto: cortarian la inyeccion de
     # arranque, que no depende de que haya bridges.json ni hits de temas.
@@ -281,11 +292,16 @@ def main() -> None:
     # (-ckpt/-drift/-calib/-playbook/-gate) que comparten el mismo session_key.
     key = session_key(data) + "-bridge"
     state = load_state(key)
+    # Campo de tipo raro (temas_inyectados = 5, o con no-hasheables): set() lanzaba
+    # TypeError antes de save_state -> pass-through hasta vencer el TTL. Se
+    # normaliza a lista de strings ANTES de la foto.
+    if "temas_inyectados" in state:
+        state["temas_inyectados"] = str_list(state["temas_inyectados"])
     # Foto serializada del estado: permite saber si arranque_lines/tema_lines lo
     # mutaron sin rastrear cada cambio, y asi guardar solo cuando hace falta.
     state_before = json.dumps(state, sort_keys=True, ensure_ascii=True)
     arranque_previo = bool(state.get("arranque_inyectado"))
-    temas_previos = set(state.get("temas_inyectados", []))
+    temas_previos = set(str_list(state.get("temas_inyectados")))
 
     lines = arranque_lines(cwd, state) + tema_lines(cwd, prompt, state)
 

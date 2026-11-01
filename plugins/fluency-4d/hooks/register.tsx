@@ -632,7 +632,7 @@ async function customThemes($: $): Promise<{ value: string; name: string }[]> {
       const slug = f.name.slice(0, -'.json'.length)
       let name = slug
       try {
-        const parsed: unknown = JSON.parse(String(await $.fs.read(`${dir}/${f.name}`)))
+        const parsed: unknown = parseJson(String(await $.fs.read(`${dir}/${f.name}`)))
         if (!isObj(parsed)) continue
         if (typeof parsed.name === 'string' && parsed.name.trim() !== '') name = parsed.name
       } catch {
@@ -646,15 +646,24 @@ async function customThemes($: $): Promise<{ value: string; name: string }[]> {
   }
 }
 
+// JSON.parse sin el BOM UTF-8 inicial (Notepad, PowerShell 5 `-Encoding utf8`),
+// igual que parseJson de statusline.js: con BOM, JSON.parse tira y el archivo
+// se ignoraba. Lo usan todas las lecturas de JSON del panel (statusline,
+// panel4d, flags y temas custom).
+function parseJson(text: string): unknown {
+  return JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text)
+}
+
 // Estricta: un archivo que no existe es {}; uno ilegible o con JSON roto TIRA,
-// para no pisarlo con un objeto vacío y perder sus otras claves.
+// para no pisarlo con un objeto vacío y perder sus otras claves. Con BOM se lee
+// bien, y al reescribirlo (mergeJson) queda sin BOM.
 async function readStrict($: $, path: string): Promise<Json> {
   if (!(await $.fs.exists(path))) return {}
   const text = String(await $.fs.read(path))
   if (text.trim() === '') return {}
   let parsed: unknown
   try {
-    parsed = JSON.parse(text)
+    parsed = parseJson(text)
   } catch {
     throw new Error(`${path} tiene JSON inválido; no lo piso`)
   }
@@ -736,10 +745,34 @@ function modelAlias(model: string | undefined): string | undefined {
   return ['opus', 'sonnet', 'haiku'].find(a => m.includes(a))
 }
 
+// Mismo formato y redondeo que fmtTokens de statusline/statusline.js, para que
+// el panel y la barra muestren igual el mismo número: M exacto sin decimales
+// ("1M"), M no exacto con 2 y k con 1; < 1000 redondeado a entero. Lo que en k
+// daría "1000.0k" (999_950..999_999) sube a "1.00M". Fuera de dominio (NaN,
+// Infinity, negativo, no number, o un texto de más de 8 caracteres o con
+// notación científica, p. ej. >= 1e10) = "—". El cuerpo es JS puro y da
+// exactamente lo mismo que el de la barra: lo verifica
+// statusline/test/fmt_tokens_parity.test.js.
 function fmtTokens(n: number): string {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`
-  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`
-  return String(n)
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return '—'
+  const k = (n / 1e3).toFixed(1)
+  let s
+  if (n < 999.5) s = String(Math.round(n))
+  else if (n < 1e6 && k !== '1000.0') s = `${k}k`
+  else s = `${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2)}M`
+  return s.length <= 8 && /^\d+(\.\d+)?[kM]?$/.test(s) ? s : '—'
+}
+
+/**
+ * Número finito desde un valor de un JSON de estado: solo `number` o string
+ * numérico no vacío. Nunca `Number()` sobre un objeto: llama a su
+ * toString/valueOf y con `{"toString":[]}` tira TypeError (igual que num() de
+ * statusline.js).
+ * @returns el número, o undefined si no es un finito
+ */
+function finiteNum(v: unknown): number | undefined {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN
+  return Number.isFinite(n) ? n : undefined
 }
 
 function hhmm(iso: string | undefined): string | undefined {
@@ -853,8 +886,8 @@ async function loadSnapshot(
   // el borrador apaga caveman (ver baseOf).
   const adhdReal = modeValue(adhd, ADHD_LEVELS)
   if (cavemanValue !== 'off' && adhdReal !== 'off') cur[ADHD_HIDDEN] = adhdReal
-  const f = Number(st.cutFraction)
-  cur['bar.cut'] = f > 0 && f < 1 ? String(f) : '0.5'
+  const f = finiteNum(st.cutFraction)
+  cur['bar.cut'] = f !== undefined && f > 0 && f < 1 ? String(f) : '0.5'
   if (l.effort !== undefined) cur['model.effort'] = l.effort
   const alias = modelAlias(l.model)
   if (alias !== undefined) cur['model.model'] = alias
@@ -917,7 +950,9 @@ function shownOf(s: Setting, value: string | undefined, u: Panel4dUi): string {
   const hit = optionsOf(s, u).find(([v]) => v === value)
   if (hit) return hit[1]
   if (s.id === 'bar.cut') return `${Math.round(Number(value) * 100)}%`
-  if (s.id === 'session.autocompact' && Number(value) > 0) return fmtTokens(Number(value))
+  // Finito y > 0: "Infinity" o "1e400" (settings editado a mano) se muestran tal cual, no "InfinityM".
+  const n = finiteNum(value)
+  if (s.id === 'session.autocompact' && n !== undefined && n > 0) return fmtTokens(n)
   return value
 }
 

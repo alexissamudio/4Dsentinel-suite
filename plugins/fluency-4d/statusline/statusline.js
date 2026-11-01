@@ -42,8 +42,12 @@ const MODES = ['simple', 'normal', 'experto'];
 //   (Opus/Sonnet 5.5; 0.1x en otros modelos, usamos 0.1 por conservador); si la cache esta fria se reescribe a 1.25x.
 //   Sin recargo por contexto largo en modelos de 1M, asi que el tamano solo no hace caro un mensaje.
 // - LARGO de la charla: aviso de calidad (context rot), no de costo. Corte = mitad de la ventana.
-const CUT_ENV = Number(process.env.STATUSLINE_CUT_TOKENS) || null;
+// Solo un numero finito > 0: num() descarta "", "abc", "Infinity" y "1e400"; 0 y negativos tambien quedan afuera.
+const CUT_ENV = ((n) => (n !== null && n > 0 ? n : null))(num(process.env.STATUSLINE_CUT_TOKENS));
 const CACHE_READ = 0.1;
+// Tope de cordura para un conteo de tokens del stdin o del transcript (ventanas
+// reales: <= ~1e7). Lo que pase de aca se descarta como dato invalido.
+const MAX_TOKENS = 1e9;
 // Reescribir la cache fria: 1.25x con TTL de 5 min, 2x con TTL de 1 h (prompt_cache.ttl).
 const CACHE_WRITE_5M = 1.25;
 const CACHE_WRITE_1H = 2;
@@ -110,10 +114,26 @@ function bar(pct, color, width = 10) {
   return paint(color, '▰'.repeat(filled)) + paint(RULE, '▱'.repeat(width - filled));
 }
 
+/**
+ * Tokens en corto: < 1000 redondeado a entero, k con 1 decimal, M exacto sin
+ * decimales ("1M") y M no exacto con 2 ("1.50M"). Lo que en k redondearia a
+ * "1000.0k" (999_950..999_999) sube a "1.00M"; igual 1_004_999 -> "1.00M": solo
+ * un multiplo exacto de 1M va sin decimales. Fuera de dominio (no number, NaN,
+ * Infinity, negativo, o un texto de mas de 8 caracteres o con notacion
+ * cientifica, p. ej. >= 1e10) = "—".
+ * Mismo cuerpo que fmtTokens de hooks/register.tsx (paridad exacta:
+ * test/fmt_tokens_parity.test.js).
+ * @param {unknown} n
+ * @returns {string} a lo sumo 8 caracteres
+ */
 function fmtTokens(n) {
-  if (n >= 1e6) return (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
-  return String(n);
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return '—';
+  const k = (n / 1e3).toFixed(1);
+  let s;
+  if (n < 999.5) s = String(Math.round(n));
+  else if (n < 1e6 && k !== '1000.0') s = k + 'k';
+  else s = (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2) + 'M';
+  return s.length <= 8 && /^\d+(\.\d+)?[kM]?$/.test(s) ? s : '—';
 }
 
 const hhmm = (ms) => {
@@ -122,14 +142,29 @@ const hhmm = (ms) => {
 };
 
 /**
- * Lee ~/.claude/fluency4d/statusline.json. Solo un objeto plano cuenta como
- * estado: un numero, un array o null = {} (asi `mode` siempre escribe un objeto
- * valido en vez de "guardar" en un primitivo).
+ * JSON.parse sin el BOM UTF-8 inicial (lo agregan Notepad o PowerShell 5 con
+ * `-Encoding utf8`; readFileSync 'utf8' no lo saca y JSON.parse lo rechaza).
+ * Lo usan todas las lecturas de JSON de la barra: statusline.json, los flags,
+ * las lineas del transcript y el stdin. Es declaracion de funcion (hoisted)
+ * porque readState() corre antes de esta linea.
+ * @param {string} text
+ * @returns {unknown}
+ * @throws SyntaxError si no es JSON
+ */
+function parseJson(text) {
+  return JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
+}
+
+/**
+ * Lee ~/.claude/fluency4d/statusline.json (con o sin BOM). Solo un objeto plano
+ * cuenta como estado: un numero, un array o null = {} (asi `mode` siempre escribe
+ * un objeto valido en vez de "guardar" en un primitivo). Cada clave se valida
+ * donde se usa (isTheme, MODES, quiet === false, cutFraction via num()).
  * @returns {object} el estado, o {} si falta, es ilegible o no es un objeto
  */
 function readState() {
   try {
-    const st = JSON.parse(fs.readFileSync(MODE_FILE, 'utf8'));
+    const st = parseJson(fs.readFileSync(MODE_FILE, 'utf8'));
     return st && typeof st === 'object' && !Array.isArray(st) ? st : {};
   } catch { return {}; } // sin archivo = default
 }
@@ -164,12 +199,13 @@ function epochSec(v) {
 }
 /**
  * Tokens de contexto de un `usage`: input + cache_read + cache_creation (los
- * campos invalidos o negativos se ignoran).
+ * campos invalidos, negativos o mayores que MAX_TOKENS se ignoran: un 1e308
+ * haria la suma Infinity y el % saldria en notacion cientifica).
  * @param {object} u objeto usage de la API
  * @returns {number|null} null si ningun campo es un numero valido
  */
 function sumTokens(u) {
-  const parts = [u.input_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens].map(num).filter((n) => n !== null && n >= 0);
+  const parts = [u.input_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens].map(num).filter((n) => n !== null && n >= 0 && n <= MAX_TOKENS);
   return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
 }
 
@@ -180,9 +216,11 @@ function readMode(st) {
 }
 
 // Fraccion de la ventana para "charla larga": cutFraction del archivo (0 < f < 1), si no la mitad.
+// Solo un number o un string numerico (via num): nunca Number() sobre un objeto,
+// que llama a su toString/valueOf y con {"toString":[]} tira TypeError.
 function cutFraction(st) {
-  const f = Number(st.cutFraction);
-  return f > 0 && f < 1 ? f : 0.5;
+  const f = num(st.cutFraction);
+  return f !== null && f > 0 && f < 1 ? f : 0.5;
 }
 
 // Fallback si el JSON no trae context_window: ultimo turno del hilo principal.
@@ -205,7 +243,7 @@ function readTranscriptTail(file) {
   const lines = buf.toString('utf8').split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     try {
-      const e = JSON.parse(lines[i]);
+      const e = parseJson(lines[i]);
       const u = e.message && e.message.usage;
       if (!u || typeof u !== 'object' || e.isSidechain) continue;
       const n = sumTokens(u);
@@ -284,13 +322,15 @@ const ADHD_LEVELS = ['auto', 'lite', 'full'];
 const CAVEMAN_LEVELS = ['auto', 'lite', 'full', 'ultra'];
 
 /**
- * Lee el flag ~/.claude/fluency4d/<name>.json.
+ * Lee el flag ~/.claude/fluency4d/<name>.json, con o sin BOM: el panel
+ * (parseJson) y hook_utils (read_json_safe, utf-8-sig) tambien lo toleran, asi
+ * un flag con BOM da el mismo veredicto en los tres lados.
  * @param {'adhd'|'caveman'|'verify'} name
  * @returns {object|null} el objeto si es JSON valido con on === true; si no, null (apagado)
  */
 function readFlag(name) {
   try {
-    const st = JSON.parse(fs.readFileSync(path.join(FLAGS_DIR, `${name}.json`), 'utf8'));
+    const st = parseJson(fs.readFileSync(path.join(FLAGS_DIR, `${name}.json`), 'utf8'));
     return st && typeof st === 'object' && !Array.isArray(st) && st.on === true ? st : null;
   } catch { return null; } // flag ausente o invalido = apagado
 }
@@ -386,7 +426,8 @@ function collect(s) {
   const modelId = clean(m.id) || '';
   const cw = isObj(s.context_window) ? s.context_window : {};
   const size = num(cw.context_window_size);
-  const windowSize = size !== null && size > 0 ? size : (/\[1m\]|1M/i.test(modelId + model) ? 1_000_000 : 200_000);
+  // 1..MAX_TOKENS: una ventana de 1e-300 o 1e308 daria un % Infinity o 0 sin sentido.
+  const windowSize = size !== null && size >= 1 && size <= MAX_TOKENS ? size : (/\[1m\]|1M/i.test(modelId + model) ? 1_000_000 : 200_000);
   let used = isObj(cw.current_usage) ? sumTokens(cw.current_usage) : null;
   if (used === null) used = contextFromTranscript(s.transcript_path);
 
@@ -404,7 +445,9 @@ function collect(s) {
   if (!missCause && pc && isObj(pc.miss_causes)) {
     missCause = clean(Object.entries(pc.miss_causes).sort((a, b) => (num(b[1]) || 0) - (num(a[1]) || 0)).map(([k]) => k)[0]);
   }
-  const cost = isObj(s.cost) ? num(s.cost.total_cost_usd) : null;
+  // 0 <= costo < 1e9: toFixed(2) de un numero >= 1e21 sale en notacion cientifica.
+  const rawCost = isObj(s.cost) ? num(s.cost.total_cost_usd) : null;
+  const cost = rawCost !== null && rawCost >= 0 && rawCost < 1e9 ? rawCost : null;
   const recache = pc ? num(pc.recache_tokens_if_cold) : null;
   const ws = isObj(s.workspace) ? s.workspace.current_dir : undefined;
 
@@ -610,7 +653,8 @@ function renderExpert(d) {
 const RENDER = { simple: renderSimple, normal: renderNormal, experto: renderExpert };
 
 // CLI: node statusline.js mode <simple|normal|experto|silencio|avisos|tema>
-// (lo usa la skill /barra). Sin argumento imprime el estado y sale 0; con uno
+// (lo usa la skill /barra). Sin argumento imprime el estado (con el tema
+// efectivo, THEME, el mismo que pinta el render) y sale 0; con uno
 // invalido, el uso y sale 1. Preserva las demas claves del archivo.
 if (process.argv[2] === 'mode') {
   const m = process.argv[3];
@@ -623,7 +667,7 @@ if (process.argv[2] === 'mode') {
   } else if (isTheme(m)) {
     st.theme = m;
   } else {
-    console.log(`Modo actual: ${readMode(st)} (${avisos()}, tema ${clean(st.theme) || THEME}). Uso: node statusline.js mode ${MODES.join('|')}|silencio|avisos|<tema: ${Object.keys(THEMES).join(', ')}>`);
+    console.log(`Modo actual: ${readMode(st)} (${avisos()}, tema ${THEME}). Uso: node statusline.js mode ${MODES.join('|')}|silencio|avisos|<tema: ${Object.keys(THEMES).join(', ')}>`);
     process.exit(m ? 1 : 0);
   }
   try {
@@ -648,7 +692,7 @@ function render() {
   if (done) return;
   done = true;
   let s = {};
-  try { s = (JSON.parse(input) || {}); } catch { /* sin datos o cortado */ }
+  try { s = (parseJson(input) || {}); } catch { /* sin datos o cortado */ }
   process.stdout.write(RENDER[readMode(STATE)](collect(s)).join('\n'), () => process.exit(0));
 }
 const STDIN_TIMEOUT_MS = 2000;

@@ -48,6 +48,7 @@ from hook_utils import (
     read_stdin_safe,
     save_state,
     session_key,
+    str_list,
 )
 
 # Cada cluster: (tipo, frases ESTRECHAS que lo disparan, nudge a inyectar).
@@ -95,12 +96,14 @@ def main() -> None:
         return output_empty()
 
     prompt = data.get("prompt") or ""
-    if not prompt:
+    if not prompt or not isinstance(prompt, str):  # no-string: nada que matchear
         return output_empty()
 
     key = session_key(data) + "-playbook"
     state = load_state(key)
-    dados = set(state.get("nudges_dados", []))
+    # str_list: nudges_dados de tipo raro (5, o con no-hasheables) hacia lanzar
+    # set() antes de save_state -> pass-through hasta vencer el TTL.
+    dados = set(str_list(state.get("nudges_dados")))
 
     norm_prompt = normalize(prompt)
     lines: list[str] = []
