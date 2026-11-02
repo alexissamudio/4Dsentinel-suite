@@ -12,7 +12,9 @@ from conftest import BRIDGES_AUTH, write_bridges
 HOOK = "bridge_router.py"
 
 
-def payload(project, session, prompt="hola que tal"):
+# Prompt de tarea real (no trivial) y sin keywords de BRIDGES_AUTH: dispara el
+# arranque pero no temas. Un saludo ("hola que tal") ya NO consume el arranque.
+def payload(project, session, prompt="arranquemos con la tarea"):
     return {"prompt": prompt, "cwd": str(project), "session_id": session}
 
 
@@ -452,3 +454,40 @@ def test_sin_bridges_no_avisa(run_hook, project):
     (project / ".claude" / "docs" / "lecciones.md").write_text("# L", encoding="utf-8")
     out = run_hook(HOOK, payload(project, "big3"))
     assert "lecciones.md" in out and AVISO_GRANDE not in out
+
+
+def test_saludo_no_consume_el_arranque(run_hook, project, state_of):
+    """Un saludo no gasta el aviso: sale con el primer pedido real."""
+    (project / ".claude" / "docs" / "lecciones.md").write_text("# L", encoding="utf-8")
+    saludo = run_hook(HOOK, payload(project, "s-sal", "Hola, ¿qué tal?"))
+    assert saludo == ""
+    # Sin cambios de estado no se persiste nada (None) o, si existe, sin el flag.
+    assert not (state_of("s-sal", "-bridge") or {}).get("arranque_inyectado")
+    real = run_hook(HOOK, payload(project, "s-sal", "revisemos el modulo de pagos"))
+    assert "lecciones.md" in real
+    assert state_of("s-sal", "-bridge")["arranque_inyectado"] is True
+
+
+def test_es_prompt_trivial():
+    import importlib.util
+    from pathlib import Path
+
+    hooks = Path(__file__).resolve().parents[3] / "plugins" / "fluency-4d" / "hooks"
+    import sys
+
+    sys.path.insert(0, str(hooks))
+    spec = importlib.util.spec_from_file_location("bridge_router", hooks / "bridge_router.py")
+    br = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(br)
+
+    for trivial in ["Hola", "buenas!", "Buen día", "hola, ¿qué tal?", "ok", "dale gracias"]:
+        assert br.es_prompt_trivial(trivial), trivial
+    for real in [
+        "",
+        "?",
+        "hola, arreglemos el login",
+        "dale, push y abri el PR",
+        "hola que tal como andas todo bien",
+        "revisa auth",
+    ]:
+        assert not br.es_prompt_trivial(real), real

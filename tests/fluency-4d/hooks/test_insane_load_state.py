@@ -558,7 +558,12 @@ def _hooks(
         "bridge_router": (
             "bridge_router.py",
             "-bridge",
-            {"session_id": s, "cwd": str(project), "prompt": "hola", "permission_mode": "default"},
+            {
+                "session_id": s,
+                "cwd": str(project),
+                "prompt": "arranquemos con la tarea",
+                "permission_mode": "default",
+            },
             {},
             "lecciones.md",
         ),

@@ -134,14 +134,39 @@ def bridges_oversize_line(cwd: Path) -> str | None:
     )
 
 
-def arranque_lines(cwd: Path, state: dict[str, Any]) -> list[str]:
-    """Primer prompt de la sesion: senalar lecciones y estado previo si existen,
-    y avisar si bridges.json supera el tope de tamano (se ignora entero).
+# Palabras de saludo/acuse (ya normalizadas: sin acentos, casefold). Un prompt
+# hecho SOLO de estas, y corto, no es trabajo: no consume el aviso de arranque.
+SALUDOS = frozenset(
+    "hola holi holis buenas buenos buen dia dias tardes noches hey hi hello ey "
+    "que tal como estas va andas gracias ok okey dale listo chau saludos".split()
+)
+MAX_PALABRAS_TRIVIAL = 4
+
+
+def es_prompt_trivial(prompt: str) -> bool:
+    """True si el prompt es un saludo/acuse corto ("Hola", "buenas, que tal").
+
+    Conservador a proposito: ante la duda NO es trivial (el aviso de arranque
+    sale). Solo cuenta como trivial si tiene entre 1 y MAX_PALABRAS_TRIVIAL
+    palabras y TODAS estan en SALUDOS. Sin palabras ("", "?", prompt no-string
+    que main() trata como "") NO es trivial: el arranque sigue.
+    """
+    palabras = re.findall(r"[a-z0-9]+", normalize(prompt))
+    return 0 < len(palabras) <= MAX_PALABRAS_TRIVIAL and all(p in SALUDOS for p in palabras)
+
+
+def arranque_lines(cwd: Path, state: dict[str, Any], prompt: str = "") -> list[str]:
+    """Primer prompt NO trivial de la sesion: senalar lecciones y estado previo
+    si existen, y avisar si bridges.json supera el tope de tamano (se ignora entero).
+
+    Un saludo/acuse corto (es_prompt_trivial) NO consume el aviso: queda para el
+    primer pedido real. Si no, con "Hola" el aviso se gastaba y la tarea real
+    llegaba sin el recordatorio de leer lecciones/estado.
 
     Marca 'arranque_inyectado' aunque no exista ninguno, para no re-chequear
     el filesystem en cada prompt.
     """
-    if state.get("arranque_inyectado"):
+    if state.get("arranque_inyectado") or es_prompt_trivial(prompt):
         return []
     state["arranque_inyectado"] = True
 
@@ -330,7 +355,7 @@ def main() -> None:
     arranque_previo = bool(state.get("arranque_inyectado"))
     temas_previos = set(str_list(state.get("temas_inyectados")))
 
-    lines = arranque_lines(cwd, state) + tema_lines(cwd, prompt, state)
+    lines = arranque_lines(cwd, state, prompt) + tema_lines(cwd, prompt, state)
 
     # Punto de emision y persistencia unicos.
     if json.dumps(state, sort_keys=True, ensure_ascii=True) != state_before:
