@@ -314,10 +314,17 @@ def test_nt_unidad_relativa_misma_unidad_es_del_proyecto(proj: Path) -> None:
 @pytest.mark.parametrize(
     "raw",
     [
-        "\\\\host\\share\\.claude\\x",
-        "\\\\host\\share\\proj\\src\\x.py",
-        "Z:\\otro\\src\\x.py",
-        "Z:\\otro\\.claude\\x",
+        # Rutas Win32: en POSIX no son absolutas sino un nombre relativo (cae
+        # dentro del proyecto y avisar es correcto), asi que solo aplican en NT.
+        *(
+            pytest.param(r, marks=pytest.mark.skipif(not IS_NT, reason="ruta Win32"))
+            for r in (
+                "\\\\host\\share\\.claude\\x",
+                "\\\\host\\share\\proj\\src\\x.py",
+                "Z:\\otro\\src\\x.py",
+                "Z:\\otro\\.claude\\x",
+            )
+        ),
         "/etc/.claude/x",
         "../.claude/x",
         "../x.py",
