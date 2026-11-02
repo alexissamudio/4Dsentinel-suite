@@ -12,11 +12,23 @@ terminar la tarea. Temas sin `rutas` no se trackean (proyectos v0.2: re-correr
 
 Matching por segmento: `src/auth` matchea `src/auth/x.py` y el archivo exacto
 `src/auth`, pero NO `src/authentication/x.py`. Case-insensitive (NTFS).
+
+Evento: PostToolUse con matcher Edit|Write|MultiEdit|NotebookEdit (hooks.json).
+Stdin: payload del evento; usa `cwd`, `tool_input.file_path` (o
+`tool_input.notebook_path`), `agent_type` y `session_id` para la clave.
+Stdout: {"hookSpecificOutput": {"hookEventName": "PostToolUse",
+"additionalContext": ...}} con el recordatorio de UN tema (el primero que
+matchea; otro tema del mismo archivo avisa en una edicion posterior).
+Lee .claude/docs/bridges.json del proyecto. Estado: <temp>/fluency4d/
+<clave>-drift.json con `temas_avisados`.
+Pass-through: payload vacio o invalido, subagente, sin cwd o sin ruta, archivo
+fuera del proyecto o bajo .claude/, sin bridges.json (o ilegible, invalido o
+por encima de los topes MAX_BRIDGES_BYTES / MAX_BRIDGES_TEMAS de hook_utils),
+ningun tema con `rutas` que matchee, o el tema ya se aviso en esta sesion.
 """
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -24,8 +36,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from hook_utils import (
     hook_main,
+    load_bridges_temas,
     load_state,
-    log_debug,
     output_context,
     output_empty,
     parse_hook_input,
@@ -34,10 +46,17 @@ from hook_utils import (
     sanitize_field,
     save_state,
     session_key,
+    str_list,
 )
 
 
 def prefix_matches(rel_posix: str, prefix: str) -> bool:
+    """True si `rel_posix` es `prefix` o cuelga de el, comparando por segmento.
+
+    Args:
+        rel_posix: ruta relativa al proyecto, en POSIX y YA casefolded.
+        prefix: una entrada de `rutas` de bridges.json; se normaliza aca.
+    """
     prefix = prefix.strip().casefold().rstrip("/")
     if not prefix:
         return False
@@ -58,6 +77,8 @@ def main() -> None:
     if not cwd_raw or not file_raw:
         return output_empty()
 
+    # resolve() en ambos lados: symlinks y `..` no deben hacer que un archivo de
+    # adentro parezca de afuera (ni al reves) en el relative_to de abajo.
     cwd = Path(cwd_raw).resolve()
     file_path = Path(file_raw)
     if not file_path.is_absolute():
@@ -70,24 +91,21 @@ def main() -> None:
         return output_empty()
 
     rel_posix = rel.as_posix().casefold()
-    if ".claude/" in rel_posix + "/":  # nunca avisar por ediciones bajo .claude/
+    # Nunca avisar por ediciones bajo .claude/ (en cualquier nivel). Se compara
+    # por SEGMENTO: un substring ".claude/" excluia tambien `my.claude/`.
+    if ".claude" in rel_posix.split("/"):
         return output_empty()
 
-    bridges_path = cwd / ".claude" / "docs" / "bridges.json"
-    if not bridges_path.is_file():
-        return output_empty()
-    try:
-        bridges = json.loads(bridges_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        log_debug(f"bridges.json ilegible: {exc}")
-        return output_empty()
-    temas = bridges.get("temas")
-    if not isinstance(temas, list):
+    # load_bridges_temas: ausente, ilegible, invalido (incluso anidado profundo
+    # -> RecursionError), no-objeto o sin `temas` lista -> []; BOM tolerado y
+    # mismos topes de tamano/temas que bridge_router (timeout del hook).
+    temas = load_bridges_temas(cwd)
+    if not temas:
         return output_empty()
 
     key = session_key(data) + "-drift"
     state = load_state(key)
-    avisados = set(state.get("temas_avisados", []))
+    avisados = set(str_list(state.get("temas_avisados")))  # tipo raro -> []
 
     for entry in temas:
         if not isinstance(entry, dict):

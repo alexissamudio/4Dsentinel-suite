@@ -15,6 +15,16 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 HOOKS_DIR = REPO_ROOT / "plugins" / "fluency-4d" / "hooks"
 
+# Intensidad del fuzz (hypothesis + concurrencia de los test_insane_*): con
+# FLUENCY_FULL_FUZZ=1 (el CI la setea) corre la intensidad completa; sin ella, la
+# corrida local usa ~1/10 de los ejemplos (piso 25) y menos carga concurrente.
+FULL_FUZZ = os.environ.get("FLUENCY_FULL_FUZZ") == "1"
+
+
+def fuzz_examples(full: int, floor: int = 25) -> int:
+    """max_examples de hypothesis: `full` en CI, max(floor, full // 10) local."""
+    return full if FULL_FUZZ else max(floor, full // 10)
+
 
 @pytest.fixture()
 def run_hook(tmp_path):

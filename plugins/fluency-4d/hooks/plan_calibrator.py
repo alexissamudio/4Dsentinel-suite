@@ -18,6 +18,16 @@ Edge-trigger: dispara SOLO en la transicion no-plan -> plan (entrada a plan mode
 se calla en los prompts siguientes del mismo episodio, y se re-arma al salir y
 volver a entrar (asi la 2da/3ra tarea de planificacion de la sesion tambien recibe
 el protocolo).
+
+Evento: UserPromptSubmit (matcher .*), registrado en hooks/hooks.json.
+Stdin: payload del evento; usa `permission_mode`, `agent_type` y `session_id`
+(o `cwd`) para la clave de estado.
+Stdout: {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+"additionalContext": PROTOCOLO}} solo en la transicion a plan mode.
+Estado: <temp>/fluency4d/<clave>-calib.json con `last_mode`, que se escribe en
+CADA prompt (tambien fuera de plan mode): eso es lo que re-arma el disparo.
+Pass-through: payload vacio o invalido, subagente, o cualquier prompt que no
+sea el primero de un episodio de plan mode.
 """
 
 from __future__ import annotations
@@ -71,6 +81,8 @@ def main() -> None:
 
     # Edge-trigger: solo en la transicion no-plan -> plan.
     fire = current == "plan" and prev != "plan"
+    # Se guarda siempre (no solo al disparar): registrar el modo no-plan es lo
+    # que hace que la proxima entrada a plan mode vuelva a ser un flanco.
     state["last_mode"] = current
     save_state(key, state)
 

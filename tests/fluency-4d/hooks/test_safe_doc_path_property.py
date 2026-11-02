@@ -24,6 +24,7 @@ import sys
 import unicodedata
 from pathlib import Path
 
+from conftest import fuzz_examples
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -40,14 +41,14 @@ _safe_seg = st.text(
 )
 
 
-@settings(derandomize=True, max_examples=300)
+@settings(derandomize=True, max_examples=fuzz_examples(300))
 @given(st.text())
 def test_p1_nunca_lanza(s):
     r = hu.safe_doc_path(s)
     assert r is None or isinstance(r, str)
 
 
-@settings(derandomize=True, max_examples=500)
+@settings(derandomize=True, max_examples=fuzz_examples(500))
 @given(st.text())
 def test_p2_salida_siempre_segura_y_estable(s):
     r = hu.safe_doc_path(s)
@@ -61,7 +62,7 @@ def test_p2_salida_siempre_segura_y_estable(s):
     assert hu.safe_doc_path(r) == r
 
 
-@settings(derandomize=True, max_examples=300)
+@settings(derandomize=True, max_examples=fuzz_examples(300))
 @given(st.lists(_safe_seg, min_size=0, max_size=4), st.integers(min_value=0, max_value=4))
 def test_p3_traversal_siempre_rechazado(parts, pos):
     parts = list(parts)
@@ -70,13 +71,13 @@ def test_p3_traversal_siempre_rechazado(parts, pos):
     assert hu.safe_doc_path("\\".join(parts)) is None  # separador Windows tambien
 
 
-@settings(derandomize=True, max_examples=200)
+@settings(derandomize=True, max_examples=fuzz_examples(200))
 @given(st.sampled_from(["/", "~", "~usuario"]), _safe_seg)
 def test_p3_absoluto_o_home_rechazado(prefix, seg):
     assert hu.safe_doc_path(prefix + seg) is None
 
 
-@settings(derandomize=True, max_examples=200)
+@settings(derandomize=True, max_examples=fuzz_examples(200))
 @given(st.characters(min_codepoint=65, max_codepoint=90), _safe_seg)
 def test_p3_unidad_windows_rechazada(letter, seg):
     assert hu.safe_doc_path(f"{letter}:/{seg}") is None

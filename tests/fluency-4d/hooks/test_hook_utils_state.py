@@ -165,3 +165,26 @@ def test_atomic_write_text_symlink_escribe_en_destino(tmp_path):
     hook_utils.atomic_write_text(link, '{"a": 1}')
     assert link.is_symlink()
     assert target.read_text(encoding="utf-8") == '{"a": 1}'
+
+
+def test_load_state_bytes_invalidos_es_estado_vacio(state_dir):
+    # Bytes no UTF-8: antes UnicodeDecodeError escapaba y el hook quedaba en
+    # pass-through en cada evento de la sesion.
+    path = hook_utils._state_path("kbad")
+    path.write_bytes(b'{"arranque_inyectado": true, "x": "\xff\xfe"}')
+    assert hook_utils.load_state("kbad") == {}
+    hook_utils.save_state("kbad", {"a": 1})  # y se puede volver a guardar encima
+    assert hook_utils.load_state("kbad")["a"] == 1
+
+
+def test_bump_stats_bytes_invalidos_se_rehace(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    path = home / ".claude" / "fluency4d" / "stats.json"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"\xff\xfe basura")
+    hook_utils.bump_stats(str(tmp_path), ["auth"], True)
+    stats = json.loads(path.read_text(encoding="utf-8"))
+    (entry,) = stats.values()
+    assert entry["sesiones"] == 1 and entry["temas"]["auth"]["inyecciones"] == 1

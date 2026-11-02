@@ -94,3 +94,14 @@ test('mode invalido: muestra Uso, sale 1 y no escribe', () => {
   assert.strictEqual(bare.status, 0);
   assert.match(bare.plain, /Modo actual: experto \(silencio, tema templado\)/);
 });
+
+test('mode sin argumento muestra el tema efectivo, no uno invalido del archivo', () => {
+  const home = tempHome();
+  const file = path.join(flagsDir(home), 'statusline.json');
+  fs.writeFileSync(file, JSON.stringify({ theme: 'inexistente' }));
+  // Mismo tema que usa el render (THEME): el invalido cae a templado.
+  const bare = run({ home, mode: null, args: ['mode'] });
+  assert.strictEqual(bare.status, 0, bare.stderr);
+  assert.match(bare.plain, /tema templado\)/);
+  assert.doesNotMatch(bare.plain, /inexistente/);
+});

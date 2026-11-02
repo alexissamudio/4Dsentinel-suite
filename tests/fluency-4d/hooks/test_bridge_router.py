@@ -7,7 +7,7 @@ import json as _json
 import os
 import time
 
-from conftest import write_bridges
+from conftest import BRIDGES_AUTH, write_bridges
 
 HOOK = "bridge_router.py"
 
@@ -389,3 +389,66 @@ def test_stats_poda_entradas_viejas(run_hook, project, tmp_path):
     run_hook(HOOK, payload(project, "m5"))
     todo = _json.loads(stats_path.read_text(encoding="utf-8"))
     assert "c:\\proyecto\\muerto" not in todo and len(todo) == 1
+
+
+# --- bridges.json valido pero con otra forma ---------------------------------
+
+
+def test_bridges_no_objeto_no_pierde_arranque(run_hook, project, state_of):
+    # JSON valido pero lista: antes `.get` lanzaba AttributeError, hook_main lo
+    # tragaba y el arranque se perdia en este prompt y en los siguientes.
+    write_bridges(project, data='[{"tema": "auth"}]')
+    (project / ".claude" / "docs" / "lecciones.md").write_text("# L", encoding="utf-8")
+    out = run_hook(HOOK, payload(project, "nobj1", "login"))
+    assert "lecciones.md" in out
+    assert state_of("nobj1", "-bridge")["arranque_inyectado"] is True
+
+
+def test_bridges_entradas_malformadas_se_ignoran(run_hook, project):
+    data = {
+        "temas": [
+            "texto suelto",
+            None,
+            {"tema": "x", "archivo": ".claude/docs/x.md", "keywords": "login"},
+            {"tema": "auth", "archivo": ".claude/docs/auth.md", "keywords": ["login"]},
+        ]
+    }
+    write_bridges(project, data=data)
+    out = run_hook(HOOK, payload(project, "nobj2", "login"))
+    assert "auth.md" in out and "x.md" not in out
+
+
+# --- aviso visible: bridges.json por encima de MAX_BRIDGES_BYTES ---------------
+
+MIB = 1024 * 1024  # == hook_utils.MAX_BRIDGES_BYTES
+AVISO_GRANDE = "bridges.json supera 1 MB"
+
+
+def _bridges_de(project, size: int) -> None:
+    head = '{"temas": ' + _json.dumps(BRIDGES_AUTH["temas"]) + ', "q": "'
+    data = head + "z" * (size - len(head) - 2) + '"}'
+    assert len(data.encode()) == size
+    write_bridges(project, data=data)
+
+
+def test_bridges_sobre_el_tope_avisa_una_vez(run_hook, project):
+    _bridges_de(project, MIB + 1)
+    first = run_hook(HOOK, payload(project, "big1", "como funciona el login?"))
+    ctx = _json.loads(first)["hookSpecificOutput"]["additionalContext"]
+    assert ctx.count(AVISO_GRANDE) == 1 and "puentes desactivados" in ctx
+    assert "auth.md" not in ctx  # el archivo se ignora entero
+    assert ctx.isascii()
+    second = run_hook(HOOK, payload(project, "big1", "y el login?"))
+    assert second == ""  # sin repetir el aviso en la misma sesion
+
+
+def test_bridges_justo_en_el_tope_no_avisa(run_hook, project):
+    _bridges_de(project, MIB)
+    out = run_hook(HOOK, payload(project, "big2", "como funciona el login?"))
+    assert "auth.md" in out and AVISO_GRANDE not in out
+
+
+def test_sin_bridges_no_avisa(run_hook, project):
+    (project / ".claude" / "docs" / "lecciones.md").write_text("# L", encoding="utf-8")
+    out = run_hook(HOOK, payload(project, "big3"))
+    assert "lecciones.md" in out and AVISO_GRANDE not in out

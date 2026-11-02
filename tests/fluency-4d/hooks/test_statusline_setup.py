@@ -883,3 +883,23 @@ def test_lock_sobrevive_al_rmdir_del_duenio(monkeypatch, home):
     with mod.setup_lock(wait_s=0.3):
         assert (fdir(home) / ".setup.lock").is_file()
     assert not (fdir(home) / ".setup.lock").exists()
+
+
+@pytest.mark.parametrize("raw", ["abc", "", "nan", "inf", "-1"])
+def test_lock_wait_invalido_usa_el_default(monkeypatch, home, raw):
+    mod = _load_module(monkeypatch, home)
+    monkeypatch.setenv("FLUENCY_4D_LOCK_WAIT", raw)
+    assert mod.lock_wait_seconds() == mod.LOCK_STALE_S + 5
+    with mod.setup_lock():  # sin lock ajeno: toma y libera sin ValueError
+        assert (fdir(home) / ".setup.lock").is_file()
+
+
+def test_lock_wait_valido_se_respeta(monkeypatch, home):
+    mod = _load_module(monkeypatch, home)
+    monkeypatch.setenv("FLUENCY_4D_LOCK_WAIT", "0.3")
+    assert mod.lock_wait_seconds() == 0.3
+
+
+def test_lock_wait_no_numerico_por_cli(run, home):
+    r = run("setup", env_extra={"FLUENCY_4D_LOCK_WAIT": "abc"})
+    assert r.returncode == 0, r.stdout + r.stderr

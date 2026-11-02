@@ -16,6 +16,14 @@ de seguridad. Correr con:
 uv run --with pytest pytest tests/ -q
 ```
 
+**Intensidad del fuzz (`FLUENCY_FULL_FUZZ`).** Sin la variable (default local) los
+`test_insane_*.py` y `test_safe_doc_path_property.py` corren livianos: hypothesis con
+`max(25, n // 10)` ejemplos (helper `fuzz_examples` en `conftest.py`) y la concurrencia
+de `bump_stats` con 8 procesos x 2 rondas en vez de 20 x 5 (~1-1.5 min en total). El CI
+(ambos jobs pytest de `validate.yml`) setea `FLUENCY_FULL_FUZZ=1` = intensidad completa
+(~6 min). Para correrla completa local: `FLUENCY_FULL_FUZZ=1 uv run --with pytest ...
+pytest tests/ -q` (PowerShell: `$env:FLUENCY_FULL_FUZZ = "1"` antes).
+
 ## El patrón (conftest.py)
 
 Cada test ejecuta el hook REAL por subprocess (`uv run --script`) pasándole el
@@ -51,6 +59,12 @@ El env del subprocess redirige TODO lo persistente a `tmp_path`:
 - Al tocar `bridge_router.py`, los 4 tests que congelan el bloque de emisión
   única (trailer una vez, vacío-pero-estado-guardado, cap 2 temas, bridges
   malformado) son los que avisan si rompiste algo.
+- Tests insanos (`test_insane_*.py`, hypothesis >= 500 ejemplos): un bridges.json de
+  más de `MAX_BRIDGES_BYTES` (1 MB) se ignora y solo cuentan los primeros
+  `MAX_BRIDGES_TEMAS` (500); un test que necesite un bridges.json grande tiene que
+  quedar debajo de esos topes. La concurrencia de `bump_stats` se testea por
+  invariante (JSON siempre válido, la entrada ajena sobrevive, sin `.corrupt-*`), no
+  por cantidad de incrementos: perder alguno con el lock ocupado es aceptable.
 - **Imports hermanos en `scripts/` + mypy strict:** los scripts se importan por
   nombre plano (`from bump_common import ...`, `from frontmatter_utils import ...`);
   funciona en runtime porque `uv run --script` pone el dir del script en `sys.path[0]`,
@@ -118,7 +132,7 @@ Variables y mecanismos que los tests ejercitan:
   se vio (mtime + contenido), se devuelve con `os.link`. El `mkdir` de `fluency4d/` va
   dentro del bucle (el dueño hace `rmdir` si lo creó vacío). Las carreras se testean
   importando el módulo en proceso y parcheando `os.replace`/`os.open`.
-- `FLUENCY_4D_LOCK_WAIT=<s>`: acota la espera del lock (default 65 s).
+- `FLUENCY_4D_LOCK_WAIT=<s>`: acota la espera del lock (default 65 s; un valor no numérico, infinito o negativo vale el default).
 - `FLUENCY_4D_FAIL_WRITE=<nombre>`: la escritura de ese archivo del usuario falla como
   si fuera de solo lectura (fault-injection del rollback). Solo tests.
 - `.orig.bak`: `setup.json` anota en `orig_backups` los que creó ESTA instalación;
