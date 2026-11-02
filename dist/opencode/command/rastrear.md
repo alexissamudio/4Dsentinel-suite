@@ -3,13 +3,11 @@ description: "Rastrea llamadores/llamados e impacto de una funcion en el grafo (
 agent: build
 ---
 
-<!-- Generado por tools/multiharness/build_harness.py desde plugins/memory/commands/rastrear.md. NO editar a mano. -->
+<!-- Generado por tools/multiharness/build_harness.py desde plugins/memory/commands/rastrear.md (cuerpo incrustado y traducido a OpenCode). NO editar a mano. -->
 
 # /rastrear
 
-Wrapper del comando de memoria `rastrear`. El cuerpo canonico vive en el fuente de la suite (plugins/memory/commands/rastrear.md).
-
-Argumentos: `$ARGUMENTS` — <nombre de la funcion> [inbound|outbound|both]
+Argumentos (`$ARGUMENTS`): <nombre de la funcion> [inbound|outbound|both]
 
 ## Instrucciones
 
@@ -22,7 +20,6 @@ Rastreá el **grafo de llamadas** de una función (análisis de impacto).
 - Presentá en español: llamadores/llamados agrupados por archivo/componente, y una lectura del
   **impacto** (dónde repercutiría un cambio a esa función).
 
-
 ## NOTA (OpenCode / MCP)
 
-Este comando envuelve herramientas del MCP `codebase-memory`. Si el MCP no esta conectado, corre `/suite-setup` primero.
+Este comando envuelve tools del MCP `codebase-memory`. En OpenCode se exponen con el prefijo del server (p. ej. `codebase-memory-mcp_search_graph` si el server se llama `codebase-memory-mcp` en `opencode.json`). Si el MCP no esta conectado, corre `/suite-setup` primero.

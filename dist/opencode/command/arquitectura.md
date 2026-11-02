@@ -3,13 +3,11 @@ description: "Muestra el mapa de arquitectura de un proyecto indexado (envuelve 
 agent: build
 ---
 
-<!-- Generado por tools/multiharness/build_harness.py desde plugins/memory/commands/arquitectura.md. NO editar a mano. -->
+<!-- Generado por tools/multiharness/build_harness.py desde plugins/memory/commands/arquitectura.md (cuerpo incrustado y traducido a OpenCode). NO editar a mano. -->
 
 # /arquitectura
 
-Wrapper del comando de memoria `arquitectura`. El cuerpo canonico vive en el fuente de la suite (plugins/memory/commands/arquitectura.md).
-
-Argumentos: `$ARGUMENTS` — [nombre del proyecto; por defecto el del repo actual]
+Argumentos (`$ARGUMENTS`): [nombre del proyecto; por defecto el del repo actual]
 
 ## Instrucciones
 
@@ -22,7 +20,6 @@ Mostrá el **mapa de arquitectura** de un proyecto indexado.
   (funciones más llamadas, por fan-in) y **clusters** (los módulos reales del grafo). Destacá los
   3-5 hotspots principales.
 
-
 ## NOTA (OpenCode / MCP)
 
-Este comando envuelve herramientas del MCP `codebase-memory`. Si el MCP no esta conectado, corre `/suite-setup` primero.
+Este comando envuelve tools del MCP `codebase-memory`. En OpenCode se exponen con el prefijo del server (p. ej. `codebase-memory-mcp_search_graph` si el server se llama `codebase-memory-mcp` en `opencode.json`). Si el MCP no esta conectado, corre `/suite-setup` primero.

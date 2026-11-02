@@ -3,18 +3,220 @@ description: "Genera un CLAUDE.md modular con 'puentes' a documentación por tem
 agent: build
 ---
 
-<!-- Generado por tools/multiharness/build_harness.py desde plugins/fluency-4d/skills/4d-init/SKILL.md. NO editar a mano. -->
+<!-- Generado por tools/multiharness/build_harness.py desde plugins/fluency-4d/skills/4d-init (cuerpo incrustado y traducido a OpenCode). NO editar a mano. -->
 
-# /4d-init - /4d-init — Generador de CLAUDE.md con puentes por tema (OpenCode)
+> **OpenCode (bundle 4Dsentinel, OpenCode 1.19.1).** Este comando INCRUSTA el skill `4d-init` completo: segui las instrucciones de abajo tal cual. NO busques un archivo de skill ni rutas de instalacion de Claude Code. Los subagentes de la suite (advisor, critic, librarian, ...) se invocan con la tool `task` (`subagent_type: <nombre>`).
+>
+> OpenCode lee `AGENTS.md` (y cae a `CLAUDE.md` si no existe). Los puentes en `.claude/docs/` los consume el hook `bridge_router.py` via el plugin `fluency-hooks.js`: genera la estructura tal cual.
 
-Wrapper del skill `4d-init` de la suite 4Dsentinel. El cuerpo canonico del flujo vive en el `SKILL.md` de la suite (plugins/fluency-4d/skills/4d-init/SKILL.md); este comando lo dispara en OpenCode.
+# /4d-init — Generador de CLAUDE.md con puentes por tema
 
-Segui el flujo del skill al pie de la letra, adaptando las rutas y herramientas al entorno OpenCode (no hay hooks automaticos de Claude Code; usas las herramientas nativas de OpenCode).
+Convertí la documentación del proyecto en **disclosure progresivo por TEMA**: un
+CLAUDE.md raíz corto con una tabla de puentes, y un doc por tema en `.claude/docs/`.
+El hook `bridge_router` del plugin usará `bridges.json` para que, cuando el usuario
+pregunte por un tema, Claude lea el doc correspondiente ANTES de responder.
 
-## Degradacion cross-harness
+Aplicá las 4D al propio proceso: vos explorás y redactás (Delegación), el usuario
+decide los temas y aprueba antes de escribir (Discernimiento humano).
 
-- Los hooks de Claude Code (`UserPromptSubmit`, `PostToolUse`, `Stop`) NO corren en OpenCode; si la skill los asume, hace el trabajo equivalente a mano.
-- Las referencias a `~/.claude/` se traducen a las rutas equivalentes de OpenCode (`~/.config/opencode/`).
-- Las invocaciones a `sentinel-agents:*` se mantienen igual (los subagentes de OpenCode replican el contrato).
+## Fase 1 — Descubrimiento
 
-Argumentos opcionales: `$ARGUMENTS`.
+1. Leé el `CLAUDE.md` raíz si existe (contenido a PRESERVAR, nunca pisar).
+2. Buscá CLAUDE.md anidados (`**/CLAUDE.md` fuera de la raíz). Si hay (patrón
+   init-deep), ADVERTÍ al usuario que van a convivir dos sistemas y pedí confirmación
+   antes de seguir.
+3. Si ya existe `.claude/docs/bridges.json`, entrás en **modo actualización** (ver
+   "Re-ejecución" abajo).
+
+## Fase 2 — Exploración (Delegación)
+
+Lanzá agentes Explore EN PARALELO para detectar los temas reales del proyecto.
+Candidatos típicos: autenticación, endpoints/API, base de datos/modelos, deploy/CI,
+testing, configuración, arquitectura general. **Solo proponé temas con evidencia
+concreta en el código** (archivos, rutas, dependencias) — nada especulativo.
+
+## Fase 3 — Confirmación con el usuario
+
+Presentá los temas detectados con su evidencia y usá la tool `question` (multiSelect)
+para que el usuario elija cuáles generar. Proponé también las keywords por tema.
+
+## Fase 4 — Generación
+
+Por cada tema aprobado, generá `.claude/docs/<tema>.md` (30–80 líneas) con este
+frontmatter obligatorio:
+
+```yaml
+---
+generated: <fecha ISO>
+source: 4d-init
+---
+```
+
+El contenido: cómo funciona el tema EN ESTE
+proyecto (archivos clave con rutas, flujo, convenciones, gotchas) — no teoría genérica.
+
+**Excepción a la regla de evidencia:** `.claude/docs/convenciones.md` se genera
+SIEMPRE (naming, formato, idioma de identificadores, estructura de carpetas,
+linters detectados). Si la evidencia es poca, el doc lo dice honestamente:
+línea "⚠ Generado con poca evidencia — validar" y `evidence: low` en el
+frontmatter. En re-ejecución se trata como cualquier doc: se pregunta antes
+de regenerar. Su entrada
+en bridges.json usa keywords específicas: `["convenciones", "styleguide",
+"estilo de codigo", "lint", "linting", "naming"]` (NO "style"/"estilo"/"formato"
+a secas: false-positives con estilos de UI).
+
+Generá `.claude/docs/bridges.json`. Cada tema lleva **`rutas`**: prefijos de
+ruta posix relativos a la raíz (carpetas con `/` final o archivos exactos),
+derivados de la evidencia de la exploración — activan el aviso automático de
+doc desactualizado cuando se editan archivos del tema:
+
+```json
+{ "version": 1, "temas": [
+    { "tema": "auth", "archivo": ".claude/docs/auth.md",
+      "keywords": ["auth", "autenticacion", "login", "token", "sesion", "jwt"],
+      "rutas": ["src/auth/", "config/auth.js"] }
+] }
+```
+
+**Reglas de keywords:** específicas del tema, en español (sin acentos: el hook
+normaliza) e inglés; mínimo 3 caracteres (el hook descarta las de <3 vía
+`MIN_KEYWORD_LEN` en `bridge_router.py`); RECHAZÁ keywords genéricas que matchearían
+en cualquier prompt ("api", "codigo", "test" solo, "base", "dato").
+
+## Fase 4.5 — Reglas-siempre vs conocimiento-por-tema
+
+Dos tipos de contenido: **conocimiento-por-tema** (cómo funciona X acá; solo
+importa al tocar X) → `.claude/docs/<tema>.md` con puente. **Regla-siempre**
+(aplica al escribir CUALQUIER código) → inline en el bloque centinela del
+CLAUDE.md, que se carga en TODA sesión.
+
+**Regla de decisión:** es **regla-siempre** sii (a) es imperativa/prohibitiva Y
+(b) un revisor marcaría su violación en un diff SIN saber qué feature implementa.
+**Ante la duda: inline** (falso positivo = 1 línea de ruido; falso negativo =
+regla no negociable escondida tras un keyword). Ejemplos trabajados:
+`ejemplo-clasificacion.md` (referencia incrustada al final de este comando).
+
+**Confirmación humana:** generá los candidatos y presentálos con la tool `question`
+multiSelect ("¿cuáles son no negociables e inline?"). NO clasifiques en silencio.
+Apuntá a ≤10-12; más es decisión del usuario. El DETALLE (ejemplos bien/mal, el
+porqué) va a `convenciones.md`; la línea inline lo restatea 1:1.
+
+## Fase 5 — Fusión en CLAUDE.md (con Discernimiento)
+
+1. **Mostrá al usuario un resumen** de todo lo que vas a escribir y esperá aprobación.
+2. Si existe CLAUDE.md, copialo primero a `.claude/backups/CLAUDE.md.<fecha>.bak`.
+3. Insertá o reemplazá SOLO el bloque entre centinelas — el resto del archivo no se toca:
+
+Layout FIJO del bloque, en este orden: sección de reglas → tabla de puentes →
+líneas de cierre:
+
+```markdown
+<!-- BEGIN 4D-BRIDGES -->
+## Reglas del proyecto (siempre)
+- SIEMPRE early returns; NUNCA if/else anidado.
+- (una línea por regla-siempre confirmada, en el orden en que el usuario las eligió)
+
+## Puentes de documentación
+| Tema | Cuándo leer | Archivo |
+|------|-------------|---------|
+| Auth | login, tokens, sesiones | .claude/docs/auth.md |
+
+Si la pregunta o tarea toca un tema de la tabla, LEÉ ese archivo ANTES de responder.
+Al escribir código, respetá `.claude/docs/convenciones.md`.
+<!-- END 4D-BRIDGES -->
+```
+
+- **Vacío-seguro:** sin reglas-siempre confirmadas, OMITÍ la sección
+  "## Reglas del proyecto" entera (nada de `##` vacío). El pointer a
+  `convenciones.md` SIEMPRE queda. Si no hay CLAUDE.md, crealo con título + bloque.
+  Todo corto: una línea por regla y por tema; el detalle vive en los docs.
+
+## Re-ejecución (modo actualización)
+
+1. Por cada doc existente en `bridges.json`, NO podés saber automáticamente si el humano
+   lo editó (el frontmatter solo lleva `generated`/`source`).
+2. **Antes de regenerar un doc que ya existe, SIEMPRE preguntá** (la tool `question`:
+   conservar / regenerar / fusionar mostrando diferencias). Nunca lo pises sin confirmar.
+3. Temas nuevos detectados se proponen como en la Fase 3; temas cuyos archivos fuente
+   desaparecieron se proponen para eliminar de la tabla.
+4. El bloque entre centinelas se regenera; todo lo demás en CLAUDE.md queda intacto.
+5. **Reglas-siempre:** baseline = el backup previo. Compará la
+   sección "## Reglas del proyecto" del bloque actual contra la del backup más
+   reciente; si difieren, el humano las editó → la tool `question` (conservar /
+   regenerar / fusionar). Orden de reglas estable entre corridas (evita diffs
+   fantasma).
+
+## Reglas duras
+
+- NUNCA tocar contenido fuera de los centinelas `<!-- BEGIN 4D-BRIDGES -->` / `<!-- END 4D-BRIDGES -->`.
+- `lecciones.md` y `estado-sesion.md` NO son docs de tema: no los regeneres ni los metas en `bridges.json` (los escribe Claude durante el trabajo, no este generador).
+- NUNCA crear CLAUDE.md anidados por directorio (territorio de /init-deep); NUNCA generar un tema sin evidencia en el código.
+- SIEMPRE backup antes de modificar un CLAUDE.md; NUNCA pisar el pointer "respetá convenciones.md" (la sección de reglas lo suplementa).
+- Cerrá con nota de diligencia: "Docs generados con asistencia de IA (fluency-4d); revisalos antes de confiar en ellos."
+
+---
+
+## Referencias incrustadas
+
+### `ejemplo-clasificacion.md`
+
+# Ejemplo: clasificar reglas-siempre vs conocimiento-por-tema
+
+Caso ilustrativo (un monorepo TypeScript con API + frontend). NO es un stack
+específico: muestra cómo aplicar la regla de decisión sección por sección.
+Recordá la regla: es **regla-siempre** sii es imperativa/prohibitiva Y un revisor
+marcaría su violación en un diff SIN saber qué feature implementa. Ante la duda,
+inline.
+
+## Contenido de origen (un CLAUDE.md monolítico típico)
+
+Secciones que suele traer: arquitectura de módulos, ubicaciones compartidas,
+sistema de diseño (tokens de color, tipografía), backend (ORM, auth, storage),
+estilo de código (early returns, manejo de errores, fallbacks), y una lista de
+"no hacer".
+
+## Cómo se parte
+
+| Contenido de origen | Clasificación | Destino |
+|---------------------|---------------|---------|
+| "SIEMPRE early returns; NUNCA if/else anidado" | Regla | inline |
+| "NUNCA throw fuera de la capa de data; en el resto try/catch + toast" | Regla | inline |
+| "NUNCA `?? []` que oculte data faltante; early return para vacíos" | Regla | inline |
+| "Componentes en orden error → loading → empty → data" | Regla | inline |
+| "Sin dark mode; primary SIEMPRE neutro, nunca color de marca" | Regla | inline |
+| "Solo la librería de componentes; NUNCA botones/inputs manuales" | Regla | inline |
+| "Tipos en `module/types.ts`, NUNCA inline (salvo Props)" | Regla | inline |
+| "Sin emojis en código/UI; NO sobre-ingeniería" | Regla | inline |
+| Estructura de módulos: qué carpeta contiene qué | Tema | `arquitectura.md` |
+| Ubicaciones compartidas (dónde vive cada helper) | Tema | `arquitectura.md` |
+| Tabla de tokens de color con sus valores hex | Tema | `design.md` |
+| Tipografía, spacing, radius concretos | Tema | `design.md` |
+| ORM, decoradores de auth, storage, rate limiting | Tema | `backend.md` |
+
+## El caso que se PARTE (ojo con estos)
+
+"Usá la capa X para el estado de servidor" mezcla regla y tema:
+
+- **Imperativo** ("el estado de servidor va por la capa de data, nunca fetch
+  crudo en componentes") → **regla**, inline.
+- **Configuración** (cómo se arma el cliente, opciones de caché, claves) →
+  **tema**, va a `backend.md` o `arquitectura.md`.
+
+## Resultado
+
+- El bloque centinela del CLAUDE.md queda con ~8 reglas inline (siempre cargadas)
+  + una tabla de 3 puentes.
+- El detalle pesado (valores de tokens, ejemplos bien/mal de manejo de errores,
+  las ubicaciones compartidas) baja a los docs, que solo se cargan al tocar su
+  tema.
+- Una regla no negociable como "sin dark mode" NUNCA queda escondida detrás de la
+  keyword "diseño": está inline, se respeta aunque el prompt no mencione estilo.
+
+## Por qué importa
+
+Si "sin dark mode" o "early returns" vivieran solo en `convenciones.md` (gated por
+la keyword "convenciones/estilo/lint"), Claude NO los cargaría al escribir, p. ej.,
+un endpoint de auth — y los violaría sin saberlo. Inline garantiza que las reglas
+no negociables estén presentes en cada tarea de código.
+
+Argumentos del usuario: `$ARGUMENTS`

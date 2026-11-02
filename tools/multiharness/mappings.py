@@ -2,7 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""mappings.py - Tablas de mapeo Claude Code -> Codex CLI.
+"""mappings.py - Tablas de mapeo Claude Code -> Codex CLI / OpenCode.
 
 Este modulo es DATOS puros (sin efectos): lo importa build_harness.py para
 saber como traducir cada artefacto de la suite (skills, agentes, hooks, home)
@@ -14,13 +14,16 @@ Cada tabla esta marcada abajo con uno de estos rotulos:
   [DOC-ONLY]   -> referencia para humanos; el generador NO la consume, editarla
                   NO cambia la salida (la traduccion real esta en otro lado o
                   esta hardcodeada de forma equivalente). No asumas lo contrario.
-Consumidas hoy: HOME_MAP, HOOK_FEATURE_FLAG, PLUGIN_ROOT_VAR. El resto es
-DOC-ONLY hasta que alguien las cablee en build_harness.py.
+Consumidas hoy: HOME_MAP, HOOK_FEATURE_FLAG, PLUGIN_ROOT_VAR y las tablas
+OPENCODE_* (seccion 7). El resto es DOC-ONLY hasta que alguien las cablee
+en build_harness.py.
 
 ASCII puro (regla de CLAUDE.md): sin acentos en los strings de este archivo.
 """
 
 from __future__ import annotations
+
+import re
 
 # ---------------------------------------------------------------------------
 # 1) Directorios "home" del harness: ~/.claude -> ~/.codex
@@ -136,3 +139,168 @@ AGENT_FIELD_MAP: dict[str, str] = {
 # El binario `cbm` (codebase-memory) NO esta instalado en esta maquina.
 # No se incluye ninguna seccion [mcp_servers] en el bundle. Queda como TODO.
 MCP_DEFERRED = True
+
+# ---------------------------------------------------------------------------
+# 7) OpenCode (dist/opencode/)
+# ---------------------------------------------------------------------------
+# [CONSUMIDA] build_harness.py (README, banners y shim) declara la version
+# contra la que se verifico el bundle (E2E con `opencode run`).
+OPENCODE_VERSION = "1.19.1"
+
+# [CONSUMIDA] build_opencode(): skills que NO se emiten como command, con la
+# razon (va al README del bundle). barra/statusline ya caen por CLAUDE_CODE_ONLY
+# en discover_skills(); se listan para que el README lo explique.
+OPENCODE_SKILLS_SKIPPED: dict[str, str] = {
+    "verify-diff": (
+        "solo escribe el flag que lee el hook `Stop` (discernment_gate.py). El "
+        "shim de OpenCode puentea UNICAMENTE `UserPromptSubmit` (`chat.message`) "
+        "y OpenCode no tiene un evento que pueda bloquear el cierre del turno: "
+        "el toggle no tendria ningun efecto, asi que emitirlo seria mentir."
+    ),
+    "barra": (
+        "cambia el modo/tema de la status line de Claude Code (no existe en "
+        "OpenCode)."
+    ),
+    "statusline": (
+        "instala la status line y el Panel 4D en settings.json de Claude Code "
+        "(engine de mods exclusivo de Claude Code)."
+    ),
+}
+
+# [CONSUMIDA] oc_translate_common(): nombres de tools exclusivas de Claude Code
+# -> equivalente OpenCode. Orden importa (lo especifico primero).
+OPENCODE_TOOL_MAP: tuple[tuple[str, str], ...] = (
+    ("el Agent tool", "la tool `task`"),
+    ("Agent tool", "la tool `task`"),
+    ("AskUserQuestion", "la tool `question`"),
+)
+
+# [CONSUMIDA] oc_translate_common(): home de Claude -> OpenCode. SOLO planes:
+# ~/.claude/fluency4d/ NO se traduce a proposito (lo leen/escriben los hooks
+# Python, que en OpenCode corren via el shim con esa misma ruta).
+OPENCODE_HOME_MAP: tuple[tuple[str, str], ...] = (
+    ("`~/.claude/plans/`",
+     "`.opencode/plans/` (proyecto) o `~/.local/share/opencode/plans/`"),
+)
+
+# [CONSUMIDA] build_opencode_skill_command(): reglas (old, new) por skill que se
+# aplican al SKILL.md fuente (frontmatter incluido) ANTES de la traduccion comun.
+# old = str literal o re.Pattern. Cada regla DEBE matchear (si la fuente cambia,
+# el build falla en vez de emitir una traduccion a medias). {OC_REFS} = ruta
+# abs de references/ instalado. Acentos de la fuente via escapes (ASCII puro).
+OPENCODE_SKILL_RULES: dict[str, tuple] = {
+    "4d-quiz": (
+        ("Una AskUserQuestion por pregunta", "Una llamada a la tool `question` por pregunta"),
+    ),
+    "sentinel-audit": (
+        (re.compile(r"Glob `\*\*/sentinel-agents/\*\*/references/iso-27000/"
+                    r"00-INSTRUCCIONES-IA\.md`\s+bajo `~/\.claude/plugins`"),
+         "en OpenCode la KB ya esta instalada (bundle) en `{OC_REFS}/iso-27000/`"),
+        ("(ver `../../CLAUDE.md`)", "(regla de datos de la suite)"),
+    ),
+    "suite-setup": (
+        ("(claude mcp add --scope user)", "(en opencode.json)"),
+        ("con `claude mcp add` y **ruta absoluta**",
+         "en `opencode.json` y **ruta absoluta**"),
+        ("y `claude mcp add` corren", "y el registro en `opencode.json` corren"),
+        ("sin este `claude mcp add` el MCP no existe",
+         "sin este registro en `opencode.json` el MCP no existe"),
+        ("`claude mcp add --scope user codebase-memory -- <ruta-absoluta-al-exe-verificado>`",
+         "agrega a tu `opencode.json` global (`~/.config/opencode/opencode.json`) "
+         "el bloque `\"mcp\": { \"codebase-memory-mcp\": { \"type\": \"local\", "
+         "\"command\": [\"<ruta-absoluta-al-exe-verificado>\"], \"enabled\": true } }` "
+         "(si ya existe una entrada, actualiza su `command`)"),
+        (re.compile(r"\*\*Reiniciar Claude Code\*\* \(el MCP se conecta al arrancar\) "
+                    r"y confirmar con `/mcp` que\s+`codebase-memory` aparece conectado\."),
+         "**Reiniciar OpenCode** (el MCP se conecta al arrancar) y confirmar con "
+         "`opencode mcp list` que `codebase-memory-mcp` aparece conectado."),
+        (re.compile(r"- Los \*\*agentes sentinel\*\* NO ven el MCP[^\n]*\n[^\n]*"),
+         "- En OpenCode los subagentes de la suite SI pueden ver las tools MCP "
+         "(salvo que sus permisos las nieguen), pero igual conviene que el "
+         "conductor consulte el grafo y les **relaye** un brief conciso."),
+        (re.compile(r"- Cargar las tools del MCP de forma \*\*diferida\*\* \(ToolSearch\)[^\n]*"),
+         "- En OpenCode las tools del MCP se exponen como `codebase-memory-mcp_<tool>` "
+         "(prefijo = nombre del server en `opencode.json`)."),
+    ),
+}
+
+# [CONSUMIDA] oc_translate_agent_body(): reglas por agente (y para el contrato,
+# clave "agent-contract"). Mismo formato que OPENCODE_SKILL_RULES.
+_GLOB_HINT = "(ubicalo por Glob si lo necesit\u00e1s)"
+_GLOB_HINT_OC = "(ruta absoluta de instalacion: leelo directo con la tool read)"
+OPENCODE_AGENT_RULES: dict[str, tuple] = {
+    "bug-hunter": ((_GLOB_HINT, _GLOB_HINT_OC),),
+    "debugger": ((_GLOB_HINT, _GLOB_HINT_OC),),
+    "security-auditor": ((_GLOB_HINT, _GLOB_HINT_OC),),
+    "compliance-auditor": (
+        (re.compile(r"Glob de `00-INSTRUCCIONES-IA\.md` bajo `<HOME>/\.claude/plugins`"),
+         "la KB instalada por el bundle OpenCode en `{OC_REFS}/iso-27000/`"),
+    ),
+    "agent-contract": (
+        (re.compile(r"`\$\{CLAUDE_PLUGIN_ROOT\}` NO est\u00e1 disponible para agentes "
+                    r"\(verificado\)\. La KB se\s+ubica as\u00ed, en orden:"),
+         "En OpenCode la KB la instala el bundle en `{OC_REFS}/iso-27000/`. Se "
+         "ubica as\u00ed, en orden:"),
+        (re.compile(r"2\. Si no, con Glob busc\u00e1 `\*\*/sentinel-agents/\*\*/references/"
+                    r"iso-27000/00-INSTRUCCIONES-IA\.md`\s+bajo el directorio de plugins "
+                    r"del usuario \(`<HOME>/\.claude/plugins`\), y us\u00e1 esa\s+carpeta "
+                    r"como ra\u00edz del KB\."),
+         "2. Si no, us\u00e1 la KB instalada: `{OC_REFS}/iso-27000/` (ra\u00edz del KB; "
+         "abr\u00ed `INDEX.md` o `00-INSTRUCCIONES-IA.md`)."),
+    ),
+}
+
+# [CONSUMIDA] build_opencode_skill_command(): nota extra (blockquote) por skill.
+OPENCODE_SKILL_NOTES: dict[str, str] = {
+    "4d-status": (
+        "Reporte de SOLO LECTURA: lee exactamente los archivos listados y nada "
+        "mas. `~/.claude/fluency4d/stats.json` es la ruta REAL de las metricas "
+        "en OpenCode tambien (las escriben los hooks de fluency-4d via el plugin "
+        "`fluency-hooks.js`); si no existe, reporta \"sin datos de uso\" y segui."
+    ),
+    "caveman": (
+        "El flag va en `~/.claude/fluency4d/` A PROPOSITO (no en "
+        "`~/.config/opencode`): es la ruta que lee `caveman_injector.py`, que en "
+        "OpenCode corre via el plugin `fluency-hooks.js` en cada mensaje. Usa la "
+        "tool `write` con la ruta absoluta expandida (esta fuera del proyecto: "
+        "OpenCode pedira permiso `external_directory`, aprobalo)."
+    ),
+    "adhd": (
+        "El flag va en `~/.claude/fluency4d/` A PROPOSITO (no en "
+        "`~/.config/opencode`): es la ruta que lee `adhd_injector.py`, que en "
+        "OpenCode corre via el plugin `fluency-hooks.js` en cada mensaje. Usa la "
+        "tool `write` con la ruta absoluta expandida (esta fuera del proyecto: "
+        "OpenCode pedira permiso `external_directory`, aprobalo)."
+    ),
+    "handoff": (
+        "Planes en OpenCode: `.opencode/plans/` del proyecto o "
+        "`~/.local/share/opencode/plans/`; si no hay ninguno, el paso degrada a "
+        "\"sin plan\"."
+    ),
+    "4d-init": (
+        "OpenCode lee `AGENTS.md` (y cae a `CLAUDE.md` si no existe). Los "
+        "puentes en `.claude/docs/` los consume el hook `bridge_router.py` via "
+        "el plugin `fluency-hooks.js`: genera la estructura tal cual."
+    ),
+    "4d-quiz": (
+        "Si la tool `question` no esta disponible (p. ej. `opencode run`), "
+        "hace la pregunta en texto y espera la letra."
+    ),
+    "suite-setup": (
+        "Adaptado a OpenCode: el registro del MCP va en `opencode.json` (no hay "
+        "`claude mcp add`). Las menciones al `plugin.json` describen el plugin "
+        "de Claude Code."
+    ),
+    "sentinel-audit": (
+        "Subagentes via la tool `task` (`security-auditor`, `compliance-auditor`, "
+        "`code-reviewer`, `validator`)."
+    ),
+}
+
+# [CONSUMIDA] build_opencode_memory_command(): nota MCP de los commands de memory.
+OPENCODE_MCP_NOTE = (
+    "Este comando envuelve tools del MCP `codebase-memory`. En OpenCode se "
+    "exponen con el prefijo del server (p. ej. `codebase-memory-mcp_search_graph` "
+    "si el server se llama `codebase-memory-mcp` en `opencode.json`). Si el MCP "
+    "no esta conectado, corre `/suite-setup` primero."
+)

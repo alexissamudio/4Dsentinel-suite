@@ -85,3 +85,37 @@ def test_bundles_sin_piezas_claude_code_only(tmp_path: Path) -> None:
             assert "skills/barra" not in rel and "skills/statusline" not in rel, (label, rel)
             if rel.endswith(".json"):
                 assert '"modules"' not in text, (label, rel)
+
+
+import check_harness as C  # noqa: E402
+
+
+def test_opencode_emite_todo_y_omite_skills_sin_soporte(tmp_path: Path) -> None:
+    root = tmp_path / "opencode"
+    B.build_opencode(root)
+    cmds = {p.stem for p in (root / "command").glob("*.md")}
+    assert {"4d", "4d-status", "caveman", "adhd", "handoff", "sentinel-audit"} <= cmds
+    assert {"buscar", "indexar"} <= cmds  # commands de memory
+    assert not cmds & set(B.M.OPENCODE_SKILLS_SKIPPED)
+    assert {p.stem for p in (root / "agent").glob("*.md")} == set(B.discover_agents())
+    assert (root / "references" / "agent-contract.md").is_file()
+    assert (root / "references" / "iso-27000" / ".manifest.sha256").is_file()
+    assert not C.validate_opencode(root)
+
+
+def test_opencode_guardas_detectan_regresiones(tmp_path: Path) -> None:
+    root = tmp_path / "opencode"
+    B.build_opencode(root)
+    shim = root / "plugin" / "fluency-hooks.js"
+    text = shim.read_text(encoding="utf-8")
+    shim.write_text(text.replace("synthetic: true,", "").replace("session_id:", "sid:"),
+                    encoding="utf-8")
+    assert C.validate_opencode(root)
+    shim.write_text(text, encoding="utf-8")
+    assert not C.validate_opencode(root)
+    cmd = root / "command" / "4d.md"
+    good = cmd.read_text(encoding="utf-8")
+    cmd.write_text(good + "\nSegui plugins/fluency-4d/skills/4d/SKILL.md\n", encoding="utf-8")
+    assert C.validate_opencode(root)
+    cmd.write_text(good + "\nusa sentinel-agents:advisor\n", encoding="utf-8")
+    assert C.validate_opencode(root)

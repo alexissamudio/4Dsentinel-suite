@@ -1,3 +1,5 @@
+<!-- Portado de plugins/sentinel-agents/references/agent-contract.md por tools/multiharness/build_harness.py (seccion 7 reescrita a la KB instalada por el bundle OpenCode). NO editar a mano. -->
+
 # Contrato de agentes — sentinel-agents
 
 Contrato COMPARTIDO por todos los agentes de este plugin. Cada agente lo cumple
@@ -167,12 +169,9 @@ el `evidence:` sigue llevando el `archivo:línea`/sección re-leído.
 
 ## 7. Ubicación de la base ISO (para compliance-auditor)
 
-`${CLAUDE_PLUGIN_ROOT}` NO está disponible para agentes (verificado). La KB se
-ubica así, en orden:
-1. Si el invocador te pasó una ruta absoluta a `references/iso-27000/`, usala.
-2. Si no, con Glob buscá `**/sentinel-agents/**/references/iso-27000/00-INSTRUCCIONES-IA.md`
-   bajo el directorio de plugins del usuario (`<HOME>/.claude/plugins`), y usá esa
-   carpeta como raíz del KB.
+En OpenCode la KB la instala el bundle en `C:/Users/samud/.config/opencode/references/iso-27000/`. Se ubica así, en orden:
+1. Si el invocador te pasó una ruta absoluta a `C:/Users/samud/.config/opencode/references/iso-27000/`, usala.
+2. Si no, usá la KB instalada: `C:/Users/samud/.config/opencode/references/iso-27000/` (raíz del KB; abrí `INDEX.md` o `00-INSTRUCCIONES-IA.md`).
 3. Si no la encontrás, reportá `INCOMPLETE` explicando que no pudiste ubicar el KB
    (no inventes controles de memoria).
 

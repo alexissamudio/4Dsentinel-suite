@@ -3,13 +3,11 @@ description: "Indexa un repositorio en el grafo de codebase-memory (envuelve ind
 agent: build
 ---
 
-<!-- Generado por tools/multiharness/build_harness.py desde plugins/memory/commands/indexar.md. NO editar a mano. -->
+<!-- Generado por tools/multiharness/build_harness.py desde plugins/memory/commands/indexar.md (cuerpo incrustado y traducido a OpenCode). NO editar a mano. -->
 
 # /indexar
 
-Wrapper del comando de memoria `indexar`. El cuerpo canonico vive en el fuente de la suite (plugins/memory/commands/indexar.md).
-
-Argumentos: `$ARGUMENTS` — [ruta del repo; por defecto el directorio actual]
+Argumentos (`$ARGUMENTS`): [ruta del repo; por defecto el directorio actual]
 
 ## Instrucciones
 
@@ -22,7 +20,6 @@ Indexá el repositorio en el grafo de **codebase-memory**.
 - Al terminar, resumí en español: nodos, aristas, lenguajes detectados, y confirmá que el
   artefacto quedó escrito en el repo.
 
-
 ## NOTA (OpenCode / MCP)
 
-Este comando envuelve herramientas del MCP `codebase-memory`. Si el MCP no esta conectado, corre `/suite-setup` primero.
+Este comando envuelve tools del MCP `codebase-memory`. En OpenCode se exponen con el prefijo del server (p. ej. `codebase-memory-mcp_search_graph` si el server se llama `codebase-memory-mcp` en `opencode.json`). Si el MCP no esta conectado, corre `/suite-setup` primero.

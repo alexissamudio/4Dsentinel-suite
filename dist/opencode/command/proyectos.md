@@ -3,13 +3,11 @@ description: "Lista los proyectos indexados en codebase-memory y su estado (envu
 agent: build
 ---
 
-<!-- Generado por tools/multiharness/build_harness.py desde plugins/memory/commands/proyectos.md. NO editar a mano. -->
+<!-- Generado por tools/multiharness/build_harness.py desde plugins/memory/commands/proyectos.md (cuerpo incrustado y traducido a OpenCode). NO editar a mano. -->
 
 # /proyectos
 
-Wrapper del comando de memoria `proyectos`. El cuerpo canonico vive en el fuente de la suite (plugins/memory/commands/proyectos.md).
-
-Argumentos: `$ARGUMENTS` — (sin argumentos)
+Argumentos: `$ARGUMENTS` -- (sin argumentos)
 
 ## Instrucciones
 
@@ -20,7 +18,6 @@ Listá los **proyectos indexados** en el grafo de codebase-memory.
   (nodos/aristas) y cuándo se indexó.
 - Si está vacío, sugerí correr `/indexar` en el repo que quieras.
 
-
 ## NOTA (OpenCode / MCP)
 
-Este comando envuelve herramientas del MCP `codebase-memory`. Si el MCP no esta conectado, corre `/suite-setup` primero.
+Este comando envuelve tools del MCP `codebase-memory`. En OpenCode se exponen con el prefijo del server (p. ej. `codebase-memory-mcp_search_graph` si el server se llama `codebase-memory-mcp` en `opencode.json`). Si el MCP no esta conectado, corre `/suite-setup` primero.
