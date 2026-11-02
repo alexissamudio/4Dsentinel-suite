@@ -221,3 +221,24 @@ en PRs contra main: el PR apilado nunca tuvo checks, y al llegar a Ubuntu fallar
 y luego `git rebase --onto origin/main <commit-squasheado>`. Tests con rutas Win32 llevan `skipif(not IS_NT)`.
 **Como aplicar:** al mergear una pila: retarget -> merge -> rebase del hijo; no confiar en "sin checks".
 Y no confundir el acumulado de tokens del hook de checkpoint con el contexto actual (el del panel).
+
+## [2026-11-02] — Rama ya squasheada en main: no mergear, cherry-pick sobre origin/main
+**Contexto:** `feature/multiharness-codex-opencode` (ae3e6e6) se habia mergeado como squash (#16, 9314eed).
+Al mergear origin/main encima, 9 conflictos add/add (incluido codigo de plugins). Ademas la `main` LOCAL estaba
+vieja: `git rev-list main...HEAD` decia "0 detras" cuando origin/main tenia 4 commits nuevos.
+**Leccion:** `git diff <rama> <squash>` vacio => la rama ya esta en main; el merge solo trae conflictos de
+historia. Rama nueva desde origin/main + cherry-pick del trabajo nuevo = mismo resultado, sin conflictos.
+**Como aplicar:** antes de mergear main, `git fetch` y comparar contra `origin/main` (no `main`); si hubo
+squash, chequear el diff de arbol y preferir cherry-pick.
+
+## [2026-11-02] — OpenCode: el contexto inyectado debe ser `synthetic:true` (y otros gotchas)
+**Contexto:** el shim empujaba el additionalContext como parte text normal en `chat.message` -> la TUI lo
+mostraba como si el usuario lo hubiera escrito. Verificado en el binario: la TUI filtra
+`type==="text" && !synthetic`. Otros: Python en Windows lee stdin cp1252 (acentos rompen keywords);
+sin `session_id` el state de hooks se fuga entre sesiones; `references/` fuera del proyecto requiere
+`permission.external_directory`; los hooks tambien se inyectaban en subagentes.
+**Leccion:** "smoke test con harness Node" no es E2E: estos bugs solo aparecen con `opencode run` +
+`opencode export <sid>` (ver partes reales) y la TUI. Y un archivo que dice "Generado por X" puede no
+serlo: 24 archivos de dist/opencode eran huerfanos; `check_harness` (DRIFT: sobra) lo destapo.
+**Como aplicar:** al portar a OpenCode, verificar por export (synthetic, orden de ids, partes del subagente);
+spawn de Python con `PYTHONUTF8=1`; correr check_harness ANTES de confiar en un dist/.

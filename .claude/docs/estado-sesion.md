@@ -1,38 +1,40 @@
-# Estado de sesión — 2026-11-02 — fluency 0.22.2 en main; multiharness con errores en OpenCode
+# Estado de sesión — 2026-11-02 — port OpenCode 1.19.1 arreglado (rama fix/opencode-runtime)
 
 ## Objetivo / frase 4D
-Discernimiento + Diligencia: la rama multiharness "no funciona bien, muchos errores dentro de OpenCode"
-(reporte del usuario). Reproducir y diagnosticar ANTES de tocar código; separar WIP de lo commiteado.
+Discernimiento + Diligencia: "muchos errores dentro de OpenCode" → reproducido con `opencode run` +
+`opencode export`, diagnosticado por origen (WIP vs commiteado vs generador) y arreglado en el generador.
 
-## Hecho (sesión 2026-10-31 → 11-02, ya en main)
-- `61572d9` #18 barra + Panel 4D + /statusline setup (0.22.0)
-- `ad3c82e` #19 /panel sin prefijo, refresco 5 s, defaults (0.22.1)
-- `e21d2c4` #21 docs de arquitectura + robustez + fuzz liviano local (`FLUENCY_FULL_FUZZ=1` en CI) (0.22.2)
-- Plugin instalado 0.22.2 y config real migrada (`statusline_setup.py setup --force`). Copias viejas en
-  `~/.claude/backup-local-panel-20261102/`. Worktree -port y ramas mergeadas borradas.
+## Hecho
+- `3985868` snapshot del WIP de 2026-08-03 (cherry-pick sobre origin/main; el original quedó en
+  `bf88e6d` en la rama vieja `feature/multiharness-codex-opencode`, que ya estaba squasheada en main como #16).
+- `9d2eef6` fix: shim con `synthetic:true` (la TUI ya no muestra el contexto como texto del usuario),
+  id ascendente, `PYTHONUTF8=1`, payload con `session_id`/`hook_event_name`/`permission_mode`, sin
+  inyección en subagentes. Generador produce los 45 archivos de `dist/opencode` (commands con SKILL.md
+  incrustado, agentes con `external_directory`, `verify-diff` no se emite). `check_harness` con guardas.
+- Verificado: check_harness OK, 7/7 tests, E2E (i)-(vii) con sessionIDs, E2E propio
+  (`ses_e61d9a26dffey75oga85chzvbu`) y **prueba visual del usuario en la TUI: PASS**.
+- Bundle instalado global en `~/.config/opencode/{command,agent,plugin,references}` (backup previo en el
+  scratchpad de la sesión, `backup-oc`).
 
 ## Pendiente
-1. **Multiharness / OpenCode (foco nuevo):** rama `feature/multiharness-codex-opencode` (HEAD `ae3e6e6`),
-   4 commits detrás de main (le falta 0.22.x). WIP SIN commitear de una sesión de 2026-08-03 (33 entradas):
-   `tools/multiharness/build_harness.py`, `check_harness.py`, `dist/codex/hooks.json`,
-   `dist/opencode/plugin/fluency-hooks.js` (+276/−146) y nuevos `dist/hermes/`, `.hermes/`,
-   `dist/opencode/agent/*.md`, `dist/opencode/command/*.md`. NO commitear ni descartar sin preguntar.
-   Viejo: el shim tenía `TODO(verificar-API-opencode)`; nunca se hizo E2E de OpenCode en vivo.
-2. Errores exactos de OpenCode: el usuario todavía no los pegó. OpenCode instalado: 1.19.1 (winget).
-3. Prueba visual del Panel 4D tras reiniciar (`/panel`, `ctrl+x ctrl+p`, Esc → 1 confirmación).
-4. Opcionales: `dist/` con rutas absolutas de la máquina; setup rechaza rutas Windows con `( + ~`;
-   pytest-xdist si se quiere bajar más que 2 min; idea `/statusline explicar`.
+1. Push de `fix/opencode-runtime` + PR a main (pedir OK al usuario).
+2. `/caveman` y `/adhd` en `opencode run` no pueden escribir el flag (`external_directory` auto-reject);
+   en la TUI piden permiso. No se amplió el permiso (en `~/.claude/fluency4d/` está statusline.js).
+3. Sin E2E: `/4d-quiz`, `/sentinel-audit`, `/handoff`, `/suite-setup`.
+4. Cada build reescribe `dist/hermes/.hermes.md` y check_harness no lo detecta (hermes solo valida frontmatter).
+5. Hooks en serie (~1,2 s/mensaje): paralelizar. `dist/` sigue con rutas absolutas de la máquina.
+6. Prueba visual del Panel 4D (Claude Code) tras reiniciar (`/panel`, `ctrl+x ctrl+p`).
+7. Opcionales: setup rechaza rutas Windows con `( + ~`; pytest-xdist; idea `/statusline explicar`.
 
 ## Rutas
 | Qué | Dónde |
 |---|---|
-| repo / rama | `C:\Users\samud\dev\4Dsentinel-suite` / `feature/multiharness-codex-opencode` |
+| repo / rama | `C:\Users\samud\dev\4Dsentinel-suite` / `fix/opencode-runtime` |
 | remote | https://github.com/alexissamudio/4Dsentinel-suite.git |
-| generador | `tools/multiharness/build_harness.py`, `check_harness.py` |
-| bundle OpenCode | `dist/opencode/` (plugin/fluency-hooks.js, agent/, command/, opencode.json) |
-| arquitectura | `docs/fluency-4d-arquitectura.md` (en main) |
+| generador | `tools/multiharness/build_harness.py`, `mappings.py`, `check_harness.py` |
+| bundle OpenCode | `dist/opencode/` → instalado en `~/.config/opencode/` |
+| repro E2E | `opencode run -m deepseek/deepseek-flash --format json "<msg>"` + `opencode export <sid>` |
 | lecciones | `.claude/docs/lecciones.md` |
 
 ## Próximo paso
-Pedir/leer los errores de OpenCode; reproducir no interactivo (`opencode run` + sus logs) con el
-`dist/opencode` actual (WIP) y con el commiteado (`git worktree add` de `ae3e6e6`) para ver de cuál vienen.
+Con OK del usuario: push + PR a main. Después, pendientes 2-5.
