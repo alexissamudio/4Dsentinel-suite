@@ -150,7 +150,8 @@ def arranque_lines(cwd: Path, state: dict[str, Any]) -> list[str]:
     if lecciones.is_file():
         lines.append(
             "Este proyecto tiene lecciones aprendidas en `.claude/docs/lecciones.md`: "
-            "leelas antes de empezar a trabajar."
+            "si el pedido implica trabajar en este proyecto, leelas antes de empezar "
+            "(ante un saludo o una consulta ajena al proyecto, no hace falta)."
         )
     estado = cwd / ".claude" / "docs" / "estado-sesion.md"
     if estado.is_file():
@@ -162,13 +163,13 @@ def arranque_lines(cwd: Path, state: dict[str, Any]) -> list[str]:
             dias = int(age_seconds // 86400)
             lines.append(
                 "Hay un estado guardado en `.claude/docs/estado-sesion.md`, pero es de "
-                f"una sesion anterior (hace {dias} dia(s)): verifica su vigencia antes "
-                "de asumir pendientes."
+                f"una sesion anterior (hace {dias} dia(s)): si vas a retomar trabajo, "
+                "verifica su vigencia antes de asumir pendientes."
             )
         else:
             lines.append(
                 "Hay un estado de sesion reciente en `.claude/docs/estado-sesion.md`: "
-                "leelo para retomar el contexto."
+                "si vas a retomar trabajo, leelo para recuperar el contexto."
             )
     aviso = bridges_oversize_line(cwd)
     if aviso:
