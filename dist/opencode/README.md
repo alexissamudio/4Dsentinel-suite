@@ -1,13 +1,13 @@
 # Bundle OpenCode de la suite 4Dsentinel
 
-Bundle regenerable que porta la suite de plugins de Claude Code a **OpenCode 1.19.1**. Generado por `tools/multiharness/build_harness.py` desde la fuente canonica en `plugins/*` (read-only). NO editar a mano: `check_harness.py` falla si el bundle no coincide con el generador.
+Bundle regenerable que porta la suite de plugins de Claude Code a **OpenCode 1.19.x / 2.2.5**. Generado por `tools/multiharness/build_harness.py` desde la fuente canonica en `plugins/*` (read-only). NO editar a mano: `check_harness.py` falla si el bundle no coincide con el generador.
 
 ## Que incluye
 
-- **Commands** (`command/*.md`, 15): `/4d`, `/4d-init`, `/4d-quiz`, `/4d-status`, `/adhd`, `/arquitectura`, `/buscar`, `/caveman`, `/handoff`, `/impacto`, `/indexar`, `/proyectos`, `/rastrear`, `/sentinel-audit`, `/suite-setup`. Cada command INCRUSTA el cuerpo real del skill/command fuente (y sus `references/`), traducido a OpenCode: nombres de agente calificados con el plugin sentinel-agents -> subagente `X` via la tool `task`; la variable de raiz de plugin de Claude Code -> ruta absoluta del plugin en el repo; `AskUserQuestion` -> tool `question`; planes -> `.opencode/plans/` / `~/.local/share/opencode/plans/`.
+- **Commands** (`command/*.md`, 15): `/4d`, `/4d-init`, `/4d-quiz`, `/4d-status`, `/adhd`, `/arquitectura`, `/buscar`, `/caveman`, `/handoff`, `/impacto`, `/indexar`, `/proyectos`, `/rastrear`, `/sentinel-audit`, `/suite-setup`. Cada command INCRUSTA el cuerpo real del skill/command fuente (y sus `references/`), traducido a OpenCode: nombres de agente calificados con el plugin sentinel-agents -> subagente `X` via la tool `task` (`subagent` en 2.x); la variable de raiz de plugin de Claude Code -> ruta absoluta del plugin en el repo; `AskUserQuestion` -> tool `question`; planes -> `.opencode/plans/` / `~/.local/share/opencode/plans/`.
 - **Agentes** (`agent/*.md`, 11, `mode: subagent`): permisos derivados del allowlist `tools` fuente (read-only -> `edit/bash/webfetch: deny`) + `external_directory` permitido SOLO sobre `C:/Users/samud/.config/opencode/references/*` (el contrato y la KB viven fuera del proyecto; sin ese permiso `opencode run` lo auto-rechaza).
 - **References** (`references/`): `agent-contract.md` (seccion 7 reescrita a la KB instalada) + KB ISO 27000 (`iso-27000/`, copia byte-a-byte, incluido `.manifest.sha256`).
-- **Hooks** -> `plugin/fluency-hooks.js`: shim que puentea los hooks Python de `UserPromptSubmit` (bridge_router, plan_calibrator, caveman_injector, adhd_injector, suite_playbook) via `chat.message`. Payload: `session_id`, `hook_event_name`, `prompt`, `cwd`, `permission_mode` (`plan` si el agente es `plan`). Inyecta una parte `synthetic: true` (el modelo la ve; la TUI no la muestra como texto del usuario) con id ascendente posterior al prompt. No inyecta en subagentes. Fuerza `PYTHONUTF8=1` para que los acentos lleguen bien.
+- **Hooks** -> `plugin/fluency-hooks.js`: shim que puentea los hooks Python de `UserPromptSubmit` (bridge_router, plan_calibrator, caveman_injector, adhd_injector, suite_playbook). UN archivo con los dos contratos de plugin: `export default { id, server, setup }`. **v1 (1.x)** lee `server` y usa `chat.message`: inyecta una parte `synthetic: true` (el modelo la ve; la TUI no la muestra como texto del usuario) con id ascendente posterior al prompt. **v2 (2.x)** lee `setup(api)` y usa `api.session.hook("context")`: inserta un mensaje user SIN persistir despues del prompt, cacheado por id de mensaje (los hooks corren una vez por prompt, no en cada paso de tool). Payload: `session_id`, `hook_event_name`, `prompt`, `cwd`, `permission_mode` (`plan` si el agente es `plan`). Hooks en paralelo y sin bloquear el event loop. No inyecta en subagentes. Fuerza `PYTHONUTF8=1` para que los acentos lleguen bien.
 - **Config** -> `opencode.json`: solo documenta el MCP; NO lo copies encima de tu config.
 
 ## Skills que NO se emiten (y por que)
@@ -39,6 +39,8 @@ Al actualizar, borra en destino los archivos que instalo un bundle anterior y ya
 
 ## Verificacion
 
-- `check_harness.py`: sin drift, JSON/TOML validos, hooks `.py` existentes, y guardas OpenCode (parte `synthetic`, `session_id` y `PYTHONUTF8` en el shim, sin nombres calificados de sentinel-agents ni la variable de raiz de plugin de Claude, commands autocontenidos).
-- E2E en runtime real de `opencode 1.19.1` (`opencode run` + `opencode export`).
+- `check_harness.py`: sin drift, JSON/TOML validos, hooks `.py` existentes, y guardas OpenCode (default `{ id, server, setup }`, parte `synthetic` en v1, hook `context` en v2, `session_id` y `PYTHONUTF8` en el shim, sin nombres calificados de sentinel-agents ni la variable de raiz de plugin de Claude, commands autocontenidos).
+- `tests/scripts/opencode_shim_contract.mjs`: importa el plugin en Node y ejercita ambos contratos con mocks (lo corre `test_build_harness.py`).
+- E2E en runtime real de `opencode 1.19.x / 2.2.5` (v1: `opencode run` + `opencode export`; v2: `opencode run --standalone` + `opencode session export`).
+- OpenCode 2.x carga `command/` (o `commands/`), `agent/` y `plugin/` del dir global; `opencode run` de 2.x no tiene `--command`: los commands se usan desde la TUI (`/nombre`) o la API `session.command`.
 - MCP (codebase-memory): fuera del bundle; se registra en el `opencode.json` del usuario.

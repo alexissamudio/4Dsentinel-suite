@@ -8,8 +8,12 @@ dist/opencode.
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "multiharness"))
@@ -112,6 +116,16 @@ def test_opencode_guardas_detectan_regresiones(tmp_path: Path) -> None:
         text.replace("synthetic: true,", "").replace("session_id:", "sid:"), encoding="utf-8"
     )
     assert C.validate_opencode(root)
+    # v2 sin id/setup (loader v2: "Plugin must export a default definition...").
+    shim.write_text(text.replace("  setup: setupV2,\n", ""), encoding="utf-8")
+    assert C.validate_opencode(root)
+    # Sin hook context v2, o volviendo a spawnSync (bloquea el event loop).
+    shim.write_text(
+        text.replace('api.session.hook("context"', 'api.session.hook("x"'), encoding="utf-8"
+    )
+    assert C.validate_opencode(root)
+    shim.write_text(text + "\n// spawnSync(\n", encoding="utf-8")
+    assert C.validate_opencode(root)
     shim.write_text(text, encoding="utf-8")
     assert not C.validate_opencode(root)
     cmd = root / "command" / "4d.md"
@@ -120,3 +134,55 @@ def test_opencode_guardas_detectan_regresiones(tmp_path: Path) -> None:
     assert C.validate_opencode(root)
     cmd.write_text(good + "\nusa sentinel-agents:advisor\n", encoding="utf-8")
     assert C.validate_opencode(root)
+
+
+FAKE_HOOK = """# /// script
+# requires-python = ">=3.11"
+# ///
+import json, sys, time
+data = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+kind = {kind!r}
+if kind == "A":
+    time.sleep(0.4)  # termina DESPUES de B: el orden de los chunks es por indice
+    with open({log!r}, "a", encoding="utf-8") as fh:
+        fh.write(data["session_id"] + "\\n")
+    ctx = "A:%s|%s|%s" % (data["prompt"], data["permission_mode"], data["cwd"])
+elif kind == "B":
+    ctx = "B:sentinel-agents:critic"
+else:
+    sys.exit(1)
+out = {{"hookSpecificOutput": {{"hookEventName": "UserPromptSubmit", "additionalContext": ctx}}}}
+sys.stdout.write(json.dumps(out, ensure_ascii=False))
+"""
+
+
+@pytest.mark.skipif(
+    not (shutil.which("node") and shutil.which("uv")), reason="requiere node y uv en el PATH"
+)
+def test_opencode_shim_contrato_v1_v2_en_node(tmp_path: Path) -> None:
+    """Importa el plugin generado en Node y ejercita los contratos v1 y v2 con mocks."""
+    root = tmp_path / "opencode"
+    B.build_opencode(root)
+    text = (root / "plugin" / "fluency-hooks.js").read_text(encoding="utf-8")
+    log = tmp_path / "hooks.log"
+    fakes = []
+    for kind in ("A", "B", "C"):
+        f = tmp_path / ("fake_%s.py" % kind)
+        f.write_text(FAKE_HOOK.format(kind=kind, log=str(log)), encoding="utf-8")
+        fakes.append(f)
+    marker = "const USER_PROMPT_HOOKS = [\n"
+    start = text.index(marker) + len(marker)
+    end = text.index("\n];", start)
+    hooks_js = ",\n".join("  " + json.dumps(str(f)) for f in fakes)
+    plugin = tmp_path / "plugin.mjs"
+    plugin.write_text(text[:start] + hooks_js + text[end:], encoding="utf-8")
+    script = Path(__file__).with_name("opencode_shim_contract.mjs")
+    res = subprocess.run(
+        ["node", str(script), str(plugin), str(log), str(tmp_path)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+    )
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "OK contrato v1 + v2" in res.stdout

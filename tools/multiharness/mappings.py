@@ -145,7 +145,12 @@ MCP_DEFERRED = True
 # ---------------------------------------------------------------------------
 # [CONSUMIDA] build_harness.py (README, banners y shim) declara la version
 # contra la que se verifico el bundle (E2E con `opencode run`).
-OPENCODE_VERSION = "1.19.1"
+# El shim (plugin/fluency-hooks.js) es UN archivo con los dos contratos de
+# plugin: v1 (`default.server` -> hook `chat.message`) y v2 (`default.setup` ->
+# `api.session.hook("context")`). E2E real en 1.19.1, 1.19.5 y 2.2.5.
+OPENCODE_V1_VERSION = "1.19.x"
+OPENCODE_V2_VERSION = "2.2.5"
+OPENCODE_VERSION = OPENCODE_V1_VERSION + " / " + OPENCODE_V2_VERSION
 
 # [CONSUMIDA] build_opencode(): skills que NO se emiten como command, con la
 # razon (va al README del bundle). barra/statusline ya caen por CLAUDE_CODE_ONLY
@@ -170,8 +175,8 @@ OPENCODE_SKILLS_SKIPPED: dict[str, str] = {
 # [CONSUMIDA] oc_translate_common(): nombres de tools exclusivas de Claude Code
 # -> equivalente OpenCode. Orden importa (lo especifico primero).
 OPENCODE_TOOL_MAP: tuple[tuple[str, str], ...] = (
-    ("el Agent tool", "la tool `task`"),
-    ("Agent tool", "la tool `task`"),
+    ("el Agent tool", "la tool `task` (`subagent` en OpenCode 2.x)"),
+    ("Agent tool", "la tool `task` (`subagent` en OpenCode 2.x)"),
     ("AskUserQuestion", "la tool `question`"),
 )
 
@@ -292,8 +297,8 @@ OPENCODE_SKILL_NOTES: dict[str, str] = {
         "de Claude Code."
     ),
     "sentinel-audit": (
-        "Subagentes via la tool `task` (`security-auditor`, `compliance-auditor`, "
-        "`code-reviewer`, `validator`)."
+        "Subagentes via la tool `task` (`subagent` en OpenCode 2.x): "
+        "`security-auditor`, `compliance-auditor`, `code-reviewer`, `validator`."
     ),
 }
 

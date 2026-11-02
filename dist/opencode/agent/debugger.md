@@ -8,7 +8,7 @@ permission:
     "C:/Users/samud/.config/opencode/references/*": allow
 ---
 
-<!-- Portado de plugins/sentinel-agents/agents/debugger.md por tools/multiharness/build_harness.py. Frontmatter reescrito al schema de OpenCode 1.19.1. NO editar a mano. -->
+<!-- Portado de plugins/sentinel-agents/agents/debugger.md por tools/multiharness/build_harness.py. Frontmatter reescrito al schema de OpenCode 1.19.x / 2.2.5. NO editar a mano. -->
 
 > **OpenCode:** el contrato de agentes esta instalado en `C:/Users/samud/.config/opencode/references/agent-contract.md` (ruta absoluta; leelo con la tool read, ya tenes permiso external_directory sobre ese directorio).
 

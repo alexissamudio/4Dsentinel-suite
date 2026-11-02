@@ -5,7 +5,7 @@ agent: build
 
 <!-- Generado por tools/multiharness/build_harness.py desde plugins/fluency-4d/skills/caveman (cuerpo incrustado y traducido a OpenCode). NO editar a mano. -->
 
-> **OpenCode (bundle 4Dsentinel, OpenCode 1.19.1).** Este comando INCRUSTA el skill `caveman` completo: segui las instrucciones de abajo tal cual. NO busques un archivo de skill ni rutas de instalacion de Claude Code. Los subagentes de la suite (advisor, critic, librarian, ...) se invocan con la tool `task` (`subagent_type: <nombre>`).
+> **OpenCode (bundle 4Dsentinel, OpenCode 1.19.x / 2.2.5).** Este comando INCRUSTA el skill `caveman` completo: segui las instrucciones de abajo tal cual. NO busques un archivo de skill ni rutas de instalacion de Claude Code. Los subagentes de la suite (advisor, critic, librarian, ...) se invocan con la tool `task` (`subagent_type: <nombre>`) en OpenCode 1.x, o con la tool `subagent` (`agent: <nombre>`) en 2.x.
 >
 > El flag va en `~/.claude/fluency4d/` A PROPOSITO (no en `~/.config/opencode`): es la ruta que lee `caveman_injector.py`, que en OpenCode corre via el plugin `fluency-hooks.js` en cada mensaje. Usa la tool `write` con la ruta absoluta expandida (esta fuera del proyecto: OpenCode pedira permiso `external_directory`, aprobalo).
 

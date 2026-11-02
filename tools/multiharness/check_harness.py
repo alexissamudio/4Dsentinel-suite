@@ -137,12 +137,26 @@ def validate_bundle(label: str, root: Path) -> bool:
 # fugado entre sesiones, nombres/rutas de Claude Code, commands-wrapper).
 OC_FORBIDDEN = ("sentinel-agents:", "${CLAUDE_PLUGIN_ROOT}")
 OC_PUSH_SYNTHETIC = re.compile(r"output\.parts\.push\(\{[^}]*\bsynthetic:\s*true\b", re.S)
+# Un solo archivo para OpenCode v1 (lee default.server) y v2 (exige default.id y
+# lee default.setup): sin `id`/`setup` la v2 lo marca "failed"; sin `server` la
+# v1 no lo carga.
+OC_DEFAULT_DUAL = re.compile(
+    r"export default \{\s*id:\s*\"[^\"]+\",\s*server:\s*\w+,\s*setup:\s*\w+,?\s*\};"
+)
 OC_SHIM_REQUIRED = (
     ("session_id:", "el payload no pasa session_id (el estado se keyea por cwd)"),
-    ('PYTHONUTF8: "1"', "spawnSync sin PYTHONUTF8=1 (stdin cp1252 en Windows)"),
+    ('PYTHONUTF8: "1"', "el hook corre sin PYTHONUTF8=1 (stdin cp1252 en Windows)"),
     ("hook_event_name:", "el payload no pasa hook_event_name"),
     ("permission_mode:", "el payload no pasa permission_mode (plan_calibrator)"),
-    ("isSubagent(input)", "no se saltea la inyeccion en subagentes"),
+    ("isSubagent(sid, agent)", "v1: no se saltea la inyeccion en subagentes"),
+    ("isSubagent(r.sessionID, r.agent)", "v2: no se saltea la inyeccion en subagentes"),
+    ('"chat.message":', "v1: falta el hook chat.message"),
+    ('api.session.hook("context"', "v2: falta api.session.hook(\"context\")"),
+    ("Promise.all(USER_PROMPT_HOOKS", "los hooks no corren en paralelo"),
+)
+OC_SHIM_FORBIDDEN = (
+    ("spawnSync(", "spawnSync bloquea el event loop de OpenCode (usar spawn async)"),
+    ("session.synthetic(", "v2: api.session.synthetic persiste/duplica la inyeccion"),
 )
 OC_SKILL_REF = re.compile(r"SKILL\.md")
 
@@ -163,8 +177,13 @@ def validate_opencode(root: Path) -> bool:
     else:
         if not OC_PUSH_SYNTHETIC.search(text):
             fail("la parte inyectada en output.parts no lleva synthetic: true")
+        if not OC_DEFAULT_DUAL.search(text):
+            fail("shim: el default export no es { id, server, setup } (v1 + v2)")
         for needle, why in OC_SHIM_REQUIRED:
             if needle not in text:
+                fail("shim: " + why)
+        for needle, why in OC_SHIM_FORBIDDEN:
+            if needle in text:
                 fail("shim: " + why)
 
     kb = root / "references" / "iso-27000"
@@ -189,7 +208,8 @@ def validate_opencode(root: Path) -> bool:
             fail("command/%s.md no deberia emitirse (OPENCODE_SKILLS_SKIPPED)" % skipped)
 
     if not err:
-        print("OK dist/opencode/ : guardas OpenCode (synthetic, session_id, "
+        print("OK dist/opencode/ : guardas OpenCode (default {id,server,setup}, "
+              "v1 synthetic, v2 context, hooks async, session_id, "
               "PYTHONUTF8, subagentes, sin nombres/rutas de Claude, commands "
               "autocontenidos)")
     return err

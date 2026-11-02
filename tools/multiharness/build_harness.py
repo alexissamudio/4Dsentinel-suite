@@ -15,7 +15,7 @@ Alcance del PoC (lo demas queda como TODO comentado en el bundle):
                Codex descubre los hooks via $CODEX_HOME/hooks.json o
                <proyecto>/.codex/hooks.json -- NO via config.toml [hooks].
     - agente : critic ([agents.critic] en config.toml)
-  OpenCode (dist/opencode/, OpenCode 1.19.1 -- TODO el bundle sale de aca):
+  OpenCode (dist/opencode/, OpenCode 1.19.x y 2.2.5 -- TODO el bundle sale de aca):
     - command   : un command por skill portable (cuerpo + references
                   INCRUSTADOS y traducidos; ver M.OPENCODE_SKILLS_SKIPPED) y por
                   cada command de memory (command/*.md).
@@ -23,7 +23,7 @@ Alcance del PoC (lo demas queda como TODO comentado en el bundle):
                   permisos del allowlist + external_directory sobre references/).
     - references: agent-contract.md (sec. 7 reescrita) + KB ISO (byte-a-byte).
     - hooks     : plugin shim JS (plugin/fluency-hooks.js) que puentea los hooks
-                  Python de UserPromptSubmit via chat.message.
+                  Python de UserPromptSubmit (v1: chat.message; v2: hook context).
     - config    : opencode.json (solo documenta el MCP).
 
 Idempotente: correrlo N veces produce el mismo arbol de salida.
@@ -533,7 +533,7 @@ def oc_replace(text: str, rules, origin: str) -> str:
 def oc_translate_common(text: str, plugin_root: Path) -> str:
     """Traduccion Claude Code -> OpenCode comun a commands y agentes.
 
-    - `sentinel-agents:X`  -> `X` (subagente OpenCode, se invoca con la tool task).
+    - `sentinel-agents:X`  -> `X` (subagente OpenCode, tool task / subagent en 2.x).
     - ${CLAUDE_PLUGIN_ROOT} -> ruta abs del plugin en este repo (igual que el shim).
     - tools exclusivas de Claude Code -> equivalente OpenCode (M.OPENCODE_TOOL_MAP).
     - ~/.claude/plans/      -> directorios de planes de OpenCode.
@@ -625,7 +625,8 @@ def build_opencode_skill_command(skill_md: Path) -> str:
         "el skill `%s` completo: segui las instrucciones de abajo tal cual. NO "
         "busques un archivo de skill ni rutas de instalacion de Claude Code. Los "
         "subagentes de la suite (advisor, critic, librarian, ...) se invocan con "
-        "la tool `task` (`subagent_type: <nombre>`)." % (M.OPENCODE_VERSION, name),
+        "la tool `task` (`subagent_type: <nombre>`) en OpenCode 1.x, o con la "
+        "tool `subagent` (`agent: <nombre>`) en 2.x." % (M.OPENCODE_VERSION, name),
     ]
     extra = M.OPENCODE_SKILL_NOTES.get(name)
     if extra:
@@ -737,195 +738,374 @@ def opencode_kb_files() -> list[Path]:
 
 
 # --- Shim de hooks -----------------------------------------------------------
+# Plantilla JS del plugin (UN archivo para OpenCode v1 y v2). Placeholders:
+# @@HOOKS@@ (rutas abs de los .py), @@SUBAGENTS@@, @@V1@@ y @@V2@@ (versiones).
+OPENCODE_SHIM_TEMPLATE = r"""// fluency-hooks.js - shim de plugin OpenCode para la suite fluency-4d.
+// Generado por tools/multiharness/build_harness.py. NO editar a mano.
+//
+// Proposito: PUENTEAR (no reescribir) los hooks Python de fluency-4d al ciclo
+// de vida de OpenCode. En el equivalente a UserPromptSubmit de Claude Code
+// invoca cada hook Python por subprocess (uv run --script <ruta_abs>), le pasa
+// el input por stdin (JSON, contrato de Claude) y reinyecta el
+// `additionalContext` que emite por stdout.
+//
+// UN archivo, DOS contratos de plugin (verificados en runtime real):
+// - OpenCode @@V1@@ (v1): lee `default.server` (fn) y usa el hook
+//   `chat.message`, que corre al crear el mensaje del usuario ANTES de
+//   persistirlo: input = {sessionID, agent, model, messageID, variant},
+//   output = {message, parts}. La parte inyectada va con `synthetic: true` (el
+//   modelo la ve; la TUI no la muestra como texto del usuario) y con id
+//   ascendente mayor que el de las partes del usuario -> queda DESPUES del
+//   prompt. Si `default` es un objeto, los exports nombrados se ignoran.
+// - OpenCode @@V2@@ (v2): valida `default` contra {id, setup: fn} y llama
+//   setup(api). No existe `chat.message`: se usa api.session.hook("context"),
+//   que corre en CADA llamada al modelo (tambien en cada paso de tools) con
+//   {sessionID, agent, model, system, messages, tools}. Se inserta un mensaje
+//   user SIN persistir (no api.session.synthetic) justo despues del mensaje
+//   del usuario; el resultado de los hooks se cachea por id de ese mensaje, asi
+//   los hooks corren una vez por prompt y no en cada paso de tool.
+// - Subagentes (sesion hija con parentID / agente mode subagent): NO se
+//   inyecta nada (los hooks tambien lo saltean por agent_type).
+// Los hooks corren en paralelo y sin bloquear el event loop (spawn async).
+// Ante cualquier fallo el shim degrada a NO-OP: nunca rompe la sesion.
+
+import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+
+// Rutas absolutas a los hooks Python de fluency-4d (resueltas al generar).
+const USER_PROMPT_HOOKS = [
+@@HOOKS@@
+];
+
+// Fallback de deteccion de subagentes (agentes del bundle + nativos de
+// OpenCode) si la API del plugin no responde.
+const KNOWN_SUBAGENTS = new Set([@@SUBAGENTS@@]);
+
+// Python en Windows lee stdin con la codepage ANSI (cp1252) salvo que se
+// fuerce UTF-8: sin esto los prompts con acentos rompen los keywords.
+const HOOK_ENV = { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" };
+const HOOK_TIMEOUT_MS = 5000; // por hook (corren en paralelo)
+const API_TIMEOUT_MS = 3000; // consultas a la API de OpenCode
+const CACHE_MAX = 500; // prompts recordados por el cache de contexto v2
+
+// Traduccion minima del texto que emiten los hooks (escritos para Claude
+// Code) a los nombres de OpenCode.
+const CONTEXT_REWRITES = [
+  [/\bsentinel-agents[:]([a-z][a-z-]*)/g, "$1"],
+  [/\bExitPlanMode\b/g, "plan_exit"],
+];
+
+// --- ids ascendentes v1 (formato OpenCode: prefijo_ + 12 hex de
+// (ms*0x1000+contador) truncado a 48 bits + 14 base62) ---
+const B62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const MASK48 = (1n << 48n) - 1n;
+function idTime(id) {
+  const m = /^[a-z]+_([0-9a-f]{12})/.exec(String(id || ""));
+  return m ? BigInt("0x" + m[1]) : -1n;
+}
+function partIDAfter(parts) {
+  // Ultimo slot del ms actual, o el siguiente a la mayor parte existente.
+  let t = (BigInt(Date.now()) * 0x1000n + 0xfffn) & MASK48;
+  for (const p of parts) {
+    const v = idTime(p && p.id);
+    if (v >= t) t = (v + 1n) & MASK48;
+  }
+  const rnd = Array.from(randomBytes(14), (b) => B62[b % 62]).join("");
+  return "prt_" + t.toString(16).padStart(12, "0") + rnd;
+}
+
+// Invoca un hook Python SIN bloquear el event loop y resuelve con su
+// additionalContext ('' si no aplica, falla o vence el timeout).
+function runPythonHook(scriptPath, payload) {
+  return new Promise((resolve) => {
+    let child = null;
+    let out = "";
+    let done = false;
+    let timer = null;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    timer = setTimeout(() => {
+      try {
+        if (child) child.kill();
+      } catch (_e) {
+        // ya termino
+      }
+      finish("");
+    }, HOOK_TIMEOUT_MS);
+    try {
+      child = spawn("uv", ["run", "--script", scriptPath], {
+        env: HOOK_ENV,
+        windowsHide: true,
+        stdio: ["pipe", "pipe", "ignore"],
+      });
+      child.on("error", () => finish(""));
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk) => {
+        out += chunk;
+      });
+      child.on("close", (code) => {
+        if (code !== 0 || !out) return finish("");
+        try {
+          const spec = JSON.parse(out).hookSpecificOutput;
+          finish(spec && spec.additionalContext ? String(spec.additionalContext) : "");
+        } catch (_e) {
+          finish("");
+        }
+      });
+      child.stdin.on("error", () => {}); // el hook cerro stdin: sin dato
+      child.stdin.end(JSON.stringify(payload || {}));
+    } catch (_e) {
+      finish(""); // fail-degraded: un hook que falla nunca rompe la sesion.
+    }
+  });
+}
+
+// Corre los hooks en paralelo; los chunks conservan el orden de USER_PROMPT_HOOKS.
+async function collectContext(payload) {
+  const results = await Promise.all(USER_PROMPT_HOOKS.map((s) => runPythonHook(s, payload)));
+  const chunks = [];
+  for (let ctx of results) {
+    if (!ctx) continue;
+    for (const [re, rep] of CONTEXT_REWRITES) ctx = ctx.replace(re, rep);
+    chunks.push(ctx);
+  }
+  return chunks.join("\n\n");
+}
+
+// Resuelve con fn() o con undefined si falla o tarda mas de ms. El timer se
+// limpia apenas hay resultado (no quedan timers vivos por llamada).
+function withTimeout(fn, ms) {
+  let timer = null;
+  const call = new Promise((resolve) => resolve(fn())).catch(() => undefined);
+  const expire = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(undefined), ms);
+  });
+  return Promise.race([call, expire]).finally(() => clearTimeout(timer));
+}
+
+function unwrap(r) {
+  return r && typeof r === "object" && "data" in r ? r.data : r;
+}
+
+// Subagente = sesion hija (la tool task/subagent crea la sesion con parentID)
+// o agente con mode "subagent"; fallback: lista estatica del bundle. Las dos
+// consultas a la API van en paralelo; los modos se cachean una vez.
+function makeSubagentDetector(getSession, getAgentModes) {
+  const bySession = new Map(); // sessionID -> boolean
+  let modes = null; // Promise<{agente: mode}>
+  const loadModes = () => {
+    if (!modes) {
+      modes = withTimeout(getAgentModes, API_TIMEOUT_MS).then((m) => {
+        if (!m || !Object.keys(m).length) modes = null; // reintentar luego
+        return m || {};
+      });
+    }
+    return modes;
+  };
+  return async function isSubagent(sessionID, agent) {
+    if (sessionID && bySession.has(sessionID)) return bySession.get(sessionID);
+    let sub = Boolean(agent && KNOWN_SUBAGENTS.has(agent));
+    if (!sub) {
+      const [session, agentModes] = await Promise.all([
+        sessionID ? withTimeout(() => getSession(sessionID), API_TIMEOUT_MS) : undefined,
+        agent ? loadModes() : {},
+      ]);
+      if (session && session.parentID) sub = true;
+      if (agent && agentModes && agentModes[agent] === "subagent") sub = true;
+    }
+    if (sessionID) bySession.set(sessionID, sub);
+    return sub;
+  };
+}
+
+function modesFrom(list, keys) {
+  const out = {};
+  if (!Array.isArray(list)) return out;
+  for (const a of list) {
+    if (!a) continue;
+    for (const k of keys) if (a[k]) out[a[k]] = a.mode;
+  }
+  return out;
+}
+
+function hookPayload(sessionID, prompt, cwd, agent) {
+  return {
+    session_id: sessionID || "",
+    hook_event_name: "UserPromptSubmit",
+    prompt,
+    cwd,
+    permission_mode: agent === "plan" ? "plan" : "default",
+  };
+}
+
+// --- v1: default.server -> chat.message (parte synthetic persistida) -------
+export const FluencyHooks = async ({ client, directory, worktree } = {}) => {
+  const isSubagent = makeSubagentDetector(
+    async (id) => unwrap(await client.session.get({ path: { id } })),
+    async () => modesFrom(unwrap(await client.app.agents()), ["name"]),
+  );
+
+  return {
+    // chat.message = equivalente a UserPromptSubmit.
+    "chat.message": async (input, output) => {
+      try {
+        if (!output || !Array.isArray(output.parts)) return;
+        const sid = input && input.sessionID;
+        const agent = input && input.agent;
+        if (await isSubagent(sid, agent)) return; // subagentes: no inyectar
+        const parts = output.parts;
+        const userText = parts
+          .filter((p) => p && p.type === "text" && !p.synthetic && typeof p.text === "string")
+          .map((p) => p.text)
+          .join("\n");
+        const cwd = directory || worktree || process.cwd();
+        const extra = await collectContext(hookPayload(sid, userText, cwd, agent));
+        if (!extra) return;
+        const ref = parts.find((p) => p && p.sessionID && p.messageID);
+        const messageID = (output.message && output.message.id)
+          || (ref && ref.messageID) || (input && input.messageID);
+        const sessionID = sid || (ref && ref.sessionID);
+        if (!messageID || !sessionID) return; // sin ids reales no se inventan
+        output.parts.push({
+          id: partIDAfter(parts),
+          sessionID,
+          messageID,
+          type: "text",
+          synthetic: true,
+          text: extra,
+        });
+      } catch (_e) {
+        // NO-OP seguro.
+      }
+    },
+  };
+};
+
+// --- v2: default.setup -> api.session.hook("context") (sin persistir) --------
+const INJECTED = "fluency4d"; // marca en metadata del mensaje inyectado
+
+function messageText(m) {
+  const content = m && Array.isArray(m.content) ? m.content : [];
+  return content
+    .filter((c) => c && c.type === "text" && typeof c.text === "string")
+    .map((c) => c.text)
+    .join("\n");
+}
+
+function isInjected(m) {
+  return Boolean(m && m.metadata && m.metadata[INJECTED]);
+}
+
+export async function setupV2(api) {
+  const isSubagent = makeSubagentDetector(
+    async (sessionID) => unwrap(await api.session.get({ sessionID })),
+    async () => modesFrom(unwrap(await api.agent.list()), ["id", "name"]),
+  );
+  const pending = new Map(); // "sesion:mensaje" -> Promise<string>
+  const resolved = new Map(); // "sesion:mensaje" -> string (para el historial)
+  const cwdBySession = new Map();
+
+  async function sessionCwd(sessionID) {
+    if (cwdBySession.has(sessionID)) return cwdBySession.get(sessionID);
+    const s = await withTimeout(
+      async () => unwrap(await api.session.get({ sessionID })),
+      API_TIMEOUT_MS,
+    );
+    const dir = (s && ((s.location && s.location.directory) || s.directory)) || process.cwd();
+    cwdBySession.set(sessionID, dir);
+    return dir;
+  }
+
+  function remember(key, promise) {
+    pending.set(key, promise);
+    promise.then((text) => resolved.set(key, text));
+    while (pending.size > CACHE_MAX) {
+      const oldest = pending.keys().next().value;
+      pending.delete(oldest);
+      resolved.delete(oldest);
+    }
+  }
+
+  async function onContext(r) {
+    if (!r || !Array.isArray(r.messages) || !r.sessionID) return;
+    if (await isSubagent(r.sessionID, r.agent)) return; // subagentes: no inyectar
+    const msgs = r.messages;
+    let last = -1;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i] && msgs[i].role === "user" && !isInjected(msgs[i])) {
+        last = i;
+        break;
+      }
+    }
+    if (last === -1) return;
+    const keyOf = (m) => r.sessionID + ":" + (m.id || messageText(m));
+    const lastKey = keyOf(msgs[last]);
+    if (!pending.has(lastKey)) {
+      const prompt = messageText(msgs[last]);
+      const agent = r.agent;
+      remember(
+        lastKey,
+        sessionCwd(r.sessionID)
+          .then((cwd) => collectContext(hookPayload(r.sessionID, prompt, cwd, agent)))
+          .catch(() => ""),
+      );
+    }
+    await pending.get(lastKey);
+    // Reinserta (de atras hacia adelante) el contexto de CADA prompt del
+    // historial, como en v1 donde la parte synthetic queda en su mensaje.
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (!m || m.role !== "user" || isInjected(m)) continue;
+      const text = resolved.get(keyOf(m));
+      if (!text || isInjected(msgs[i + 1])) continue;
+      msgs.splice(i + 1, 0, {
+        role: "user",
+        content: [{ type: "text", text }],
+        metadata: { [INJECTED]: true },
+      });
+    }
+  }
+
+  const handle = await api.session.hook("context", async (r) => {
+    try {
+      await onContext(r);
+    } catch (_e) {
+      // NO-OP seguro.
+    }
+  });
+  return () => {
+    try {
+      if (handle && handle.dispose) return handle.dispose();
+    } catch (_e) {
+      // ya cerrado
+    }
+  };
+}
+
+// v1 (1.19.x) lee `server`; v2 (2.x) exige `id` y lee `setup`.
+export default {
+  id: "4dsentinel.fluency-hooks",
+  server: FluencyHooks,
+  setup: setupV2,
+};
+"""
+
+
 def build_opencode_plugin(hooks: dict, agent_names: list[str]) -> str:
     scripts = opencode_userprompt_scripts(hooks)
     js_list = ",\n".join('  "' + s.replace("\\", "\\\\") + '"' for s in scripts)
     subagents = sorted(set(agent_names) | set(OPENCODE_NATIVE_SUBAGENTS))
     js_sub = ", ".join('"%s"' % a for a in subagents)
     return (
-        "// fluency-hooks.js - shim de plugin OpenCode para la suite fluency-4d.\n"
-        "// Generado por tools/multiharness/build_harness.py. NO editar a mano.\n"
-        "//\n"
-        "// Proposito: PUENTEAR (no reescribir) los hooks Python de fluency-4d\n"
-        "// al ciclo de vida de OpenCode. En el evento equivalente a\n"
-        "// UserPromptSubmit de Claude Code, invoca cada hook Python por\n"
-        "// subprocess (uv run --script <ruta_abs>), le pasa el input por stdin\n"
-        "// (JSON, contrato de Claude) y reinyecta el `additionalContext` que\n"
-        "// emite por stdout.\n"
-        "//\n"
-        "// API OpenCode {VER} (verificada): el hook `chat.message` se dispara al\n"
-        "// crear el mensaje del usuario, ANTES de persistirlo y de llamar al\n"
-        "// modelo: input = {sessionID, agent, model, messageID, variant},\n"
-        "// output = {message, parts}. El texto del usuario vive en output.parts.\n"
-        "// - La parte inyectada va con `synthetic: true`: el modelo la recibe,\n"
-        "//   pero la TUI no la muestra/copia/edita como texto del usuario.\n"
-        "// - Su id es ascendente (mismo formato que los ids nativos) y mayor que\n"
-        "//   el de las partes del usuario -> queda DESPUES del prompt.\n"
-        "// - Subagentes (sesion hija de la tool task / agente mode subagent): NO\n"
-        "//   se inyecta nada (los hooks tambien lo saltean por agent_type).\n"
-        "// Ante cualquier fallo el shim degrada a NO-OP: nunca rompe la sesion.\n"
-        "\n"
-        'import { spawnSync } from "node:child_process";\n'
-        'import { randomBytes } from "node:crypto";\n'
-        "\n"
-        "// Rutas absolutas a los hooks Python de fluency-4d (resueltas al generar).\n"
-        "const USER_PROMPT_HOOKS = [\n"
-        + js_list + "\n"
-        "];\n"
-        "\n"
-        "// Fallback de deteccion de subagentes (agentes del bundle + nativos de\n"
-        "// OpenCode) si el client del plugin no responde.\n"
-        "const KNOWN_SUBAGENTS = new Set([" + js_sub + "]);\n"
-        "\n"
-        "// Python en Windows lee stdin con la codepage ANSI (cp1252) salvo que se\n"
-        "// fuerce UTF-8: sin esto los prompts con acentos rompen los keywords.\n"
-        "const HOOK_ENV = { ...process.env, PYTHONUTF8: \"1\", PYTHONIOENCODING: \"utf-8\" };\n"
-        "\n"
-        "// Traduccion minima del texto que emiten los hooks (escritos para Claude\n"
-        "// Code) a los nombres de OpenCode.\n"
-        "const CONTEXT_REWRITES = [\n"
-        "  [/\\bsentinel-agents[:]([a-z][a-z-]*)/g, \"$1\"],\n"
-        "  [/\\bExitPlanMode\\b/g, \"plan_exit\"],\n"
-        "];\n"
-        "\n"
-        "// --- ids ascendentes (formato OpenCode: prefijo_ + 12 hex de\n"
-        "// (ms*0x1000+contador) truncado a 48 bits + 14 base62) ---\n"
-        'const B62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";\n'
-        "const MASK48 = (1n << 48n) - 1n;\n"
-        "function idTime(id) {\n"
-        "  const m = /^[a-z]+_([0-9a-f]{12})/.exec(String(id || \"\"));\n"
-        "  return m ? BigInt(\"0x\" + m[1]) : -1n;\n"
-        "}\n"
-        "function partIDAfter(parts) {\n"
-        "  // Ultimo slot del ms actual, o el siguiente a la mayor parte existente.\n"
-        "  let t = (BigInt(Date.now()) * 0x1000n + 0xfffn) & MASK48;\n"
-        "  for (const p of parts) {\n"
-        "    const v = idTime(p && p.id);\n"
-        "    if (v >= t) t = (v + 1n) & MASK48;\n"
-        "  }\n"
-        "  const rnd = Array.from(randomBytes(14), (b) => B62[b % 62]).join(\"\");\n"
-        "  return \"prt_\" + t.toString(16).padStart(12, \"0\") + rnd;\n"
-        "}\n"
-        "\n"
-        "// Invoca un hook Python y devuelve su additionalContext (o '' si no aplica).\n"
-        "function runPythonHook(scriptPath, payload) {\n"
-        "  try {\n"
-        '    const res = spawnSync("uv", ["run", "--script", scriptPath], {\n'
-        "      input: JSON.stringify(payload || {}),\n"
-        '      encoding: "utf8",\n'
-        "      env: HOOK_ENV,\n"
-        "      timeout: 5000,\n"
-        "      windowsHide: true,\n"
-        "    });\n"
-        '    if (res.status !== 0 || !res.stdout) return "";\n'
-        "    const out = JSON.parse(res.stdout);\n"
-        "    const spec = out && out.hookSpecificOutput;\n"
-        '    return (spec && spec.additionalContext) ? String(spec.additionalContext) : "";\n'
-        "  } catch (_e) {\n"
-        '    return ""; // fail-degraded: un hook que falla nunca rompe la sesion.\n'
-        "  }\n"
-        "}\n"
-        "\n"
-        "function collectContext(payload) {\n"
-        "  const chunks = [];\n"
-        "  for (const script of USER_PROMPT_HOOKS) {\n"
-        "    let ctx = runPythonHook(script, payload);\n"
-        "    if (!ctx) continue;\n"
-        "    for (const [re, rep] of CONTEXT_REWRITES) ctx = ctx.replace(re, rep);\n"
-        "    chunks.push(ctx);\n"
-        "  }\n"
-        '  return chunks.join("\\n\\n");\n'
-        "}\n"
-        "\n"
-        "function withTimeout(promise, ms) {\n"
-        "  return Promise.race([\n"
-        "    Promise.resolve(promise).catch(() => undefined),\n"
-        "    new Promise((resolve) => setTimeout(() => resolve(undefined), ms)),\n"
-        "  ]);\n"
-        "}\n"
-        "\n"
-        "export const FluencyHooks = async ({ client, directory, worktree } = {}) => {\n"
-        "  const subagentBySession = new Map(); // sessionID -> boolean (cache)\n"
-        "  let agentModes = null; // nombre -> mode (cache de client.app.agents)\n"
-        "\n"
-        "  async function loadAgentModes() {\n"
-        "    if (agentModes) return agentModes;\n"
-        "    try {\n"
-        "      const r = await withTimeout(client.app.agents(), 3000);\n"
-        "      const list = (r && (r.data || r)) || [];\n"
-        "      if (Array.isArray(list) && list.length) {\n"
-        "        agentModes = {};\n"
-        "        for (const a of list) if (a && a.name) agentModes[a.name] = a.mode;\n"
-        "      }\n"
-        "    } catch (_e) { /* fallback: KNOWN_SUBAGENTS */ }\n"
-        "    return agentModes || {};\n"
-        "  }\n"
-        "\n"
-        "  // Subagente = sesion hija (la tool task crea la sesion con parentID) o\n"
-        "  // agente con mode \"subagent\"; fallback: lista estatica del bundle.\n"
-        "  async function isSubagent(input) {\n"
-        "    const sid = input && input.sessionID;\n"
-        "    if (sid && subagentBySession.has(sid)) return subagentBySession.get(sid);\n"
-        "    const agent = input && input.agent;\n"
-        "    let sub = Boolean(agent && KNOWN_SUBAGENTS.has(agent));\n"
-        "    if (!sub && client && sid) {\n"
-        "      try {\n"
-        "        const r = await withTimeout(client.session.get({ path: { id: sid } }), 3000);\n"
-        "        const s = r && (r.data || r);\n"
-        "        if (s && s.parentID) sub = true;\n"
-        "      } catch (_e) { /* sin dato */ }\n"
-        "    }\n"
-        "    if (!sub && client && agent) {\n"
-        "      const modes = await loadAgentModes();\n"
-        "      if (modes[agent] === \"subagent\") sub = true;\n"
-        "    }\n"
-        "    if (sid) subagentBySession.set(sid, sub);\n"
-        "    return sub;\n"
-        "  }\n"
-        "\n"
-        "  return {\n"
-        "    // chat.message = equivalente a UserPromptSubmit.\n"
-        '    "chat.message": async (input, output) => {\n'
-        "      try {\n"
-        "        if (!output || !Array.isArray(output.parts)) return;\n"
-        "        if (await isSubagent(input)) return; // subagentes: no inyectar\n"
-        "        const parts = output.parts;\n"
-        "        const userText = parts\n"
-        '          .filter((p) => p && p.type === "text" && !p.synthetic'
-        ' && typeof p.text === "string")\n'
-        "          .map((p) => p.text)\n"
-        '          .join("\\n");\n'
-        "        const payload = {\n"
-        "          session_id: (input && input.sessionID) || \"\",\n"
-        '          hook_event_name: "UserPromptSubmit",\n'
-        "          prompt: userText,\n"
-        "          cwd: directory || worktree || process.cwd(),\n"
-        '          permission_mode: (input && input.agent === "plan") ? "plan" : "default",\n'
-        "        };\n"
-        "        const extra = collectContext(payload);\n"
-        "        if (!extra) return;\n"
-        "        const ref = parts.find((p) => p && p.sessionID && p.messageID);\n"
-        "        const messageID = (output.message && output.message.id)\n"
-        "          || (ref && ref.messageID) || (input && input.messageID);\n"
-        "        const sessionID = (input && input.sessionID) || (ref && ref.sessionID);\n"
-        "        if (!messageID || !sessionID) return; // sin ids reales no se inventan\n"
-        "        output.parts.push({\n"
-        "          id: partIDAfter(parts),\n"
-        "          sessionID,\n"
-        "          messageID,\n"
-        '          type: "text",\n'
-        "          synthetic: true,\n"
-        "          text: extra,\n"
-        "        });\n"
-        "      } catch (_e) {\n"
-        "        // NO-OP seguro.\n"
-        "      }\n"
-        "    },\n"
-        "  };\n"
-        "};\n"
-        "\n"
-        "export default FluencyHooks;\n"
-    ).replace("{VER}", M.OPENCODE_VERSION)
+        OPENCODE_SHIM_TEMPLATE.replace("@@HOOKS@@", js_list)
+        .replace("@@SUBAGENTS@@", js_sub)
+        .replace("@@V1@@", M.OPENCODE_V1_VERSION)
+        .replace("@@V2@@", M.OPENCODE_V2_VERSION)
+    )
 
 
 def build_opencode_json() -> str:
@@ -963,7 +1143,8 @@ def build_opencode_readme(skills: list[Path], memory_cmds: list[Path],
         "- **Commands** (`command/*.md`, %d): %s. Cada command INCRUSTA el cuerpo "
         "real del skill/command fuente (y sus `references/`), traducido a OpenCode: "
         "nombres de agente calificados con el plugin sentinel-agents -> subagente "
-        "`X` via la tool `task`; la variable de raiz de plugin de Claude Code -> "
+        "`X` via la tool `task` (`subagent` en 2.x); la variable de raiz de plugin "
+        "de Claude Code -> "
         "ruta absoluta del plugin en el repo; "
         "`AskUserQuestion` -> tool `question`; planes -> `.opencode/plans/` / "
         "`~/.local/share/opencode/plans/`.\n"
@@ -976,12 +1157,18 @@ def build_opencode_readme(skills: list[Path], memory_cmds: list[Path],
         "byte-a-byte, incluido `.manifest.sha256`).\n"
         "- **Hooks** -> `plugin/fluency-hooks.js`: shim que puentea los hooks "
         "Python de `UserPromptSubmit` (bridge_router, plan_calibrator, "
-        "caveman_injector, adhd_injector, suite_playbook) via `chat.message`. "
-        "Payload: `session_id`, `hook_event_name`, `prompt`, `cwd`, "
-        "`permission_mode` (`plan` si el agente es `plan`). Inyecta una parte "
+        "caveman_injector, adhd_injector, suite_playbook). UN archivo con los dos "
+        "contratos de plugin: `export default { id, server, setup }`. **v1 "
+        "(1.x)** lee `server` y usa `chat.message`: inyecta una parte "
         "`synthetic: true` (el modelo la ve; la TUI no la muestra como texto del "
-        "usuario) con id ascendente posterior al prompt. No inyecta en "
-        "subagentes. Fuerza `PYTHONUTF8=1` para que los acentos lleguen bien.\n"
+        "usuario) con id ascendente posterior al prompt. **v2 (2.x)** lee "
+        "`setup(api)` y usa `api.session.hook(\"context\")`: inserta un mensaje "
+        "user SIN persistir despues del prompt, cacheado por id de mensaje (los "
+        "hooks corren una vez por prompt, no en cada paso de tool). Payload: "
+        "`session_id`, `hook_event_name`, `prompt`, `cwd`, `permission_mode` "
+        "(`plan` si el agente es `plan`). Hooks en paralelo y sin bloquear el "
+        "event loop. No inyecta en subagentes. Fuerza `PYTHONUTF8=1` para que "
+        "los acentos lleguen bien.\n"
         "- **Config** -> `opencode.json`: solo documenta el MCP; NO lo copies "
         "encima de tu config.\n"
         "\n"
@@ -1024,10 +1211,17 @@ def build_opencode_readme(skills: list[Path], memory_cmds: list[Path],
         "## Verificacion\n"
         "\n"
         "- `check_harness.py`: sin drift, JSON/TOML validos, hooks `.py` "
-        "existentes, y guardas OpenCode (parte `synthetic`, `session_id` y "
-        "`PYTHONUTF8` en el shim, sin nombres calificados de sentinel-agents ni "
-        "la variable de raiz de plugin de Claude, commands autocontenidos).\n"
-        "- E2E en runtime real de `opencode %s` (`opencode run` + `opencode export`).\n"
+        "existentes, y guardas OpenCode (default `{ id, server, setup }`, parte "
+        "`synthetic` en v1, hook `context` en v2, `session_id` y `PYTHONUTF8` en "
+        "el shim, sin nombres calificados de sentinel-agents ni la variable de "
+        "raiz de plugin de Claude, commands autocontenidos).\n"
+        "- `tests/scripts/opencode_shim_contract.mjs`: importa el plugin en Node y "
+        "ejercita ambos contratos con mocks (lo corre `test_build_harness.py`).\n"
+        "- E2E en runtime real de `opencode %s` (v1: `opencode run` + `opencode "
+        "export`; v2: `opencode run --standalone` + `opencode session export`).\n"
+        "- OpenCode 2.x carga `command/` (o `commands/`), `agent/` y `plugin/` "
+        "del dir global; `opencode run` de 2.x no tiene `--command`: los commands "
+        "se usan desde la TUI (`/nombre`) o la API `session.command`.\n"
         "- MCP (codebase-memory): fuera del bundle; se registra en el "
         "`opencode.json` del usuario.\n"
     ) % (

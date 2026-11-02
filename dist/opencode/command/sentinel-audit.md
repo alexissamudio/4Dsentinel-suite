@@ -5,9 +5,9 @@ agent: build
 
 <!-- Generado por tools/multiharness/build_harness.py desde plugins/sentinel-agents/skills/sentinel-audit (cuerpo incrustado y traducido a OpenCode). NO editar a mano. -->
 
-> **OpenCode (bundle 4Dsentinel, OpenCode 1.19.1).** Este comando INCRUSTA el skill `sentinel-audit` completo: segui las instrucciones de abajo tal cual. NO busques un archivo de skill ni rutas de instalacion de Claude Code. Los subagentes de la suite (advisor, critic, librarian, ...) se invocan con la tool `task` (`subagent_type: <nombre>`).
+> **OpenCode (bundle 4Dsentinel, OpenCode 1.19.x / 2.2.5).** Este comando INCRUSTA el skill `sentinel-audit` completo: segui las instrucciones de abajo tal cual. NO busques un archivo de skill ni rutas de instalacion de Claude Code. Los subagentes de la suite (advisor, critic, librarian, ...) se invocan con la tool `task` (`subagent_type: <nombre>`) en OpenCode 1.x, o con la tool `subagent` (`agent: <nombre>`) en 2.x.
 >
-> Subagentes via la tool `task` (`security-auditor`, `compliance-auditor`, `code-reviewer`, `validator`).
+> Subagentes via la tool `task` (`subagent` en OpenCode 2.x): `security-auditor`, `compliance-auditor`, `code-reviewer`, `validator`.
 
 # /sentinel-audit — Orquestador de auditoría
 
@@ -42,7 +42,7 @@ de vuelta en `C:/Users/samud/.config/opencode/references/iso-27000/` (regla de d
   Cadenas cortas por defecto: `full` encadena 4 agentes y acumula contexto — es
   opt-in explícito.
 
-## Orquestación por tipo (invocá con la tool `task`)
+## Orquestación por tipo (invocá con la tool `task` (`subagent` en OpenCode 2.x))
 
 - **security:** `security-auditor` sobre `target`. Un solo agente,
   sin handoff.
