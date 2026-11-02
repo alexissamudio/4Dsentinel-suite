@@ -27,6 +27,7 @@ from typing import Any
 from unittest import mock
 
 import pytest
+from conftest import fuzz_examples
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
@@ -36,7 +37,7 @@ ENV_KEY = "FLUENCY_4D_LOCK_WAIT"
 DEFAULT = 65.0
 NEEDS_NODE = pytest.mark.skipif(shutil.which("node") is None, reason="requiere node en PATH")
 HSET = settings(
-    max_examples=600,
+    max_examples=fuzz_examples(600),
     deadline=None,
     derandomize=True,
     suppress_health_check=[HealthCheck.function_scoped_fixture, HealthCheck.too_slow],

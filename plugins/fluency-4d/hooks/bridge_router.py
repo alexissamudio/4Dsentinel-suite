@@ -9,7 +9,9 @@ Dos responsabilidades, ambas con dedup por sesion:
 
 1. Arranque (primer prompt de la sesion): si el proyecto tiene
    .claude/docs/lecciones.md o estado-sesion.md, inyecta la instruccion de
-   leerlos (nombrando SOLO los que existen, con edad para el estado).
+   leerlos (nombrando SOLO los que existen, con edad para el estado). Si
+   bridges.json pesa mas que MAX_BRIDGES_BYTES, agrega UNA linea de aviso
+   (se ignora entero; sin esto el usuario no sabria por que no hay puentes).
 2. Puentes por tema: si el prompt menciona una keyword de bridges.json,
    inyecta la instruccion de leer el doc del tema antes de responder.
 
@@ -48,6 +50,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent))
 
 from hook_utils import (
+    MAX_BRIDGES_BYTES,
     bump_stats,
     hook_main,
     load_bridges_temas,
@@ -112,8 +115,28 @@ def keyword_matches(keyword: str, norm_prompt: str) -> bool:
     return re.search(r"(?<!\w)" + re.escape(kw) + r"(?!\w)", norm_prompt) is not None
 
 
+def bridges_oversize_line(cwd: Path) -> str | None:
+    """Aviso visible si bridges.json existe pero pesa mas que MAX_BRIDGES_BYTES.
+
+    load_bridges_temas lo ignora entero (solo log_debug con HOOK_DEBUG=1), asi
+    que sin esto el usuario no se entera de por que no hay puentes. Solo stat
+    (no lee el archivo): barato dentro del timeout de 5 s. Nunca lanza.
+    """
+    try:
+        path = cwd / ".claude" / "docs" / "bridges.json"
+        if not path.is_file() or path.stat().st_size <= MAX_BRIDGES_BYTES:
+            return None
+    except (OSError, ValueError):
+        return None
+    mb = MAX_BRIDGES_BYTES // (1024 * 1024)
+    return (
+        f"[fluency-4d] .claude/docs/bridges.json supera {mb} MB: se ignora (puentes desactivados)."
+    )
+
+
 def arranque_lines(cwd: Path, state: dict[str, Any]) -> list[str]:
-    """Primer prompt de la sesion: senalar lecciones y estado previo si existen.
+    """Primer prompt de la sesion: senalar lecciones y estado previo si existen,
+    y avisar si bridges.json supera el tope de tamano (se ignora entero).
 
     Marca 'arranque_inyectado' aunque no exista ninguno, para no re-chequear
     el filesystem en cada prompt.
@@ -147,6 +170,9 @@ def arranque_lines(cwd: Path, state: dict[str, Any]) -> list[str]:
                 "Hay un estado de sesion reciente en `.claude/docs/estado-sesion.md`: "
                 "leelo para retomar el contexto."
             )
+    aviso = bridges_oversize_line(cwd)
+    if aviso:
+        lines.append(aviso)
     return lines
 
 

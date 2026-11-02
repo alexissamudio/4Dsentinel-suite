@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import FULL_FUZZ, fuzz_examples
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
@@ -34,7 +35,7 @@ sys.path.insert(0, str(HOOKS_DIR))
 import hook_utils  # noqa: E402
 
 EJEMPLOS = settings(
-    max_examples=500,
+    max_examples=fuzz_examples(500),
     deadline=None,
     suppress_health_check=[HealthCheck.function_scoped_fixture, HealthCheck.too_slow],
 )
@@ -399,9 +400,13 @@ def test_sin_permiso_de_lectura(state_dir: Path, home: Path, tmp_path: Path) -> 
 
 
 # --- concurrencia: 20 procesos bumpeando a la vez -----------------------------
+# Carga completa con FLUENCY_FULL_FUZZ=1 (CI); local corre igual pero liviana
+# (menos procesos y rondas, y menos espera de arranque sincronizado).
 
-N_PROCS = 20
+N_PROCS = 20 if FULL_FUZZ else 8
 N_BUMPS = 10
+N_RONDAS = 5 if FULL_FUZZ else 2
+ARRANQUE_SEG = 3.0 if FULL_FUZZ else 1.5
 SCRIPT_CONC = """
 import sys, time
 sys.path.insert(0, sys.argv[1])
@@ -415,7 +420,7 @@ for _ in range(int(sys.argv[4])):
 
 
 def _ronda_concurrente(tmp_path: Path, ronda: int) -> dict[str, Any]:
-    """20 procesos x 10 bump_stats a la vez + un lector que muestrea stats.json."""
+    """N_PROCS procesos x N_BUMPS bump_stats a la vez + un lector que muestrea stats.json."""
     base = tmp_path / f"r{ronda}"
     home = base / "home"
     env = {**os.environ, "HOME": str(home), "USERPROFILE": str(home), "HOOK_DEBUG": "1"}
@@ -424,7 +429,7 @@ def _ronda_concurrente(tmp_path: Path, ronda: int) -> dict[str, Any]:
     sp = _stats_path(home)
     sp.parent.mkdir(parents=True)
     sp.write_text(json.dumps({"ajeno": {"_ts": time.time(), "sesiones": 7}}), encoding="utf-8")
-    start = time.time() + 3.0
+    start = time.time() + ARRANQUE_SEG
     procs = [
         subprocess.Popen(
             [sys.executable, "-c", SCRIPT_CONC, str(HOOKS_DIR), cwd, str(start), str(N_BUMPS)],
@@ -485,7 +490,7 @@ def test_concurrencia_bump_stats_nunca_corrompe(tmp_path: Path) -> None:
     otro proyecto y nunca se manda a cuarentena (.corrupt-*). Los incrementos
     perdidos (lock no conseguido en 200 ms) son aceptables y no se asertan,
     salvo que al menos uno tiene que haber entrado."""
-    for ronda in range(5):
+    for ronda in range(N_RONDAS):
         r = _ronda_concurrente(tmp_path, ronda)
         assert r["rc"] == [0] * N_PROCS and r["tracebacks"] == []
         assert r["invalidas"] == 0, f"ronda {ronda}: {r['invalidas']} lecturas invalidas"

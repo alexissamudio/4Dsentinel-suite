@@ -49,6 +49,7 @@ jobs:
       - name: Pytest (+ coverage report de scripts y hooks)
         env:
           FLUENCY_COV: "1"
+          FLUENCY_FULL_FUZZ: "1"
         run: >
           uv run
           --with pytest==9.1.1 --with pytest-randomly==4.1.0
@@ -73,6 +74,8 @@ jobs:
       - name: Node tests de la barra (statusline)
         run: node --test "plugins/fluency-4d/statusline/test/*.test.js"
       - name: Pytest (Windows)
+        env:
+          FLUENCY_FULL_FUZZ: "1"
         run: >
           uv run
           --with pytest==9.1.1 --with pytest-randomly==4.1.0 --with hypothesis==6.156.6

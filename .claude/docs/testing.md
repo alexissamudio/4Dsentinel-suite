@@ -16,6 +16,14 @@ de seguridad. Correr con:
 uv run --with pytest pytest tests/ -q
 ```
 
+**Intensidad del fuzz (`FLUENCY_FULL_FUZZ`).** Sin la variable (default local) los
+`test_insane_*.py` y `test_safe_doc_path_property.py` corren livianos: hypothesis con
+`max(25, n // 10)` ejemplos (helper `fuzz_examples` en `conftest.py`) y la concurrencia
+de `bump_stats` con 8 procesos x 2 rondas en vez de 20 x 5 (~1-1.5 min en total). El CI
+(ambos jobs pytest de `validate.yml`) setea `FLUENCY_FULL_FUZZ=1` = intensidad completa
+(~6 min). Para correrla completa local: `FLUENCY_FULL_FUZZ=1 uv run --with pytest ...
+pytest tests/ -q` (PowerShell: `$env:FLUENCY_FULL_FUZZ = "1"` antes).
+
 ## El patrón (conftest.py)
 
 Cada test ejecuta el hook REAL por subprocess (`uv run --script`) pasándole el

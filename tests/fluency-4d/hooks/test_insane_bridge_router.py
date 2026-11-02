@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import HOOKS_DIR
+from conftest import HOOKS_DIR, fuzz_examples
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
@@ -43,7 +43,7 @@ VALID_TEMA = "zzvalido"
 VALID_FILE = ".claude/docs/zzvalido.md"
 VALID_KW = "zzpalabraclave"
 FUZZ = settings(
-    max_examples=500,
+    max_examples=fuzz_examples(500),
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large],
 )
