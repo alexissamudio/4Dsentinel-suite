@@ -9,7 +9,8 @@
 // context v2 (sin persistir, cacheado por mensaje), subagentes, orden de
 // chunks, hooks async (el event loop sigue vivo) y dispose.
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const [pluginPath, hooksLog, cwd] = process.argv.slice(2);
@@ -149,4 +150,225 @@ for (const [sid, agent] of [["ses_sub", "build"], ["ses_3", "explore"]]) {
 
 await dispose();
 assert.equal(disposed, 1);
+
+// =============================================================================
+// Regresiones de la prueba de estres (una por fix). Cada caso importa una
+// VARIANTE del plugin con sus propios hooks falsos y constantes reducidas.
+// =============================================================================
+const SRC = readFileSync(pluginPath, "utf8");
+const constOf = (name) => Number(eval(new RegExp(`const ${name} = ([^;]+);`).exec(SRC)[1]));
+const HOOK_STDOUT_MAX = constOf("HOOK_STDOUT_MAX");
+const CONTEXT_MAX = constOf("CONTEXT_MAX");
+const MAX_CONCURRENT_HOOKS = constOf("MAX_CONCURRENT_HOOKS");
+const HEADER = "# /// script\n# requires-python = \">=3.11\"\n# ///\n";
+const py = (s) => JSON.stringify(s); // literal de string valido en Python
+const fake = (name, body) => {
+  const f = join(cwd, name + ".py");
+  writeFileSync(f, HEADER + "import json, os, sys, time\n" + body, "utf8");
+  return f;
+};
+const emit = (expr) => `print(json.dumps({"hookSpecificOutput": {"additionalContext": ${expr}}}))\n`;
+let nVariant = 0;
+async function variant(hooks, consts = {}) {
+  let src = SRC.replace(/const USER_PROMPT_HOOKS = \[[\s\S]*?\n\];/,
+    "const USER_PROMPT_HOOKS = " + JSON.stringify(hooks) + ";");
+  for (const [k, v] of Object.entries(consts)) {
+    src = src.replace(new RegExp(`const ${k} = [^;]+;`), `const ${k} = ${v};`);
+  }
+  const f = join(cwd, `variant_${++nVariant}.mjs`);
+  writeFileSync(f, src, "utf8");
+  return import(pathToFileURL(f).href);
+}
+const ECHO = fake("echo", "d = json.loads(sys.stdin.buffer.read().decode('utf-8'))\n"
+  + emit("'E:%s|%s|%s' % (d['session_id'], d['cwd'], d['prompt'])"));
+const primaryClient = (getImpl, agents = [{ name: "build", mode: "primary" }]) => ({
+  session: { get: getImpl },
+  app: { agents: async () => ({ data: agents }) },
+});
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// --- Fix 1: hook colgado -> se mata el ARBOL (uv + python), Node no queda colgado.
+{
+  const pidFile = join(cwd, "hang.pid");
+  const HANG = fake("hang", `open(${py(pidFile)}, "w").write(str(os.getpid()))\n`
+    + "time.sleep(30)\n" + emit("'LATE'"));
+  const m = await variant([ECHO, HANG], { HOOK_TIMEOUT_MS: 4000 });
+  const v = await m.default.server({ client: primaryClient(async () => ({ data: {} })), directory: cwd });
+  const o = v1Output("ses_hang", "colgado");
+  const t0 = Date.now();
+  await v["chat.message"]({ sessionID: "ses_hang", agent: "build" }, o);
+  assert.ok(Date.now() - t0 < 7000, "el timeout del hook no corto");
+  assert.equal(o.parts[1].text, `E:ses_hang|${cwd}|colgado`, "el hook sano tambien se perdio");
+  assert.ok(existsSync(pidFile), "el hook colgado no llego a arrancar python");
+  const pid = Number(readFileSync(pidFile, "utf8"));
+  const alive = (p) => {
+    try {
+      process.kill(p, 0);
+    } catch (_e) {
+      return false;
+    }
+    try { // zombie sin reapear (contenedor sin init) = muerto
+      return !/\) Z /.test(readFileSync(`/proc/${p}/stat`, "utf8"));
+    } catch (_e) {
+      return true;
+    }
+  };
+  let dead = false;
+  for (let i = 0; i < 50 && !dead; i++) {
+    dead = !alive(pid);
+    if (!dead) await sleep(100);
+  }
+  assert.ok(dead, "python del hook colgado sobrevivio al timeout (huerfano, pid " + pid + ")");
+}
+
+// --- Fix 2a: stdout de un hook por encima de HOOK_STDOUT_MAX -> ese hook aporta "".
+{
+  const HUGE = fake("huge", "sys.stdin.read()\n" + emit(`"X" * ${HOOK_STDOUT_MAX * 4}`));
+  const m = await variant([ECHO, HUGE]);
+  const v = await m.default.server({ client: primaryClient(async () => ({ data: {} })), directory: cwd });
+  const o = v1Output("ses_huge", "grande");
+  await v["chat.message"]({ sessionID: "ses_huge", agent: "build" }, o);
+  assert.equal(o.parts[1].text, `E:ses_huge|${cwd}|grande`, "se inyecto el stdout gigante");
+}
+
+// --- Fix 2b: contexto concatenado por encima de CONTEXT_MAX -> truncado con marca.
+{
+  const each = Math.floor(HOOK_STDOUT_MAX / 2); // cada hook queda bajo su tope
+  const bigs = ["big1", "big2", "big3"].map((n) => fake(n, "sys.stdin.read()\n" + emit(`"Y" * ${each}`)));
+  assert.ok(3 * each > CONTEXT_MAX);
+  const m = await variant(bigs);
+  const v = await m.default.server({ client: primaryClient(async () => ({ data: {} })), directory: cwd });
+  const o = v1Output("ses_big", "muchos");
+  await v["chat.message"]({ sessionID: "ses_big", agent: "build" }, o);
+  const t = o.parts[1].text;
+  assert.ok(t.length <= CONTEXT_MAX, "contexto sin tope total (" + t.length + ")");
+  assert.ok(t.length > CONTEXT_MAX / 2);
+  assert.ok(t.endsWith("[fluency-4d: contexto truncado]"), "falta la marca de truncado");
+}
+
+// --- Fix 3: session.get indeterminado (error o timeout) NO se cachea como "no hija".
+for (const kind of ["error", "timeout"]) {
+  const m = await variant([ECHO], { API_TIMEOUT_MS: 300 });
+  let flaky = true;
+  const v = await m.default.server({
+    client: primaryClient(async () => {
+      if (flaky && kind === "error") throw new Error("boom");
+      if (flaky) await sleep(900);
+      return { data: { parentID: "ses_padre" } };
+    }),
+    directory: cwd,
+  });
+  const o1 = v1Output("ses_flaky", "uno");
+  await v["chat.message"]({ sessionID: "ses_flaky", agent: "build" }, o1);
+  assert.equal(o1.parts.length, 2, "dato indeterminado: fail-open (inyecta sin cachear)");
+  flaky = false;
+  const o2 = v1Output("ses_flaky", "dos");
+  await v["chat.message"]({ sessionID: "ses_flaky", agent: "build" }, o2);
+  assert.equal(o2.parts.length, 1, `v1 cacheo 'no hija' tras ${kind} e inyecto en la hija`);
+}
+{ // v2: idem, y el cwd de respaldo (process.cwd()) tampoco se cachea.
+  const m = await variant([ECHO], { API_TIMEOUT_MS: 300 });
+  let flaky = true;
+  let hook = null;
+  const sesDir = join(cwd, "dir-de-la-sesion");
+  await m.default.setup({
+    session: {
+      hook: async (_n, fn) => { hook = fn; return { dispose() {} }; },
+      get: async ({ sessionID }) => {
+        if (flaky) throw new Error("boom");
+        return { id: sessionID, location: { directory: sesDir },
+          ...(sessionID === "ses_hija" ? { parentID: "ses_padre" } : {}) };
+      },
+    },
+    agent: { list: async () => ({ data: [{ id: "build", mode: "primary" }] }) },
+  });
+  const a = { sessionID: "ses_v2", agent: "build", system: [], messages: [user("m1", "uno")] };
+  await hook(a);
+  assert.equal(textOf(a.messages[1]), `E:ses_v2|${process.cwd()}|uno`);
+  const h1 = { sessionID: "ses_hija", agent: "build", system: [], messages: [user("h1", "x")] };
+  await hook(h1);
+  assert.equal(h1.messages.length, 2, "dato indeterminado: fail-open");
+  flaky = false;
+  const b = { sessionID: "ses_v2", agent: "build", system: [], messages: [user("m2", "dos")] };
+  await hook(b);
+  assert.equal(textOf(b.messages[1]), `E:ses_v2|${sesDir}|dos`, "v2 cacheo el cwd de respaldo");
+  const h2 = { sessionID: "ses_hija", agent: "build", system: [], messages: [user("h2", "y")] };
+  await hook(h2);
+  assert.equal(h2.messages.length, 1, "v2 cacheo 'no hija' tras un error e inyecto en la hija");
+}
+
+// --- Menor: primario llamado como un subagente nativo (`general` mode primary).
+{
+  const m = await variant([ECHO]);
+  const v1g = await m.default.server({
+    client: primaryClient(async () => ({ data: {} }), [{ name: "general", mode: "primary" }]),
+    directory: cwd,
+  });
+  const o = v1Output("ses_gen", "hola");
+  await v1g["chat.message"]({ sessionID: "ses_gen", agent: "general" }, o);
+  assert.equal(o.parts.length, 2, "v1: el primario `general` no recibio contexto");
+  let hook = null;
+  await m.default.setup({
+    session: { hook: async (_n, fn) => { hook = fn; return { dispose() {} }; },
+      get: async ({ sessionID }) => ({ id: sessionID, location: { directory: cwd } }) },
+    agent: { list: async () => ({ data: [{ id: "general", mode: "primary" }] }) },
+  });
+  const r = { sessionID: "ses_gen2", agent: "general", system: [], messages: [user("g1", "hola")] };
+  await hook(r);
+  assert.equal(r.messages.length, 2, "v2: el primario `general` no recibio contexto");
+}
+
+// --- Menor: v1 sin input.sessionID -> session_id sale de las partes (no "").
+{
+  const m = await variant([ECHO]);
+  const v = await m.default.server({ client: primaryClient(async () => ({ data: {} })), directory: cwd });
+  const o = v1Output("ses_partes", "sin sid");
+  await v["chat.message"]({ agent: "build" }, o);
+  assert.equal(o.parts[1].text, `E:ses_partes|${cwd}|sin sid`);
+}
+
+// --- Menor: v2, un prompt desalojado del cache mientras corria no reaparece
+// en el historial (pero su propio paso SI recibe su contexto).
+{
+  const m = await variant([ECHO], { CACHE_MAX: 1 });
+  let hook = null;
+  await m.default.setup({
+    session: { hook: async (_n, fn) => { hook = fn; return { dispose() {} }; },
+      get: async ({ sessionID }) => ({ id: sessionID, location: { directory: cwd } }) },
+    agent: { list: async () => ({ data: [{ id: "build", mode: "primary" }] }) },
+  });
+  const a = { sessionID: "ses_ev_a", agent: "build", system: [], messages: [user("m1", "a1")] };
+  const b = { sessionID: "ses_ev_b", agent: "build", system: [], messages: [user("n1", "b1")] };
+  await Promise.all([hook(a), hook(b)]);
+  assert.equal(a.messages.length, 2, "el prompt desalojado perdio su propio contexto");
+  assert.equal(b.messages.length, 2);
+  const a2 = { sessionID: "ses_ev_a", agent: "build", system: [], messages: [user("m1", "a1"),
+    { id: "r1", role: "assistant", content: [{ type: "text", text: "ok" }], metadata: {} },
+    user("m2", "a2")] };
+  await hook(a2);
+  assert.deepEqual(a2.messages.map((x) => (isInjected(x) ? "ctx" : x.role)),
+    ["user", "assistant", "user", "ctx"], "una entrada desalojada reaparecio en `resolved`");
+}
+
+// --- Menor: semaforo -> nunca mas de MAX_CONCURRENT_HOOKS hooks vivos a la vez.
+{
+  const spans = join(cwd, "spans.log");
+  const SLOW = fake("slow", "sys.stdin.read()\nt0 = time.time()\ntime.sleep(0.6)\n"
+    + `open(${py(spans)}, "a").write("%f %f\\n" % (t0, time.time()))\n` + emit("'S'"));
+  const m = await variant([SLOW]);
+  const v = await m.default.server({ client: primaryClient(async () => ({ data: {} })), directory: cwd });
+  const outs = Array.from({ length: MAX_CONCURRENT_HOOKS + 4 }, (_, i) => v1Output("ses_sem" + i, "p"));
+  await Promise.all(outs.map((o, i) => v["chat.message"]({ sessionID: "ses_sem" + i, agent: "build" }, o)));
+  assert.ok(outs.every((o) => o.parts.length === 2), "algun hook encolado no corrio");
+  const ev = readFileSync(spans, "utf8").trim().split("\n").flatMap((l) => {
+    const [s, e] = l.split(" ").map(Number);
+    return [[s, 1], [e, -1]];
+  }).sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  let cur = 0;
+  let peak = 0;
+  for (const [, d] of ev) { cur += d; peak = Math.max(peak, cur); }
+  assert.ok(peak <= MAX_CONCURRENT_HOOKS, "hooks concurrentes: " + peak);
+  assert.ok(peak > 1, "los hooks dejaron de correr en paralelo");
+}
+
 console.log("OK contrato v1 + v2 del shim OpenCode");
