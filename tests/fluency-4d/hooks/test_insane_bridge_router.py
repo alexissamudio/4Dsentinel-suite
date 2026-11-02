@@ -227,7 +227,13 @@ def test_fuzz_prompt_arbitrario(prompt: str) -> None:
     with fresh_root() as d:
         root = Path(d)
         project = make_project(root, json.dumps(doc))
-        assert_arranque(run_inproc(root, project, prompt))
+        out = run_inproc(root, project, prompt)
+        # Un saludo/acuse corto NO consume el arranque (queda para el pedido real);
+        # cualquier otro prompt lo inyecta.
+        if bridge_router.es_prompt_trivial(prompt):
+            assert LECCIONES not in context_of(out)
+        else:
+            assert_arranque(out)
         # Con la keyword aislada por espacios en medio de la basura, matchea.
         out = run_inproc(root, project, prompt + " " + VALID_KW + " " + prompt, session="s2")
         assert VALID_FILE in context_of(out)
