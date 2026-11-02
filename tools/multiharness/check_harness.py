@@ -132,6 +132,60 @@ def validate_bundle(label: str, root: Path) -> bool:
     return err
 
 
+DEFAULT_HERMES_DIST = B.REPO_ROOT / "dist" / "hermes"
+
+
+def validate_hermes(root: Path) -> bool:
+    """Valida el bundle hermes: SKILL.md con frontmatter valido y references existentes.
+
+    Devuelve True si hay algun error.
+    """
+    import yaml as _yaml_lib
+    err = False
+    skills_dir = root / "skills"
+    if not skills_dir.is_dir():
+        print("ERROR dist/hermes/ : no existe skills/")
+        return True
+
+    skill_count = 0
+    for skill_dir in sorted(skills_dir.iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.exists():
+            print("ERROR dist/hermes/ : falta SKILL.md en %s" % skill_dir.name)
+            err = True
+            continue
+        skill_count += 1
+        # Validar frontmatter
+        try:
+            text = skill_md.read_text(encoding="utf-8")
+            if not text.startswith("---"):
+                print("ERROR dist/hermes/skills/%s : frontmatter no empieza con ---" % skill_dir.name)
+                err = True
+                continue
+            end = text.find("\n---", 3)
+            if end == -1:
+                print("ERROR dist/hermes/skills/%s : frontmatter sin cierre ---" % skill_dir.name)
+                err = True
+                continue
+            fm = _yaml_lib.safe_load(text[3:end])
+            if not fm or "name" not in fm:
+                print("ERROR dist/hermes/skills/%s : frontmatter sin 'name'" % skill_dir.name)
+                err = True
+                continue
+            if "description" not in fm:
+                print("ERROR dist/hermes/skills/%s : frontmatter sin 'description'" % skill_dir.name)
+                err = True
+        except Exception as e:
+            print("ERROR dist/hermes/skills/%s : YAML invalido (%s)" % (skill_dir.name, e))
+            err = True
+
+    if not err:
+        print("OK dist/hermes/ : %d skills con frontmatter valido" % skill_count)
+    return err
+
+
 def main() -> int:
     targets = [
         ("codex", B.DEFAULT_DIST, B.build),
@@ -149,6 +203,12 @@ def main() -> int:
             build_fn(fresh)
             drift = compare_bundle(label, committed, fresh) or drift
             invalid = validate_bundle(label, committed) or invalid
+
+    # Validar hermes (skills, no drift — los skills no se generan, se copian)
+    if DEFAULT_HERMES_DIST.exists():
+        invalid = validate_hermes(DEFAULT_HERMES_DIST) or invalid
+    else:
+        print("INFO: dist/hermes/ no existe; ejecuta build_harness.py primero")
 
     if drift:
         print("RESULTADO: DRIFT detectado (regenera con build_harness.py)")

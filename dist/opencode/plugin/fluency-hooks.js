@@ -15,6 +15,12 @@
 // Ante cualquier fallo el shim degrada a NO-OP: nunca rompe la sesion.
 
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
+
+// Genera IDs unicos para partes inyectadas (requeridos por la capa de
+// eventos durables de OpenCode: el id DEBE empezar con 'prt_').
+function newPartID() { return `prt_${randomUUID()}`; }
+function newMessageID() { return `msg_${randomUUID()}`; }
 
 // Rutas absolutas a los hooks Python de fluency-4d (resueltas al generar).
 const USER_PROMPT_HOOKS = [
@@ -71,10 +77,25 @@ export const FluencyHooks = async ({ project, client, $ } = {}) => {
           cwd: (project && project.worktree) || process.cwd(),
         };
         const extra = collectContext(payload);
-        // Inyeccion: se MUTA output.parts empujando una parte de texto
-        // (output.additionalContext no existe en la API de OpenCode).
+        // Inyeccion: se MUTA output.parts con los campos requeridos por
+        // OpenCode (id con prefijo prt_, sessionID, messageID) para
+        // evitar errores de persistencia en la capa de eventos durables.
         if (extra && output && Array.isArray(output.parts)) {
-          output.parts.push({ type: "text", text: extra });
+          // Tomar sessionID y messageID de las partes existentes
+          const firstPart = parts.find((p) => p && p.sessionID);
+          const sessionID = firstPart?.sessionID
+            || (input && input.sessionID)
+            || "";
+          const messageID = firstPart?.messageID
+            || (output && output.messageID)
+            || newMessageID();
+          output.parts.push({
+            id: newPartID(),
+            sessionID: sessionID,
+            messageID: messageID,
+            type: "text",
+            text: extra,
+          });
         }
       } catch (_e) {
         // NO-OP seguro.

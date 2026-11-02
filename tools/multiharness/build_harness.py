@@ -602,6 +602,12 @@ def build_opencode_plugin(hooks: dict) -> str:
         "// Ante cualquier fallo el shim degrada a NO-OP: nunca rompe la sesion.\n"
         "\n"
         'import { spawnSync } from "node:child_process";\n'
+        'import { randomUUID } from "node:crypto";\n'
+        "\n"
+        "// Genera IDs unicos para partes inyectadas (requeridos por la capa de\n"
+        "// eventos durables de OpenCode: el id DEBE empezar con 'prt_').\n"
+        'function newPartID() { return `prt_${randomUUID()}`; }\n'
+        'function newMessageID() { return `msg_${randomUUID()}`; }\n'
         "\n"
         "// Rutas absolutas a los hooks Python de fluency-4d (resueltas al generar).\n"
         "const USER_PROMPT_HOOKS = [\n"
@@ -654,10 +660,25 @@ def build_opencode_plugin(hooks: dict) -> str:
         "          cwd: (project && project.worktree) || process.cwd(),\n"
         "        };\n"
         "        const extra = collectContext(payload);\n"
-        "        // Inyeccion: se MUTA output.parts empujando una parte de texto\n"
-        "        // (output.additionalContext no existe en la API de OpenCode).\n"
+        "        // Inyeccion: se MUTA output.parts con los campos requeridos por\n"
+        "        // OpenCode (id con prefijo prt_, sessionID, messageID) para\n"
+        "        // evitar errores de persistencia en la capa de eventos durables.\n"
         "        if (extra && output && Array.isArray(output.parts)) {\n"
-        '          output.parts.push({ type: "text", text: extra });\n'
+        "          // Tomar sessionID y messageID de las partes existentes\n"
+        "          const firstPart = parts.find((p) => p && p.sessionID);\n"
+        "          const sessionID = firstPart?.sessionID\n"
+        "            || (input && input.sessionID)\n"
+        '            || "";\n'
+        "          const messageID = firstPart?.messageID\n"
+        "            || (output && output.messageID)\n"
+        "            || newMessageID();\n"
+        "          output.parts.push({\n"
+        "            id: newPartID(),\n"
+        "            sessionID: sessionID,\n"
+        "            messageID: messageID,\n"
+        '            type: "text",\n'
+        "            text: extra,\n"
+        "          });\n"
         "        }\n"
         "      } catch (_e) {\n"
         "        // NO-OP seguro.\n"
@@ -804,12 +825,63 @@ def build_opencode(dist_dir: Path) -> list[Path]:
     return written
 
 
+DEFAULT_HERMES_DIST = REPO_ROOT / "dist" / "hermes"
+
+
+def build_hermes_md() -> str:
+    """Genera .hermes.md desde CLAUDE.md."""
+    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    rules, bridges = extract_hard_rules(claude_md)
+    # Convertir paths .claude/ -> .hermes/
+    bridges_hermes = []
+    for b in bridges:
+        bridges_hermes.append(b.replace(".claude/", ".hermes/"))
+    parts = [
+        "# .hermes.md — Contrato del proyecto (bundle Hermes)",
+        "",
+        "> Generado por `tools/multiharness/build_harness.py` desde `CLAUDE.md`.",
+        "> Adaptado para Hermes Agent: skills bajo demanda en vez de hooks automaticos.",
+        "",
+        "<!-- BEGIN 4D-BRIDGES -->",
+        "## Reglas del proyecto (siempre)",
+        "",
+    ]
+    parts += rules if rules else ["- (sin reglas detectadas)"]
+    parts += [
+        "",
+        "## Puentes de documentacion",
+        "",
+    ]
+    parts += bridges_hermes if bridges_hermes else ["(sin puentes)"]
+    parts += [
+        "",
+        "Si la pregunta o tarea toca un tema de la tabla, LEE ese archivo ANTES de responder.",
+        "Al escribir codigo, respeta `.hermes/docs/convenciones.md`.",
+        "<!-- END 4D-BRIDGES -->",
+        "",
+        "## Skills instalados (suite 4Dsentinel para Hermes)",
+        "",
+        "Carga los skills desde `~/.hermes/skills/productivity/`. Mira el README en",
+        "`dist/hermes/` para la lista completa de comandos.",
+    ]
+    return "\n".join(parts)
+
+
+def build_hermes(dist_dir: Path) -> list[Path]:
+    """Genera el bundle Hermes bajo dist_dir. Devuelve las rutas escritas."""
+    written: list[Path] = []
+    written.append(write(dist_dir / ".hermes.md", build_hermes_md()))
+    return written
+
+
 def main() -> int:
     written = build(DEFAULT_DIST)
     written_oc = build_opencode(DEFAULT_OPENCODE_DIST)
+    written_hm = build_hermes(DEFAULT_HERMES_DIST)
     print("Repo root : %s" % REPO_ROOT)
     print("Bundle    : %s" % DEFAULT_DIST)
     print("Bundle OC : %s" % DEFAULT_OPENCODE_DIST)
+    print("Bundle HM : %s" % DEFAULT_HERMES_DIST)
     print("Skills    : %d descubiertos" % len(discover_skills()))
     print("Agentes   : %d descubiertos" % len(discover_agents()))
     print("Archivos escritos (codex):")
@@ -817,6 +889,9 @@ def main() -> int:
         print("  - %s" % p.relative_to(REPO_ROOT))
     print("Archivos escritos (opencode):")
     for p in written_oc:
+        print("  - %s" % p.relative_to(REPO_ROOT))
+    print("Archivos escritos (hermes):")
+    for p in written_hm:
         print("  - %s" % p.relative_to(REPO_ROOT))
     return 0
 
