@@ -136,9 +136,10 @@ def bridges_oversize_line(cwd: Path) -> str | None:
 
 # Palabras de saludo/acuse (ya normalizadas: sin acentos, casefold). Un prompt
 # hecho SOLO de estas, y corto, no es trabajo: no consume el aviso de arranque.
+# Sin "dale"/"listo": en rioplatense son ordenes ("segui"), no saludos.
 SALUDOS = frozenset(
     "hola holi holis buenas buenos buen dia dias tardes noches hey hi hello ey "
-    "que tal como estas va andas gracias ok okey dale listo chau saludos".split()
+    "que tal como estas va andas gracias ok okey chau saludos".split()
 )
 MAX_PALABRAS_TRIVIAL = 4
 
@@ -150,8 +151,10 @@ def es_prompt_trivial(prompt: str) -> bool:
     sale). Solo cuenta como trivial si tiene entre 1 y MAX_PALABRAS_TRIVIAL
     palabras y TODAS estan en SALUDOS. Sin palabras ("", "?", prompt no-string
     que main() trata como "") NO es trivial: el arranque sigue.
+    Tokeniza con [^\\W_]+ (letras/digitos de CUALQUIER alfabeto): con [a-z0-9]+
+    un pedido en ruso/CJK + "ok" quedaba reducido a ['ok'] y pasaba por saludo.
     """
-    palabras = re.findall(r"[a-z0-9]+", normalize(prompt))
+    palabras = re.findall(r"[^\W_]+", normalize(prompt))
     return 0 < len(palabras) <= MAX_PALABRAS_TRIVIAL and all(p in SALUDOS for p in palabras)
 
 

@@ -155,12 +155,22 @@ def read_stdin_safe(timeout: float = 5.0) -> str:
 
     Lee como maximo MAX_STDIN_BYTES. Devuelve "" si vence el timeout o la lectura
     falla: el hilo daemon queda colgado pero no impide que el proceso termine.
+
+    Decodifica SIEMPRE como UTF-8 (el harness manda el JSON en UTF-8): leer con
+    sys.stdin.read() usaba el encoding del locale (cp1252 en Windows) y los
+    prompts con tildes, enie o signos invertidos llegaban como mojibake (keywords con tilde sin
+    matchear, saludos no reconocidos). Bytes invalidos -> U+FFFD, sin excepcion.
+    Si stdin no tiene .buffer (p. ej. reemplazado por un StringIO), se lee texto.
     """
     result = {"data": ""}
 
     def _read() -> None:
         try:
-            result["data"] = sys.stdin.read(MAX_STDIN_BYTES)
+            buf = getattr(sys.stdin, "buffer", None)
+            if buf is not None:
+                result["data"] = buf.read(MAX_STDIN_BYTES).decode("utf-8", "replace")
+            else:
+                result["data"] = sys.stdin.read(MAX_STDIN_BYTES)
         except Exception:
             result["data"] = ""
 
