@@ -891,7 +891,8 @@ def build_opencode_plugin(hooks: dict, agent_names: list[str]) -> str:
         "        if (await isSubagent(input)) return; // subagentes: no inyectar\n"
         "        const parts = output.parts;\n"
         "        const userText = parts\n"
-        '          .filter((p) => p && p.type === "text" && !p.synthetic && typeof p.text === "string")\n'
+        '          .filter((p) => p && p.type === "text" && !p.synthetic'
+        ' && typeof p.text === "string")\n'
         "          .map((p) => p.text)\n"
         '          .join("\\n");\n'
         "        const payload = {\n"

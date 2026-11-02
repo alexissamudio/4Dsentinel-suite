@@ -108,8 +108,9 @@ def test_opencode_guardas_detectan_regresiones(tmp_path: Path) -> None:
     B.build_opencode(root)
     shim = root / "plugin" / "fluency-hooks.js"
     text = shim.read_text(encoding="utf-8")
-    shim.write_text(text.replace("synthetic: true,", "").replace("session_id:", "sid:"),
-                    encoding="utf-8")
+    shim.write_text(
+        text.replace("synthetic: true,", "").replace("session_id:", "sid:"), encoding="utf-8"
+    )
     assert C.validate_opencode(root)
     shim.write_text(text, encoding="utf-8")
     assert not C.validate_opencode(root)

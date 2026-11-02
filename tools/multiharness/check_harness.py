@@ -229,7 +229,9 @@ def validate_hermes(root: Path) -> bool:
         try:
             text = skill_md.read_text(encoding="utf-8")
             if not text.startswith("---"):
-                print("ERROR dist/hermes/skills/%s : frontmatter no empieza con ---" % skill_dir.name)
+                print(
+                    "ERROR dist/hermes/skills/%s : frontmatter no empieza con ---" % skill_dir.name
+                )
                 err = True
                 continue
             end = text.find("\n---", 3)
@@ -243,7 +245,9 @@ def validate_hermes(root: Path) -> bool:
                 err = True
                 continue
             if "description" not in fm:
-                print("ERROR dist/hermes/skills/%s : frontmatter sin 'description'" % skill_dir.name)
+                print(
+                    "ERROR dist/hermes/skills/%s : frontmatter sin 'description'" % skill_dir.name
+                )
                 err = True
         except Exception as e:
             print("ERROR dist/hermes/skills/%s : YAML invalido (%s)" % (skill_dir.name, e))
