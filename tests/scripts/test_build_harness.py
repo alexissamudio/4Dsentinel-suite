@@ -18,6 +18,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "multiharness"))
 import build_harness as B  # noqa: E402
+import check_harness as C  # noqa: E402
 
 REQUIRED = {
     "hooks/register.tsx",
@@ -69,6 +70,15 @@ def test_hooks_json_sin_modules() -> None:
     assert out["hooks"].keys() == raw["hooks"].keys()
 
 
+@pytest.fixture(scope="module")
+def bundles(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Bundles codex + opencode generados UNA vez por modulo (solo lectura)."""
+    root = tmp_path_factory.mktemp("bundles")
+    B.build(root / "codex")
+    B.build_opencode(root / "opencode")
+    return root
+
+
 def _texts(root: Path) -> dict[str, str]:
     return {
         p.relative_to(root).as_posix(): p.read_text(encoding="utf-8")
@@ -77,11 +87,9 @@ def _texts(root: Path) -> dict[str, str]:
     }
 
 
-def test_bundles_sin_piezas_claude_code_only(tmp_path: Path) -> None:
-    B.build(tmp_path / "codex")
-    B.build_opencode(tmp_path / "opencode")
+def test_bundles_sin_piezas_claude_code_only(bundles: Path) -> None:
     for label in ("codex", "opencode"):
-        files = _texts(tmp_path / label)
+        files = _texts(bundles / label)
         assert files, label
         for rel, text in files.items():
             assert "register.tsx" not in text, (label, rel)
@@ -91,25 +99,21 @@ def test_bundles_sin_piezas_claude_code_only(tmp_path: Path) -> None:
                 assert '"modules"' not in text, (label, rel)
 
 
-import check_harness as C  # noqa: E402
-
-
-def test_opencode_emite_todo_y_omite_skills_sin_soporte(tmp_path: Path) -> None:
-    root = tmp_path / "opencode"
-    B.build_opencode(root)
+def test_opencode_emite_todo_y_omite_skills_sin_soporte(bundles: Path) -> None:
+    root = bundles / "opencode"
     cmds = {p.stem for p in (root / "command").glob("*.md")}
     assert {"4d", "4d-status", "caveman", "adhd", "handoff", "sentinel-audit"} <= cmds
     assert {"buscar", "indexar"} <= cmds  # commands de memory
-    assert not cmds & set(B.M.OPENCODE_SKILLS_SKIPPED)
+    assert not cmds & set(B.unsupported_skills("opencode"))
     assert {p.stem for p in (root / "agent").glob("*.md")} == set(B.discover_agents())
     assert (root / "references" / "agent-contract.md").is_file()
     assert (root / "references" / "iso-27000" / ".manifest.sha256").is_file()
     assert not C.validate_opencode(root)
 
 
-def test_opencode_guardas_detectan_regresiones(tmp_path: Path) -> None:
+def test_opencode_guardas_detectan_regresiones(bundles: Path, tmp_path: Path) -> None:
     root = tmp_path / "opencode"
-    B.build_opencode(root)
+    shutil.copytree(bundles / "opencode", root)  # este test muta el bundle
     shim = root / "plugin" / "fluency-hooks.js"
     text = shim.read_text(encoding="utf-8")
     shim.write_text(
@@ -136,6 +140,27 @@ def test_opencode_guardas_detectan_regresiones(tmp_path: Path) -> None:
     assert C.validate_opencode(root)
 
 
+def _fake_agent(tools_block: str) -> dict[str, dict[str, str]]:
+    text = "---\nname: fake\ndescription: x\n" + tools_block + "---\n\ncuerpo\n"
+    meta = B.parse_frontmatter(text)
+    meta.update(_path="fake.md", _text=text)
+    return {"fake": meta}
+
+
+def test_opencode_permission_tools_inline_y_lista_yaml() -> None:
+    """`tools:` como lista YAML (fix F1 de parse_tools) emite los mismos deny que inline."""
+    inline = B.build_opencode_agent(_fake_agent("tools: Read, Grep, Glob\n"), "fake")
+    lista = B.build_opencode_agent(_fake_agent("tools:\n  - Read\n  - Grep\n  - Glob\n"), "fake")
+    for out in (inline, lista):
+        assert "  edit: deny\n" in out
+        assert "  bash: deny\n" in out
+        assert "  webfetch: deny\n" in out
+    assert lista == inline
+    # Con Bash en la lista NO se niega bash (la lista se lee, no queda vacia).
+    con_bash = B.build_opencode_agent(_fake_agent("tools:\n  - Read\n  - Bash\n"), "fake")
+    assert "bash: deny" not in con_bash and "edit: deny" in con_bash
+
+
 FAKE_HOOK = """# /// script
 # requires-python = ">=3.11"
 # ///
@@ -159,11 +184,9 @@ sys.stdout.write(json.dumps(out, ensure_ascii=False))
 @pytest.mark.skipif(
     not (shutil.which("node") and shutil.which("uv")), reason="requiere node y uv en el PATH"
 )
-def test_opencode_shim_contrato_v1_v2_en_node(tmp_path: Path) -> None:
+def test_opencode_shim_contrato_v1_v2_en_node(bundles: Path, tmp_path: Path) -> None:
     """Importa el plugin generado en Node y ejercita los contratos v1 y v2 con mocks."""
-    root = tmp_path / "opencode"
-    B.build_opencode(root)
-    text = (root / "plugin" / "fluency-hooks.js").read_text(encoding="utf-8")
+    text = (bundles / "opencode" / "plugin" / "fluency-hooks.js").read_text(encoding="utf-8")
     log = tmp_path / "hooks.log"
     fakes = []
     for kind in ("A", "B", "C"):

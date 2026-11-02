@@ -14,9 +14,9 @@ Cada tabla esta marcada abajo con uno de estos rotulos:
   [DOC-ONLY]   -> referencia para humanos; el generador NO la consume, editarla
                   NO cambia la salida (la traduccion real esta en otro lado o
                   esta hardcodeada de forma equivalente). No asumas lo contrario.
-Consumidas hoy: HOME_MAP, HOOK_FEATURE_FLAG, PLUGIN_ROOT_VAR y las tablas
-OPENCODE_* (seccion 7). El resto es DOC-ONLY hasta que alguien las cablee
-en build_harness.py.
+Consumidas hoy: HOME_MAP, HOOK_FEATURE_FLAG, PLUGIN_ROOT_VAR, HARNESSES,
+SKILLS_UNSUPPORTED y las tablas OPENCODE_* (seccion 7). El resto es DOC-ONLY
+hasta que alguien las cablee en build_harness.py.
 
 ASCII puro (regla de CLAUDE.md): sin acentos en los strings de este archivo.
 """
@@ -152,23 +152,30 @@ OPENCODE_V1_VERSION = "1.19.x"
 OPENCODE_V2_VERSION = "2.2.5"
 OPENCODE_VERSION = OPENCODE_V1_VERSION + " / " + OPENCODE_V2_VERSION
 
-# [CONSUMIDA] build_opencode(): skills que NO se emiten como command, con la
-# razon (va al README del bundle). barra/statusline ya caen por CLAUDE_CODE_ONLY
-# en discover_skills(); se listan para que el README lo explique.
-OPENCODE_SKILLS_SKIPPED: dict[str, str] = {
+# Harnesses a los que el generador porta la suite (dist/<harness>/).
+HARNESSES: tuple[str, ...] = ("codex", "opencode")
+
+# [CONSUMIDA] tabla UNICA de skills sin soporte: {skill: (harnesses, razon)}.
+# - Las que no soporta NINGUN harness de HARNESSES entran en
+#   build_harness.CLAUDE_CODE_ONLY (skills/<name>) -> discover_skills() las omite.
+# - build_harness.unsupported_skills("opencode") filtra los commands OpenCode y
+#   arma la seccion "Skills que NO se emiten" del README (en este orden).
+SKILLS_UNSUPPORTED: dict[str, tuple[tuple[str, ...], str]] = {
     "verify-diff": (
+        ("opencode",),
         "solo escribe el flag que lee el hook `Stop` (discernment_gate.py). El "
         "shim de OpenCode puentea UNICAMENTE `UserPromptSubmit` (`chat.message`) "
         "y OpenCode no tiene un evento que pueda bloquear el cierre del turno: "
-        "el toggle no tendria ningun efecto, asi que emitirlo seria mentir."
+        "el toggle no tendria ningun efecto, asi que emitirlo seria mentir.",
     ),
     "barra": (
-        "cambia el modo/tema de la status line de Claude Code (no existe en "
-        "OpenCode)."
+        HARNESSES,
+        "cambia el modo/tema de la status line de Claude Code (no existe en OpenCode).",
     ),
     "statusline": (
+        HARNESSES,
         "instala la status line y el Panel 4D en settings.json de Claude Code "
-        "(engine de mods exclusivo de Claude Code)."
+        "(engine de mods exclusivo de Claude Code).",
     ),
 }
 
@@ -178,6 +185,13 @@ OPENCODE_TOOL_MAP: tuple[tuple[str, str], ...] = (
     ("el Agent tool", "la tool `task` (`subagent` en OpenCode 2.x)"),
     ("Agent tool", "la tool `task` (`subagent` en OpenCode 2.x)"),
     ("AskUserQuestion", "la tool `question`"),
+)
+
+# [CONSUMIDA] renombres de IDENTIFICADORES de tools, por palabra completa
+# (\b...\b): oc_translate_common() los aplica a los .md y el shim JS al texto que
+# emiten los hooks Python (su CONTEXT_REWRITES se genera desde esta tabla).
+OPENCODE_TOOL_RENAMES: tuple[tuple[str, str], ...] = (
+    ("ExitPlanMode", "plan_exit"),
 )
 
 # [CONSUMIDA] oc_translate_common(): home de Claude -> OpenCode. SOLO planes:
@@ -234,9 +248,9 @@ OPENCODE_SKILL_RULES: dict[str, tuple] = {
 _GLOB_HINT = "(ubicalo por Glob si lo necesit\u00e1s)"
 _GLOB_HINT_OC = "(ruta absoluta de instalacion: leelo directo con la tool read)"
 OPENCODE_AGENT_RULES: dict[str, tuple] = {
-    "bug-hunter": ((_GLOB_HINT, _GLOB_HINT_OC),),
-    "debugger": ((_GLOB_HINT, _GLOB_HINT_OC),),
-    "security-auditor": ((_GLOB_HINT, _GLOB_HINT_OC),),
+    **dict.fromkeys(
+        ("bug-hunter", "debugger", "security-auditor"), ((_GLOB_HINT, _GLOB_HINT_OC),)
+    ),
     "compliance-auditor": (
         (re.compile(r"Glob de `00-INSTRUCCIONES-IA\.md` bajo `<HOME>/\.claude/plugins`"),
          "la KB instalada por el bundle OpenCode en `{OC_REFS}/iso-27000/`"),
@@ -255,7 +269,20 @@ OPENCODE_AGENT_RULES: dict[str, tuple] = {
     ),
 }
 
+def _flag_note(injector: str) -> str:
+    """Nota de los toggles cuyo flag lee un hook *_injector.py via el shim."""
+    return (
+        "El flag va en `~/.claude/fluency4d/` A PROPOSITO (no en "
+        "`~/.config/opencode`): es la ruta que lee `%s`, que en "
+        "OpenCode corre via el plugin `fluency-hooks.js` en cada mensaje. Usa la "
+        "tool `write` con la ruta absoluta expandida (esta fuera del proyecto: "
+        "OpenCode pedira permiso `external_directory`, aprobalo)." % injector
+    )
+
+
 # [CONSUMIDA] build_opencode_skill_command(): nota extra (blockquote) por skill.
+# {SKILL_AGENTS} = subagentes de sentinel-agents que nombra el SKILL.md fuente
+# (en orden de aparicion, solo los que devuelve discover_agents()).
 OPENCODE_SKILL_NOTES: dict[str, str] = {
     "4d-status": (
         "Reporte de SOLO LECTURA: lee exactamente los archivos listados y nada "
@@ -263,20 +290,8 @@ OPENCODE_SKILL_NOTES: dict[str, str] = {
         "en OpenCode tambien (las escriben los hooks de fluency-4d via el plugin "
         "`fluency-hooks.js`); si no existe, reporta \"sin datos de uso\" y segui."
     ),
-    "caveman": (
-        "El flag va en `~/.claude/fluency4d/` A PROPOSITO (no en "
-        "`~/.config/opencode`): es la ruta que lee `caveman_injector.py`, que en "
-        "OpenCode corre via el plugin `fluency-hooks.js` en cada mensaje. Usa la "
-        "tool `write` con la ruta absoluta expandida (esta fuera del proyecto: "
-        "OpenCode pedira permiso `external_directory`, aprobalo)."
-    ),
-    "adhd": (
-        "El flag va en `~/.claude/fluency4d/` A PROPOSITO (no en "
-        "`~/.config/opencode`): es la ruta que lee `adhd_injector.py`, que en "
-        "OpenCode corre via el plugin `fluency-hooks.js` en cada mensaje. Usa la "
-        "tool `write` con la ruta absoluta expandida (esta fuera del proyecto: "
-        "OpenCode pedira permiso `external_directory`, aprobalo)."
-    ),
+    "caveman": _flag_note("caveman_injector.py"),
+    "adhd": _flag_note("adhd_injector.py"),
     "handoff": (
         "Planes en OpenCode: `.opencode/plans/` del proyecto o "
         "`~/.local/share/opencode/plans/`; si no hay ninguno, el paso degrada a "
@@ -298,7 +313,7 @@ OPENCODE_SKILL_NOTES: dict[str, str] = {
     ),
     "sentinel-audit": (
         "Subagentes via la tool `task` (`subagent` en OpenCode 2.x): "
-        "`security-auditor`, `compliance-auditor`, `code-reviewer`, `validator`."
+        "{SKILL_AGENTS}."
     ),
 }
 

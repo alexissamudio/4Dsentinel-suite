@@ -17,7 +17,7 @@ Alcance del PoC (lo demas queda como TODO comentado en el bundle):
     - agente : critic ([agents.critic] en config.toml)
   OpenCode (dist/opencode/, OpenCode 1.19.x y 2.2.5 -- TODO el bundle sale de aca):
     - command   : un command por skill portable (cuerpo + references
-                  INCRUSTADOS y traducidos; ver M.OPENCODE_SKILLS_SKIPPED) y por
+                  INCRUSTADOS y traducidos; ver M.SKILLS_UNSUPPORTED) y por
                   cada command de memory (command/*.md).
     - agentes   : todos los de sentinel-agents (agent/*.md, mode: subagent,
                   permisos del allowlist + external_directory sobre references/).
@@ -40,19 +40,23 @@ import re
 import sys
 from pathlib import Path
 
+# tools/multiharness/build_harness.py -> parents[2] = raiz del repo.
+REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import mappings as M  # noqa: E402
+from frontmatter_utils import parse_tools  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Rutas ancla (absolutas, resueltas desde la ubicacion de este script)
 # ---------------------------------------------------------------------------
-# tools/multiharness/build_harness.py -> parents[2] = raiz del repo.
-REPO_ROOT = Path(__file__).resolve().parents[2]
 PLUGINS = REPO_ROOT / "plugins"
 FLUENCY_ROOT = PLUGINS / "fluency-4d"          # resuelve ${CLAUDE_PLUGIN_ROOT}
 SENTINEL_ROOT = PLUGINS / "sentinel-agents"
+MEMORY_ROOT = PLUGINS / "memory"
 DEFAULT_DIST = REPO_ROOT / "dist" / "codex"
 DEFAULT_OPENCODE_DIST = REPO_ROOT / "dist" / "opencode"
+DEFAULT_HERMES_DIST = REPO_ROOT / "dist" / "hermes"
 
 # ---------------------------------------------------------------------------
 # Exclusion "solo Claude Code"
@@ -60,7 +64,8 @@ DEFAULT_OPENCODE_DIST = REPO_ROOT / "dist" / "opencode"
 # Piezas de fluency-4d que dependen del engine de mods de Claude Code (Panel 4D,
 # hooks module TSX) o de su status line / temas. NO se emiten a Codex ni a
 # OpenCode. Rutas relativas a plugins/fluency-4d (se nombran aunque todavia no
-# existan: la lista es el contrato, no un reflejo del arbol actual).
+# existan: la lista es el contrato, no un reflejo del arbol actual). Las skills
+# salen de M.SKILLS_UNSUPPORTED: las que no soporta ningun harness.
 CLAUDE_CODE_ONLY: tuple[str, ...] = (
     "hooks/register.tsx",      # hooks module del Panel 4D
     "tests",                   # tests del panel (claude plugin test)
@@ -69,8 +74,10 @@ CLAUDE_CODE_ONLY: tuple[str, ...] = (
     ".claude-plugin/types",    # tipos que escribe el engine
     "statusline",              # status line (Node)
     "themes",                  # temas de Claude Code
-    "skills/barra",
-    "skills/statusline",
+) + tuple(
+    "skills/" + skill
+    for skill, (harnesses, _) in M.SKILLS_UNSUPPORTED.items()
+    if set(M.HARNESSES) <= set(harnesses)
 )
 # Claves de hooks/hooks.json que solo entiende Claude Code (`modules` = hooks
 # modules del engine de mods). Se quitan antes de transpilar.
@@ -92,6 +99,12 @@ def is_claude_code_only(path: Path) -> bool:
 def strip_claude_only_keys(hooks: dict) -> dict:
     """Copia de hooks.json sin las claves CLAUDE_CODE_ONLY_HOOK_KEYS."""
     return {k: v for k, v in hooks.items() if k not in CLAUDE_CODE_ONLY_HOOK_KEYS}
+
+
+def unsupported_skills(harness: str) -> dict[str, str]:
+    """{skill: razon} de las skills que `harness` no soporta (M.SKILLS_UNSUPPORTED)."""
+    return {skill: why for skill, (harnesses, why) in M.SKILLS_UNSUPPORTED.items()
+            if harness in harnesses}
 
 
 # ---------------------------------------------------------------------------
@@ -129,11 +142,16 @@ def parse_frontmatter(text: str) -> dict[str, str]:
 
 
 def discover_agents() -> dict[str, dict[str, str]]:
-    """Parsea el frontmatter de plugins/sentinel-agents/agents/*.md."""
+    """Parsea el frontmatter de plugins/sentinel-agents/agents/*.md.
+
+    El texto completo queda en meta["_text"] (los builders no releen el .md).
+    """
     agents: dict[str, dict[str, str]] = {}
     for md in sorted(SENTINEL_ROOT.glob("agents/*.md")):
-        meta = parse_frontmatter(md.read_text(encoding="utf-8"))
+        text = md.read_text(encoding="utf-8")
+        meta = parse_frontmatter(text)
         meta["_path"] = str(md)
+        meta["_text"] = text
         agents[meta.get("name", md.stem)] = meta
     return agents
 
@@ -144,11 +162,32 @@ def load_hooks() -> dict:
     return strip_claude_only_keys(raw)
 
 
+def hook_script_names(hooks: dict, event: str) -> list[str]:
+    """Nombres (`x.py`) de los hooks de `event` bajo ${CLAUDE_PLUGIN_ROOT}/hooks/, en orden."""
+    marker = M.PLUGIN_ROOT_VAR + "/hooks/"
+    out: list[str] = []
+    for group in hooks.get("hooks", {}).get(event, []):
+        for hk in group.get("hooks", []):
+            cmd = hk.get("command", "")
+            idx = cmd.find(marker)
+            if idx != -1:
+                out.append(cmd[idx + len(marker):].split('"')[0].split(" ")[0])
+    return out
+
+
+def hook_list(hooks: dict, event: str) -> str:
+    """'a, b, c' con los nombres sin `.py` de los hooks de `event` (para READMEs)."""
+    return ", ".join(Path(n).stem for n in hook_script_names(hooks, event))
+
+
 # ---------------------------------------------------------------------------
 # Helpers de emision
 # ---------------------------------------------------------------------------
-def toml_basic(s: str) -> str:
-    """Escapa un string para un basic string TOML (comillas dobles)."""
+def quote_dq(s: str) -> str:
+    """String entre comillas dobles con \\ y " escapados.
+
+    Mismo escape para un basic string TOML y un escalar YAML double-quoted.
+    """
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
@@ -186,8 +225,8 @@ def build_hooks_json(hooks: dict) -> str:
     eventos y schema, solo se resuelve ${CLAUDE_PLUGIN_ROOT} a la ruta absoluta
     de plugins/fluency-4d. Codex descubre este archivo en $CODEX_HOME/hooks.json
     o en <proyecto>/.codex/hooks.json (mecanismo verificado por E2E) -- NO por
-    config.toml [hooks]. Incluye UserPromptSubmit (4), PostToolUse (doc_drift,
-    memory_checkpoint) y Stop (discernment_gate), tal cual la fuente. Sin
+    config.toml [hooks]. Incluye todos los eventos (UserPromptSubmit,
+    PostToolUse, Stop) tal cual la fuente. Sin
     `modules` (hooks module del Panel 4D, solo Claude Code).
     """
     resolved = resolve_plugin_root(strip_claude_only_keys(hooks))
@@ -217,7 +256,7 @@ def build_config_toml(agents: dict[str, dict[str, str]]) -> str:
         "# Subagentes portados de plugins/sentinel-agents/agents/*.md",
         "",
         "[agents.critic]",
-        "description = " + toml_basic(desc),
+        "description = " + quote_dq(desc),
         'config_file = "critic.config.toml"',
         "",
         "# TODO(PoC): resto de sentinel-agents (advisor, bug-hunter, code-reviewer, ...)",
@@ -247,7 +286,7 @@ def build_critic_config(agents: dict[str, dict[str, str]]) -> str:
         out.append("#      (sin override). Descomentar para forzar uno:")
         out.append('# model = "o4-mini"')
     else:
-        out.append("model = " + toml_basic(model))
+        out.append("model = " + quote_dq(model))
     out += [
         "",
         "# maxTurns (Claude) = %s" % (max_turns or "n/d"),
@@ -276,9 +315,7 @@ def strip_frontmatter(text: str) -> str:
 
 
 def build_critic_body(agents: dict[str, dict[str, str]]) -> str:
-    critic = agents.get("critic", {})
-    src = Path(critic["_path"]).read_text(encoding="utf-8")
-    body = strip_frontmatter(src).lstrip("\n")
+    body = strip_frontmatter(agents["critic"]["_text"]).lstrip("\n")
     header = (
         "<!-- Portado de plugins/sentinel-agents/agents/critic.md por "
         "tools/multiharness/build_harness.py. NO editar a mano. -->\n"
@@ -367,45 +404,59 @@ def extract_hard_rules(claude_md: str) -> tuple[list[str], list[str]]:
     return rules, bridges
 
 
-def build_agents_md() -> str:
-    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    rules, bridges = extract_hard_rules(claude_md)
-    parts = [
-        "# AGENTS.md - contrato del proyecto (bundle Codex)",
-        "",
-        "> Generado por `tools/multiharness/build_harness.py` desde los "
-        "innegociables de `CLAUDE.md`. Equivalente en Codex de las reglas duras "
-        "de Claude Code.",
-        "",
-        "## Reglas del proyecto (siempre)",
-        "",
-    ]
-    parts += rules if rules else ["- (sin reglas detectadas en CLAUDE.md)"]
-    parts += [
-        "",
-        "## Puentes de documentacion",
-        "",
-        "> NOTA (Codex): los puentes apuntan a `.claude/docs/*` del proyecto. "
-        "Codex no ejecuta el hook `bridge_router` automaticamente para leerlos; "
-        "leelos a mano si la tarea toca ese tema.",
-        "",
-    ]
-    parts += bridges if bridges else ["(sin tabla de puentes)"]
-    parts += [
-        "",
-        "## Notas de portabilidad",
-        "",
-        "- Hooks: emitidos como `hooks.json` (schema de Claude Code), descubierto "
-        "en `$CODEX_HOME/hooks.json` o `<proyecto>/.codex/hooks.json`. `config.toml` "
-        "solo activa `[features] hooks = true`; su bloque `[hooks]` NO dispara nada.",
-        "- Subagentes: `[agents.<name>]` + `<name>.config.toml`.",
-        "- MCP (codebase-memory): DIFERIDO (binario `cbm` no instalado).",
-        "",
-    ]
+def build_contract_md(head: list[str], no_rules: str, bridges_note: list[str],
+                      no_bridges: str, tail: list[str],
+                      bridge_rewrite: tuple[str, str] | None = None) -> str:
+    """Contrato del proyecto (reglas duras + puentes de CLAUDE.md) para otro harness.
+
+    head/tail rodean las secciones fijas; bridges_note va antes de la tabla de
+    puentes; bridge_rewrite = (old, new) aplicado a cada fila de la tabla.
+    """
+    rules, bridges = extract_hard_rules((REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8"))
+    if bridge_rewrite:
+        bridges = [b.replace(*bridge_rewrite) for b in bridges]
+    parts = [*head, "## Reglas del proyecto (siempre)", ""]
+    parts += rules or [no_rules]
+    parts += ["", "## Puentes de documentacion", "", *bridges_note]
+    parts += bridges or [no_bridges]
+    parts += tail
     return "\n".join(parts)
 
 
-def build_readme() -> str:
+def build_agents_md() -> str:
+    return build_contract_md(
+        head=[
+            "# AGENTS.md - contrato del proyecto (bundle Codex)",
+            "",
+            "> Generado por `tools/multiharness/build_harness.py` desde los "
+            "innegociables de `CLAUDE.md`. Equivalente en Codex de las reglas duras "
+            "de Claude Code.",
+            "",
+        ],
+        no_rules="- (sin reglas detectadas en CLAUDE.md)",
+        bridges_note=[
+            "> NOTA (Codex): los puentes apuntan a `.claude/docs/*` del proyecto. "
+            "Codex no ejecuta el hook `bridge_router` automaticamente para leerlos; "
+            "leelos a mano si la tarea toca ese tema.",
+            "",
+        ],
+        no_bridges="(sin tabla de puentes)",
+        tail=[
+            "",
+            "## Notas de portabilidad",
+            "",
+            "- Hooks: emitidos como `hooks.json` (schema de Claude Code), descubierto "
+            "en `$CODEX_HOME/hooks.json` o `<proyecto>/.codex/hooks.json`. `config.toml` "
+            "solo activa `[features] hooks = true`; su bloque `[hooks]` NO dispara nada.",
+            "- Subagentes: `[agents.<name>]` + `<name>.config.toml`.",
+            "- MCP (codebase-memory): DIFERIDO (binario `cbm` no instalado).",
+            "",
+        ],
+    )
+
+
+def build_readme(hooks: dict) -> str:
+    hook_lists = tuple(hook_list(hooks, ev) for ev in ("UserPromptSubmit", "PostToolUse", "Stop"))
     return (
         "# Bundle Codex de la suite 4Dsentinel (PoC)\n"
         "\n"
@@ -420,9 +471,8 @@ def build_readme() -> str:
         "`~/.claude` reescritas a `~/.codex`).\n"
         "- **Slash command** `handoff` -> `prompts/handoff.md`.\n"
         "- **Hooks** -> `hooks.json` (formato Claude Code): `UserPromptSubmit` "
-        "(bridge_router, plan_calibrator, caveman_injector, suite_playbook), "
-        "`PostToolUse` (doc_drift, memory_checkpoint) y `Stop` "
-        "(discernment_gate), con rutas absolutas a esta maquina.\n"
+        "(%s), `PostToolUse` (%s) y `Stop` (%s), con rutas absolutas a esta "
+        "maquina.\n"
         "- **Subagente** `critic` -> `[agents.critic]` en `config.toml` + "
         "`critic.config.toml` + `agents/critic.md`.\n"
         "- **AGENTS.md** con las reglas duras del proyecto.\n"
@@ -477,7 +527,7 @@ def build_readme() -> str:
         "- **Resto de subagentes** y `references/agent-contract.md`: TODO.\n"
         "- `~/.claude/plans/`: sin equivalente en Codex -> el paso del plan en "
         "`handoff` degrada a \"sin plan\".\n"
-    )
+    ) % hook_lists
 
 
 # ---------------------------------------------------------------------------
@@ -491,25 +541,20 @@ OC_REFS_DIR = OPENCODE_HOME / "references"
 PLUGIN_ROOTS: dict[str, Path] = {
     "fluency-4d": FLUENCY_ROOT,
     "sentinel-agents": SENTINEL_ROOT,
-    "memory": PLUGINS / "memory",
+    "memory": MEMORY_ROOT,
 }
-MEMORY_ROOT = PLUGINS / "memory"
 # Subagentes nativos de OpenCode (mode: subagent) -- fallback del shim si el
 # client del plugin no responde.
 OPENCODE_NATIVE_SUBAGENTS: tuple[str, ...] = ("general", "explore")
 
 BACKTICK_REF = re.compile(r"`references/([^`]*)`")
-SENTINEL_PREFIX = re.compile(r"sentinel-agents:([a-z][a-z-]*)")
-
-
-def yaml_dq(s: str) -> str:
-    """Escala YAML entre comillas dobles (escapa backslash y comilla doble)."""
-    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
-
-
-def oc_abs(p: Path) -> str:
-    """Ruta absoluta con '/' (la tool read de OpenCode la acepta en Windows)."""
-    return p.as_posix()
+# `sentinel-agents:<agente>` -> `<agente>`. SENTINEL_NS/AGENT_NAME_RE tambien
+# generan la regla equivalente del shim JS y la guarda de check_harness.
+SENTINEL_NS = "sentinel-agents:"
+AGENT_NAME_RE = r"[a-z][a-z-]*"
+SENTINEL_PREFIX = re.compile(SENTINEL_NS + "(" + AGENT_NAME_RE + ")")
+OC_TOOL_RENAMES = tuple((re.compile(r"\b%s\b" % re.escape(old)), new)
+                        for old, new in M.OPENCODE_TOOL_RENAMES)
 
 
 def oc_replace(text: str, rules, origin: str) -> str:
@@ -517,6 +562,7 @@ def oc_replace(text: str, rules, origin: str) -> str:
 
     Cada regla DEBE matchear al menos una vez: si la fuente cambio y el marcador
     ya no existe, el build falla en vez de emitir una traduccion a medias.
+    Despues resuelve {OC_REFS} (ruta absoluta de references/ instalado).
     """
     for old, new in rules:
         if isinstance(old, re.Pattern):
@@ -527,7 +573,7 @@ def oc_replace(text: str, rules, origin: str) -> str:
         if n == 0:
             raise SystemExit("ERROR(%s): marcador de traduccion no encontrado: %r"
                              % (origin, getattr(old, "pattern", old)))
-    return text
+    return text.replace("{OC_REFS}", OC_REFS_DIR.as_posix())
 
 
 def oc_translate_common(text: str, plugin_root: Path) -> str:
@@ -535,36 +581,35 @@ def oc_translate_common(text: str, plugin_root: Path) -> str:
 
     - `sentinel-agents:X`  -> `X` (subagente OpenCode, tool task / subagent en 2.x).
     - ${CLAUDE_PLUGIN_ROOT} -> ruta abs del plugin en este repo (igual que el shim).
-    - tools exclusivas de Claude Code -> equivalente OpenCode (M.OPENCODE_TOOL_MAP).
+    - tools exclusivas de Claude Code -> equivalente OpenCode (M.OPENCODE_TOOL_MAP
+      y los identificadores de M.OPENCODE_TOOL_RENAMES).
     - ~/.claude/plans/      -> directorios de planes de OpenCode.
     Los flags/estado en ~/.claude/fluency4d/ NO se traducen: los leen/escriben
     los hooks Python, que en OpenCode corren via el shim con esa misma ruta.
     """
     text = SENTINEL_PREFIX.sub(r"\1", text)
-    text = text.replace(M.PLUGIN_ROOT_VAR, oc_abs(plugin_root))
-    for old, new in M.OPENCODE_TOOL_MAP:
+    text = text.replace(M.PLUGIN_ROOT_VAR, plugin_root.as_posix())
+    for old, new in (*M.OPENCODE_TOOL_MAP, *M.OPENCODE_HOME_MAP):
         text = text.replace(old, new)
-    for old, new in M.OPENCODE_HOME_MAP:
-        text = text.replace(old, new)
+    for pattern, new in OC_TOOL_RENAMES:
+        text = pattern.sub(new, text)
     return text
 
 
-def oc_rewrite_refs(text: str, skill_dir: Path | None, plugin_root: Path,
-                    embedded: set[str]) -> str:
+def oc_rewrite_refs(text: str, skill_dir: Path | None, plugin_root: Path) -> str:
     """Reescribe `references/<x>` backtickeado.
 
-    - si <x> existe en <skill>/references/ -> se INCRUSTA al final del command
-      (se anota en `embedded`) y el texto apunta a la copia incrustada;
+    - si <x> existe en <skill>/references/ -> el texto apunta a la copia
+      INCRUSTADA al final del command;
     - si existe en <plugin>/references/ -> ruta ABSOLUTA de instalacion del
       bundle (~/.config/opencode/references/<x>).
     """
     def sub(m: re.Match) -> str:
         rel = m.group(1)
         if skill_dir is not None and (skill_dir / "references" / rel).is_file():
-            embedded.add(rel)
             return "`%s` (referencia incrustada al final de este comando)" % rel
         if (plugin_root / "references" / rel.rstrip("/")).exists():
-            dst = oc_abs(OC_REFS_DIR / rel.rstrip("/"))
+            dst = (OC_REFS_DIR / rel.rstrip("/")).as_posix()
             return "`%s%s`" % (dst, "/" if rel.endswith("/") else "")
         raise SystemExit("ERROR: referencia no resoluble: references/%s" % rel)
     return BACKTICK_REF.sub(sub, text)
@@ -572,30 +617,21 @@ def oc_rewrite_refs(text: str, skill_dir: Path | None, plugin_root: Path,
 
 def opencode_userprompt_scripts(hooks: dict) -> list[str]:
     """Rutas absolutas de los .py de UserPromptSubmit (para el shim JS)."""
-    marker = M.PLUGIN_ROOT_VAR + "/hooks/"
-    out: list[str] = []
-    for group in hooks.get("hooks", {}).get("UserPromptSubmit", []):
-        for hk in group.get("hooks", []):
-            cmd = hk.get("command", "")
-            idx = cmd.find(marker)
-            if idx == -1:
-                continue
-            rest = cmd[idx + len(marker):]
-            name = rest.split('"')[0].split(" ")[0]
-            out.append(str(FLUENCY_ROOT / "hooks" / name))
-    return out
+    return [str(FLUENCY_ROOT / "hooks" / name)
+            for name in hook_script_names(hooks, "UserPromptSubmit")]
 
 
 # --- Commands (skills + commands de memory) ---------------------------------
-def discover_opencode_skills() -> list[Path]:
-    """Skills portables que se emiten como command (excluye M.OPENCODE_SKILLS_SKIPPED)."""
-    return [p for p in discover_skills() if p.parent.name not in M.OPENCODE_SKILLS_SKIPPED]
+def opencode_skills(skills: list[Path]) -> list[Path]:
+    """Skills portables que se emiten como command (sin las que OpenCode no soporta)."""
+    skipped = unsupported_skills("opencode")
+    return [p for p in skills if p.parent.name not in skipped]
 
 
 def oc_command_header(desc: str, origin: str) -> str:
     return (
         "---\n"
-        "description: " + yaml_dq(desc) + "\n"
+        "description: " + quote_dq(desc) + "\n"
         "agent: build\n"
         "---\n\n"
         "<!-- Generado por tools/multiharness/build_harness.py desde %s "
@@ -603,22 +639,19 @@ def oc_command_header(desc: str, origin: str) -> str:
     )
 
 
-def build_opencode_skill_command(skill_md: Path) -> str:
+def build_opencode_skill_command(skill_md: Path, agent_names: list[str]) -> str:
     name = skill_md.parent.name
     plugin = skill_md.parents[2].name
     plugin_root = PLUGIN_ROOTS[plugin]
     origin = "plugins/%s/skills/%s" % (plugin, name)
+    raw = skill_md.read_text(encoding="utf-8")
     # Reglas por-skill sobre el fuente COMPLETO (frontmatter incluido: la
-    # description tambien puede nombrar mecanismos de Claude Code). {OC_REFS}
-    # = ruta absoluta de references/ instalado.
-    src = oc_replace(skill_md.read_text(encoding="utf-8"),
-                     M.OPENCODE_SKILL_RULES.get(name, ()), origin)
-    src = src.replace("{OC_REFS}", oc_abs(OC_REFS_DIR))
+    # description tambien puede nombrar mecanismos de Claude Code).
+    src = oc_replace(raw, M.OPENCODE_SKILL_RULES.get(name, ()), origin)
     meta = parse_frontmatter(src)
     meta["description"] = oc_translate_common(meta.get("description", name), plugin_root)
     body = oc_translate_common(strip_frontmatter(src).lstrip("\n"), plugin_root)
-    embedded: set[str] = set()
-    body = oc_rewrite_refs(body, skill_md.parent, plugin_root, embedded)
+    body = oc_rewrite_refs(body, skill_md.parent, plugin_root)
 
     notes = [
         "> **OpenCode (bundle 4Dsentinel, OpenCode %s).** Este comando INCRUSTA "
@@ -630,6 +663,11 @@ def build_opencode_skill_command(skill_md: Path) -> str:
     ]
     extra = M.OPENCODE_SKILL_NOTES.get(name)
     if extra:
+        if "{SKILL_AGENTS}" in extra:
+            named = dict.fromkeys(a for a in SENTINEL_PREFIX.findall(raw) if a in agent_names)
+            if not named:
+                raise SystemExit("ERROR(%s): {SKILL_AGENTS} sin subagentes conocidos" % origin)
+            extra = extra.replace("{SKILL_AGENTS}", ", ".join("`%s`" % a for a in named))
         notes.append("> " + extra)
     out = oc_command_header(meta.get("description", name), origin)
     out += "\n>\n".join(notes) + "\n\n" + body.rstrip("\n") + "\n"
@@ -668,15 +706,16 @@ def build_opencode_memory_command(cmd_md: Path) -> str:
 
 
 # --- Agentes -----------------------------------------------------------------
-def opencode_permission(tools: str) -> str:
+def opencode_permission(tools: set[str]) -> str:
     """Bloque `permission` (YAML) de un agente OpenCode.
 
-    Deriva los deny del allowlist `tools` fuente (read-only Read/Grep/Glob ->
+    Deriva los deny del allowlist `tools` fuente (set de
+    frontmatter_utils.parse_tools: inline o lista YAML; read-only Read/Grep/Glob ->
     edit/bash/webfetch: deny) y concede external_directory SOLO sobre el dir de
     references instalado (~/.config/opencode/references), que esta fuera del
     proyecto: sin esto OpenCode pide permiso y `opencode run` lo auto-rechaza.
     """
-    allowed = {t.strip().lower() for t in tools.split(",") if t.strip()}
+    allowed = {t.lower() for t in tools}
     lines = ["permission:"]
     if allowed and "*" not in allowed:
         if not (allowed & {"write", "edit", "multiedit", "notebookedit"}):
@@ -686,22 +725,21 @@ def opencode_permission(tools: str) -> str:
         if "webfetch" not in allowed:
             lines.append("  webfetch: deny")
     lines.append("  external_directory:")
-    lines.append("    " + yaml_dq(oc_abs(OC_REFS_DIR) + "/*") + ": allow")
+    lines.append("    " + quote_dq(OC_REFS_DIR.as_posix() + "/*") + ": allow")
     return "\n".join(lines) + "\n"
 
 
 def oc_translate_agent_body(text: str, origin: str) -> str:
     text = oc_replace(text, M.OPENCODE_AGENT_RULES.get(Path(origin).stem, ()), origin)
-    text = text.replace("{OC_REFS}", oc_abs(OC_REFS_DIR))
     text = oc_translate_common(text, SENTINEL_ROOT)
-    return oc_rewrite_refs(text, None, SENTINEL_ROOT, set())
+    return oc_rewrite_refs(text, None, SENTINEL_ROOT)
 
 
 def build_opencode_agent(agents: dict[str, dict[str, str]], name: str) -> str:
     meta = agents.get(name, {})
     if not meta:
         raise SystemExit("ERROR: no se encontro el agente '%s'" % name)
-    src = Path(meta["_path"]).read_text(encoding="utf-8")
+    src = meta["_text"]
     origin = "plugins/sentinel-agents/agents/%s.md" % name
     body = oc_translate_agent_body(strip_frontmatter(src).lstrip("\n"), origin)
     banner = (
@@ -710,13 +748,13 @@ def build_opencode_agent(agents: dict[str, dict[str, str]], name: str) -> str:
         "> **OpenCode:** el contrato de agentes esta instalado en `%s` (ruta "
         "absoluta; leelo con la tool read, ya tenes permiso external_directory "
         "sobre ese directorio).\n\n"
-        % (origin, M.OPENCODE_VERSION, oc_abs(OC_REFS_DIR / "agent-contract.md"))
+        % (origin, M.OPENCODE_VERSION, (OC_REFS_DIR / "agent-contract.md").as_posix())
     )
     return (
         "---\n"
-        "description: " + yaml_dq(meta.get("description", "")) + "\n"
+        "description: " + quote_dq(meta.get("description", "")) + "\n"
         "mode: subagent\n"
-        + opencode_permission(meta.get("tools", ""))
+        + opencode_permission(parse_tools(src))
         + "---\n\n"
         + banner + body
     )
@@ -731,15 +769,10 @@ def build_opencode_agent_contract() -> str:
             "-->\n\n" % origin) + body
 
 
-def opencode_kb_files() -> list[Path]:
-    """KB ISO 27000 (copia byte-a-byte: el .manifest.sha256 depende de los bytes)."""
-    root = SENTINEL_ROOT / "references" / "iso-27000"
-    return sorted(p for p in root.rglob("*") if p.is_file())
-
-
 # --- Shim de hooks -----------------------------------------------------------
 # Plantilla JS del plugin (UN archivo para OpenCode v1 y v2). Placeholders:
-# @@HOOKS@@ (rutas abs de los .py), @@SUBAGENTS@@, @@V1@@ y @@V2@@ (versiones).
+# @@HOOKS@@ (rutas abs de los .py), @@REWRITES@@ (CONTEXT_REWRITES),
+# @@SUBAGENTS@@, @@V1@@ y @@V2@@ (versiones).
 OPENCODE_SHIM_TEMPLATE = r"""// fluency-hooks.js - shim de plugin OpenCode para la suite fluency-4d.
 // Generado por tools/multiharness/build_harness.py. NO editar a mano.
 //
@@ -791,8 +824,7 @@ const CACHE_MAX = 500; // prompts recordados por el cache de contexto v2
 // Traduccion minima del texto que emiten los hooks (escritos para Claude
 // Code) a los nombres de OpenCode.
 const CONTEXT_REWRITES = [
-  [/\bsentinel-agents[:]([a-z][a-z-]*)/g, "$1"],
-  [/\bExitPlanMode\b/g, "plan_exit"],
+@@REWRITES@@
 ];
 
 // --- ids ascendentes v1 (formato OpenCode: prefijo_ + 12 hex de
@@ -1095,13 +1127,26 @@ export default {
 """
 
 
+def opencode_context_rewrites() -> list[tuple[str, str]]:
+    """(regex JS, reemplazo) del shim: la misma traduccion que oc_translate_common
+    hace con SENTINEL_PREFIX y M.OPENCODE_TOOL_RENAMES. El `:` va como `[:]` para
+    que el shim no contenga el literal `sentinel-agents:` (guarda de check_harness).
+    """
+    sentinel = r"/\b%s[:](%s)/g" % (SENTINEL_NS.rstrip(":"), AGENT_NAME_RE)
+    return [(sentinel, "$1")] + [(r"/\b%s\b/g" % re.escape(old), new)
+                                 for old, new in M.OPENCODE_TOOL_RENAMES]
+
+
 def build_opencode_plugin(hooks: dict, agent_names: list[str]) -> str:
     scripts = opencode_userprompt_scripts(hooks)
     js_list = ",\n".join('  "' + s.replace("\\", "\\\\") + '"' for s in scripts)
+    js_rewrites = "\n".join("  [%s, %s]," % (rx, json.dumps(new))
+                            for rx, new in opencode_context_rewrites())
     subagents = sorted(set(agent_names) | set(OPENCODE_NATIVE_SUBAGENTS))
     js_sub = ", ".join('"%s"' % a for a in subagents)
     return (
         OPENCODE_SHIM_TEMPLATE.replace("@@HOOKS@@", js_list)
+        .replace("@@REWRITES@@", js_rewrites)
         .replace("@@SUBAGENTS@@", js_sub)
         .replace("@@V1@@", M.OPENCODE_V1_VERSION)
         .replace("@@V2@@", M.OPENCODE_V2_VERSION)
@@ -1126,10 +1171,9 @@ def build_opencode_json() -> str:
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
 
-def build_opencode_readme(skills: list[Path], memory_cmds: list[Path],
-                          agent_names: list[str]) -> str:
-    cmd_names = sorted([p.parent.name for p in skills] + [p.stem for p in memory_cmds])
-    skipped = "".join("- `%s`: %s\n" % (k, v) for k, v in M.OPENCODE_SKILLS_SKIPPED.items())
+def build_opencode_readme(cmd_names: list[str], agent_names: list[str], hooks: dict) -> str:
+    cmd_names = sorted(cmd_names)
+    skipped = "".join("- `%s`: %s\n" % kv for kv in unsupported_skills("opencode").items())
     return (
         "# Bundle OpenCode de la suite 4Dsentinel\n"
         "\n"
@@ -1156,8 +1200,7 @@ def build_opencode_readme(skills: list[Path], memory_cmds: list[Path],
         "reescrita a la KB instalada) + KB ISO 27000 (`iso-27000/`, copia "
         "byte-a-byte, incluido `.manifest.sha256`).\n"
         "- **Hooks** -> `plugin/fluency-hooks.js`: shim que puentea los hooks "
-        "Python de `UserPromptSubmit` (bridge_router, plan_calibrator, "
-        "caveman_injector, adhd_injector, suite_playbook). UN archivo con los dos "
+        "Python de `UserPromptSubmit` (%s). UN archivo con los dos "
         "contratos de plugin: `export default { id, server, setup }`. **v1 "
         "(1.x)** lee `server` y usa `chat.message`: inyecta una parte "
         "`synthetic: true` (el modelo la ve; la TUI no la muestra como texto del "
@@ -1184,8 +1227,8 @@ def build_opencode_readme(skills: list[Path], memory_cmds: list[Path],
         "- Los puentes siguen en `.claude/docs/` del proyecto (los lee "
         "`bridge_router.py`). OpenCode usa `AGENTS.md`; si no existe, cae a "
         "`CLAUDE.md`.\n"
-        "- Hooks `PostToolUse` (doc_drift, memory_checkpoint) y `Stop` "
-        "(discernment_gate) NO se puentean: solo `UserPromptSubmit`.\n"
+        "- Hooks `PostToolUse` (%s) y `Stop` (%s) NO se puentean: solo "
+        "`UserPromptSubmit`.\n"
         "- Rutas absolutas de ESTA maquina (repo y `~/.config/opencode`): "
         "regenerar si cambian.\n"
         "\n"
@@ -1226,18 +1269,24 @@ def build_opencode_readme(skills: list[Path], memory_cmds: list[Path],
         "`opencode.json` del usuario.\n"
     ) % (
         M.OPENCODE_VERSION, len(cmd_names), ", ".join("`/%s`" % c for c in cmd_names),
-        len(agent_names), oc_abs(OC_REFS_DIR), skipped, oc_abs(OC_REFS_DIR),
-        M.OPENCODE_VERSION,
+        len(agent_names), OC_REFS_DIR.as_posix(), hook_list(hooks, "UserPromptSubmit"),
+        skipped, hook_list(hooks, "PostToolUse"), hook_list(hooks, "Stop"),
+        OC_REFS_DIR.as_posix(), M.OPENCODE_VERSION,
     )
 
 
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
-def build(dist_dir: Path) -> list[Path]:
-    """Genera el bundle completo bajo dist_dir. Devuelve las rutas escritas."""
-    skills = discover_skills()
-    agents = discover_agents()
+def build(dist_dir: Path, skills: list[Path] | None = None,
+          agents: dict[str, dict[str, str]] | None = None) -> list[Path]:
+    """Genera el bundle completo bajo dist_dir. Devuelve las rutas escritas.
+
+    skills/agents: resultado de discover_skills()/discover_agents() si el
+    llamador ya los tiene (si no, se descubren aca).
+    """
+    skills = discover_skills() if skills is None else skills
+    agents = discover_agents() if agents is None else agents
     hooks = load_hooks()
 
     if "critic" not in agents:
@@ -1254,11 +1303,12 @@ def build(dist_dir: Path) -> list[Path]:
     written.append(write(dist_dir / "critic.config.toml", build_critic_config(agents)))
     written.append(write(dist_dir / "agents" / "critic.md", build_critic_body(agents)))
     written.append(write(dist_dir / "AGENTS.md", build_agents_md()))
-    written.append(write(dist_dir / "README.md", build_readme()))
+    written.append(write(dist_dir / "README.md", build_readme(hooks)))
     return written
 
 
-def build_opencode(dist_dir: Path) -> list[Path]:
+def build_opencode(dist_dir: Path, skills: list[Path] | None = None,
+                   agents: dict[str, dict[str, str]] | None = None) -> list[Path]:
     """Genera el bundle OpenCode bajo dist_dir. Devuelve las rutas escritas.
 
     Todo lo que hay en dist/opencode sale de aca (check_harness falla si sobra
@@ -1266,9 +1316,9 @@ def build_opencode(dist_dir: Path) -> list[Path]:
     (todos los de sentinel-agents), references (contrato + KB ISO), shim de
     hooks, opencode.json y README.
     """
-    agents = discover_agents()
+    agents = discover_agents() if agents is None else agents
     hooks = load_hooks()
-    skills = discover_opencode_skills()
+    skills = opencode_skills(discover_skills() if skills is None else skills)
     memory_cmds = sorted(MEMORY_ROOT.glob("commands/*.md"))
     names = sorted(agents)
     if not names:
@@ -1280,7 +1330,7 @@ def build_opencode(dist_dir: Path) -> list[Path]:
     written: list[Path] = []
     for skill_md in skills:
         written.append(write(dist_dir / "command" / (skill_md.parent.name + ".md"),
-                             build_opencode_skill_command(skill_md)))
+                             build_opencode_skill_command(skill_md, names)))
     for cmd_md in memory_cmds:
         written.append(write(dist_dir / "command" / cmd_md.name,
                              build_opencode_memory_command(cmd_md)))
@@ -1289,9 +1339,10 @@ def build_opencode(dist_dir: Path) -> list[Path]:
                              build_opencode_agent(agents, name)))
     written.append(write(dist_dir / "references" / "agent-contract.md",
                          build_opencode_agent_contract()))
-    kb_root = SENTINEL_ROOT / "references"
-    for src in opencode_kb_files():
-        dst = dist_dir / "references" / src.relative_to(kb_root)
+    # KB ISO 27000: copia byte-a-byte (el .manifest.sha256 depende de los bytes).
+    refs_root = SENTINEL_ROOT / "references"
+    for src in sorted(p for p in (refs_root / "iso-27000").rglob("*") if p.is_file()):
+        dst = dist_dir / "references" / src.relative_to(refs_root)
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_bytes(src.read_bytes())
         written.append(dst)
@@ -1299,50 +1350,37 @@ def build_opencode(dist_dir: Path) -> list[Path]:
                          build_opencode_plugin(hooks, names)))
     written.append(write(dist_dir / "opencode.json", build_opencode_json()))
     written.append(write(dist_dir / "README.md",
-                         build_opencode_readme(skills, memory_cmds, names)))
+                         build_opencode_readme(cmd_names, names, hooks)))
     return written
 
 
-DEFAULT_HERMES_DIST = REPO_ROOT / "dist" / "hermes"
-
-
 def build_hermes_md() -> str:
-    """Genera .hermes.md desde CLAUDE.md."""
-    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    rules, bridges = extract_hard_rules(claude_md)
-    # Convertir paths .claude/ -> .hermes/
-    bridges_hermes = []
-    for b in bridges:
-        bridges_hermes.append(b.replace(".claude/", ".hermes/"))
-    parts = [
-        "# .hermes.md — Contrato del proyecto (bundle Hermes)",
-        "",
-        "> Generado por `tools/multiharness/build_harness.py` desde `CLAUDE.md`.",
-        "> Adaptado para Hermes Agent: skills bajo demanda en vez de hooks automaticos.",
-        "",
-        "<!-- BEGIN 4D-BRIDGES -->",
-        "## Reglas del proyecto (siempre)",
-        "",
-    ]
-    parts += rules if rules else ["- (sin reglas detectadas)"]
-    parts += [
-        "",
-        "## Puentes de documentacion",
-        "",
-    ]
-    parts += bridges_hermes if bridges_hermes else ["(sin puentes)"]
-    parts += [
-        "",
-        "Si la pregunta o tarea toca un tema de la tabla, LEE ese archivo ANTES de responder.",
-        "Al escribir codigo, respeta `.hermes/docs/convenciones.md`.",
-        "<!-- END 4D-BRIDGES -->",
-        "",
-        "## Skills instalados (suite 4Dsentinel para Hermes)",
-        "",
-        "Carga los skills desde `~/.hermes/skills/productivity/`. Mira el README en",
-        "`dist/hermes/` para la lista completa de comandos.",
-    ]
-    return "\n".join(parts)
+    """Genera .hermes.md desde CLAUDE.md (puentes .claude/ -> .hermes/)."""
+    return build_contract_md(
+        head=[
+            "# .hermes.md — Contrato del proyecto (bundle Hermes)",
+            "",
+            "> Generado por `tools/multiharness/build_harness.py` desde `CLAUDE.md`.",
+            "> Adaptado para Hermes Agent: skills bajo demanda en vez de hooks automaticos.",
+            "",
+            "<!-- BEGIN 4D-BRIDGES -->",
+        ],
+        no_rules="- (sin reglas detectadas)",
+        bridges_note=[],
+        no_bridges="(sin puentes)",
+        tail=[
+            "",
+            "Si la pregunta o tarea toca un tema de la tabla, LEE ese archivo ANTES de responder.",
+            "Al escribir codigo, respeta `.hermes/docs/convenciones.md`.",
+            "<!-- END 4D-BRIDGES -->",
+            "",
+            "## Skills instalados (suite 4Dsentinel para Hermes)",
+            "",
+            "Carga los skills desde `~/.hermes/skills/productivity/`. Mira el README en",
+            "`dist/hermes/` para la lista completa de comandos.",
+        ],
+        bridge_rewrite=(".claude/", ".hermes/"),
+    )
 
 
 def build_hermes(dist_dir: Path) -> list[Path]:
@@ -1353,15 +1391,17 @@ def build_hermes(dist_dir: Path) -> list[Path]:
 
 
 def main() -> int:
-    written = build(DEFAULT_DIST)
-    written_oc = build_opencode(DEFAULT_OPENCODE_DIST)
+    skills = discover_skills()
+    agents = discover_agents()
+    written = build(DEFAULT_DIST, skills, agents)
+    written_oc = build_opencode(DEFAULT_OPENCODE_DIST, skills, agents)
     written_hm = build_hermes(DEFAULT_HERMES_DIST)
     print("Repo root : %s" % REPO_ROOT)
     print("Bundle    : %s" % DEFAULT_DIST)
     print("Bundle OC : %s" % DEFAULT_OPENCODE_DIST)
     print("Bundle HM : %s" % DEFAULT_HERMES_DIST)
-    print("Skills    : %d descubiertos" % len(discover_skills()))
-    print("Agentes   : %d descubiertos" % len(discover_agents()))
+    print("Skills    : %d descubiertos" % len(skills))
+    print("Agentes   : %d descubiertos" % len(agents))
     print("Archivos escritos (codex):")
     for p in written:
         print("  - %s" % p.relative_to(REPO_ROOT))

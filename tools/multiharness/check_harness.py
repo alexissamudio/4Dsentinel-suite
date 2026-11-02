@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pyyaml"]
+# dependencies = []
 # ///
 """check_harness.py - Detector de drift + validador de los bundles multiharness.
 
@@ -135,7 +135,7 @@ def validate_bundle(label: str, root: Path) -> bool:
 # Guardas OpenCode: fallan si vuelven los defectos del port verificados en
 # runtime real (contexto visible como texto del usuario, stdin cp1252, estado
 # fugado entre sesiones, nombres/rutas de Claude Code, commands-wrapper).
-OC_FORBIDDEN = ("sentinel-agents:", "${CLAUDE_PLUGIN_ROOT}")
+OC_FORBIDDEN = (B.SENTINEL_NS, B.M.PLUGIN_ROOT_VAR)
 OC_PUSH_SYNTHETIC = re.compile(r"output\.parts\.push\(\{[^}]*\bsynthetic:\s*true\b", re.S)
 # Un solo archivo para OpenCode v1 (lee default.server) y v2 (exige default.id y
 # lee default.setup): sin `id`/`setup` la v2 lo marca "failed"; sin `server` la
@@ -158,7 +158,6 @@ OC_SHIM_FORBIDDEN = (
     ("spawnSync(", "spawnSync bloquea el event loop de OpenCode (usar spawn async)"),
     ("session.synthetic(", "v2: api.session.synthetic persiste/duplica la inyeccion"),
 )
-OC_SKILL_REF = re.compile(r"SKILL\.md")
 
 
 def validate_opencode(root: Path) -> bool:
@@ -196,16 +195,16 @@ def validate_opencode(root: Path) -> bool:
             if bad in body:
                 fail("%s contiene %r (no traducido a OpenCode)" % (rel, bad))
         if rel.startswith("command/"):
-            if OC_SKILL_REF.search(body):
+            if "SKILL.md" in body:
                 fail("%s referencia un SKILL.md en vez de incrustarlo" % rel)
             if "$ARGUMENTS" not in body:
                 fail("%s no recibe $ARGUMENTS" % rel)
         if rel.startswith("agent/") and "external_directory:" not in body:
             fail("%s sin permiso external_directory para references/" % rel)
 
-    for skipped in B.M.OPENCODE_SKILLS_SKIPPED:
+    for skipped in B.unsupported_skills("opencode"):
         if (root / "command" / (skipped + ".md")).exists():
-            fail("command/%s.md no deberia emitirse (OPENCODE_SKILLS_SKIPPED)" % skipped)
+            fail("command/%s.md no deberia emitirse (SKILLS_UNSUPPORTED)" % skipped)
 
     if not err:
         print("OK dist/opencode/ : guardas OpenCode (default {id,server,setup}, "
@@ -215,63 +214,43 @@ def validate_opencode(root: Path) -> bool:
     return err
 
 
-DEFAULT_HERMES_DIST = B.REPO_ROOT / "dist" / "hermes"
-
-
 def validate_hermes(root: Path) -> bool:
-    """Valida el bundle hermes: SKILL.md con frontmatter valido y references existentes.
+    """Valida el bundle hermes: cada skill tiene SKILL.md con frontmatter
+    (abierto y cerrado con ---) que declara `name` y `description`.
 
-    Devuelve True si hay algun error.
+    Usa el parser minimo de build_harness (sin pyyaml). Devuelve True si hay error.
     """
-    try:
-        import yaml as _yaml_lib  # declarado en la cabecera PEP 723
-    except ImportError:
-        print("ERROR: falta pyyaml para validar dist/hermes/ (corre con "
-              "`uv run --script` o `--with pyyaml`)")
-        return True
     err = False
+
+    def fail(msg: str) -> None:
+        nonlocal err
+        print("ERROR dist/hermes/" + msg)
+        err = True
+
     skills_dir = root / "skills"
     if not skills_dir.is_dir():
-        print("ERROR dist/hermes/ : no existe skills/")
-        return True
+        fail(" : no existe skills/")
+        return err
 
     skill_count = 0
-    for skill_dir in sorted(skills_dir.iterdir()):
-        if not skill_dir.is_dir():
-            continue
+    for skill_dir in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
         skill_md = skill_dir / "SKILL.md"
+        where = "skills/%s : " % skill_dir.name
         if not skill_md.exists():
-            print("ERROR dist/hermes/ : falta SKILL.md en %s" % skill_dir.name)
-            err = True
+            fail(" : falta SKILL.md en %s" % skill_dir.name)
             continue
         skill_count += 1
-        # Validar frontmatter
-        try:
-            text = skill_md.read_text(encoding="utf-8")
-            if not text.startswith("---"):
-                print(
-                    "ERROR dist/hermes/skills/%s : frontmatter no empieza con ---" % skill_dir.name
-                )
-                err = True
-                continue
-            end = text.find("\n---", 3)
-            if end == -1:
-                print("ERROR dist/hermes/skills/%s : frontmatter sin cierre ---" % skill_dir.name)
-                err = True
-                continue
-            fm = _yaml_lib.safe_load(text[3:end])
-            if not fm or "name" not in fm:
-                print("ERROR dist/hermes/skills/%s : frontmatter sin 'name'" % skill_dir.name)
-                err = True
-                continue
-            if "description" not in fm:
-                print(
-                    "ERROR dist/hermes/skills/%s : frontmatter sin 'description'" % skill_dir.name
-                )
-                err = True
-        except Exception as e:
-            print("ERROR dist/hermes/skills/%s : YAML invalido (%s)" % (skill_dir.name, e))
-            err = True
+        text = skill_md.read_text(encoding="utf-8")
+        if not text.startswith("---"):
+            fail(where + "frontmatter no empieza con ---")
+            continue
+        if text.find("\n---", 3) == -1:
+            fail(where + "frontmatter sin cierre ---")
+            continue
+        fm = B.parse_frontmatter(text)
+        for key in ("name", "description"):
+            if key not in fm:
+                fail(where + "frontmatter sin '%s'" % key)
 
     if not err:
         print("OK dist/hermes/ : %d skills con frontmatter valido" % skill_count)
@@ -299,8 +278,8 @@ def main() -> int:
                 invalid = validate_opencode(committed) or invalid
 
     # Validar hermes (skills, no drift — los skills no se generan, se copian)
-    if DEFAULT_HERMES_DIST.exists():
-        invalid = validate_hermes(DEFAULT_HERMES_DIST) or invalid
+    if B.DEFAULT_HERMES_DIST.exists():
+        invalid = validate_hermes(B.DEFAULT_HERMES_DIST) or invalid
     else:
         print("INFO: dist/hermes/ no existe; ejecuta build_harness.py primero")
 
