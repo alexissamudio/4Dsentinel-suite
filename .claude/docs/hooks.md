@@ -46,5 +46,8 @@ fallback por hash de cwd si falta `session_id`) y `bump_stats`.
 - Stop: respetar `stop_hook_active` (anti-bucle canónico).
 - El router tiene punto de emisión único: cualquier feature nueva se cuelga ahí,
   no agrega early-returns (se tragan la inyección de arranque).
+- Un `bridges.json` de más de `MAX_BRIDGES_BYTES` (1 MB) se ignora entero; el
+  arranque agrega UNA línea `[fluency-4d] ... supera 1 MB` (solo `stat`, una vez
+  por sesión) para que el usuario sepa por qué no hay puentes.
 - Los hooks NUNCA escriben dentro del proyecto del usuario: temp y
   `~/.claude/fluency4d/` solamente.

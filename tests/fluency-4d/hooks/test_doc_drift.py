@@ -84,3 +84,28 @@ def test_tema_no_str_no_rompe(run_hook, project):
     write_bridges(project, data=data)
     out = run_hook(HOOK, payload(project, "dns1", file_path=win(project, "src/auth/login.py")))
     assert "auth" in out and "auth.md" in out
+
+
+def test_carpeta_que_termina_en_claude_no_se_excluye(run_hook, project):
+    # `my.claude/` no es `.claude/`: el chequeo es por segmento, no por substring.
+    data = {
+        "temas": [
+            {"tema": "cfg", "archivo": ".claude/docs/cfg.md", "rutas": ["my.claude/"]},
+        ]
+    }
+    write_bridges(project, data=data)
+    out = run_hook(HOOK, payload(project, "dc1", file_path=win(project, "my.claude/x.py")))
+    assert "cfg.md" in out
+
+
+def test_claude_anidado_sigue_excluido(run_hook, project):
+    data = {"temas": [{"tema": "pkg", "archivo": ".claude/docs/pkg.md", "rutas": ["pkg/"]}]}
+    write_bridges(project, data=data)
+    out = run_hook(HOOK, payload(project, "dc2", file_path=win(project, "pkg/.claude/x.md")))
+    assert out == ""
+
+
+def test_bridges_no_objeto_no_rompe(run_hook, project):
+    write_bridges(project, data='["src/auth/"]')
+    out = run_hook(HOOK, payload(project, "dc3", file_path=win(project, "src/auth/login.py")))
+    assert out == ""

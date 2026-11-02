@@ -8,6 +8,16 @@
 Apagado por defecto. Con FLUENCY_4D_STRICT=1 o con el flag verify.json ON
 (skill /verify-diff), bloquea UNA vez por sesion con la checklist de
 discernimiento de las 4D antes de dejar terminar la tarea.
+
+Evento: Stop (matcher .*), registrado en hooks/hooks.json.
+Stdin: payload del evento; usa `stop_hook_active`, `agent_type` y
+`session_id` (o `cwd`) para la clave de estado.
+Stdout: {"decision": "block", "reason": CHECKLIST} (top-level).
+Estado: lee el env FLUENCY_4D_STRICT y ~/.claude/fluency4d/verify.json; lee y
+escribe <temp>/fluency4d/<clave>-gate.json con `gate_bloqueado`.
+Pass-through: gate apagado (ni STRICT=1 ni verify ON), `stop_hook_active`
+(Claude ya esta continuando por un bloqueo), subagente, o ya se bloqueo una vez
+en esta sesion.
 """
 
 from __future__ import annotations
@@ -50,6 +60,8 @@ CHECKLIST = (
 
 @hook_main("Stop")
 def main() -> None:
+    # Se chequea ANTES de leer stdin: con el gate apagado (el default) el hook
+    # sale sin esperar ni parsear el payload.
     if os.environ.get("FLUENCY_4D_STRICT") != "1" and not load_verify():
         return output_empty()
 
@@ -57,7 +69,7 @@ def main() -> None:
     # Guarda canonica anti-bucle, independiente del archivo de estado.
     if data.get("stop_hook_active"):
         return output_empty()
-    if data.get("agent_type"):
+    if data.get("agent_type"):  # subagentes: no bloquear su cierre
         return output_empty()
 
     # Sufijo -gate: aisla el estado de este gate del resto de los hooks
@@ -67,6 +79,8 @@ def main() -> None:
     if state.get("gate_bloqueado"):
         return output_empty()
 
+    # Se marca ANTES de emitir: si save_state falla (best-effort), a lo sumo el
+    # gate vuelve a bloquear en otro Stop; stop_hook_active evita el bucle.
     state["gate_bloqueado"] = True
     save_state(key, state)
     output_stop_block(CHECKLIST)

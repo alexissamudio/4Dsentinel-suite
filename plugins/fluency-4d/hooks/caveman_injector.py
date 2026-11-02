@@ -13,6 +13,15 @@ A diferencia de plan_calibrator, NO usa edge-trigger: reinyecta siempre que
 este ON, y eso es lo que da la persistencia del estilo entre turnos. La fuente
 unica de verdad del estilo es el dict DIRECTIVA de aca; el skill solo escribe
 el flag.
+
+Evento: UserPromptSubmit (matcher .*), registrado en hooks/hooks.json.
+Stdin: payload del evento; solo mira `agent_type`.
+Stdout: {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+"additionalContext": DIRECTIVA[level]}}.
+Estado: lee ~/.claude/fluency4d/caveman.json (load_caveman); no escribe nada.
+Pass-through (exit 0 sin stdout): payload vacio o invalido, subagente, o
+caveman.json ausente / OFF / con level fuera de auto|lite|full|ultra.
+Tiene precedencia sobre adhd_injector, que cede si caveman esta ON.
 """
 
 from __future__ import annotations

@@ -1,9 +1,19 @@
 #!/usr/bin/env node
-// Status line de Claude Code con 3 modos:
+// Status line de Claude Code (parte de fluency-4d) con 3 modos:
 //   simple  -> semaforo + una accion, en palabras llanas (sin tokens ni %)
 //   normal  -> barras con etiquetas faciles + consejo si hace falta
 //   experto -> todos los numeros (ctx, costo, cache, proyeccion) + consejo
-// Recibe por stdin el JSON de sesion que manda Claude Code.
+//
+// Como se invoca: `/statusline setup` copia este archivo a la ruta fija
+// ~/.claude/fluency4d/statusline.js y pone `statusLine` en settings.json. Claude
+// Code lo corre como proceso nuevo en cada refresco (eventos + refreshInterval),
+// le manda por stdin el JSON de la sesion (modelo, context_window, rate_limits,
+// prompt_cache, cost, workspace...) y pinta cada linea de stdout como una fila.
+//
+// Lee (nunca escribe al renderizar): ~/.claude/fluency4d/statusline.json (modo,
+// tema, avisos, cutFraction), los flags adhd/caveman/verify.json del mismo dir,
+// la cola del transcript (solo si el JSON no trae el uso de contexto) y el HEAD
+// de git del dir de trabajo. Escribe solo statusline.json, y solo con `mode`.
 //
 // Cambiar de modo:  node statusline.js mode simple|normal|experto
 // Avisos:           node statusline.js mode silencio|avisos  (silencio = sin consejos ni etiquetas de aviso; los numeros siguen; default silencio)
@@ -14,6 +24,12 @@
 //   (statusline.json puede traer "cutFraction": 0.25|0.5|0.75 = fraccion de la ventana; el env tiene prioridad)
 //   STATUSLINE_THEME       templado (default) | tokyo-night | catppuccin | nord | gruvbox
 //                          (tambien: node statusline.js mode <tema>, que tiene prioridad)
+// Defaults (experto, silencio, templado): los mismos que asume el Panel 4D
+// (hooks/register.tsx) y la skill /barra; si divergen, el panel mostraria un
+// valor "actual" que la barra no aplica. Experto: la vista completa (simple y
+// normal son recortes que se eligen). Silencio: los consejos son opt-in
+// (`mode avisos`) y los numeros se ven igual. Templado: el tema del propio
+// plugin, a juego con themes/templado.json.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -26,12 +42,21 @@ const MODES = ['simple', 'normal', 'experto'];
 //   (Opus/Sonnet 5.5; 0.1x en otros modelos, usamos 0.1 por conservador); si la cache esta fria se reescribe a 1.25x.
 //   Sin recargo por contexto largo en modelos de 1M, asi que el tamano solo no hace caro un mensaje.
 // - LARGO de la charla: aviso de calidad (context rot), no de costo. Corte = mitad de la ventana.
-const CUT_ENV = Number(process.env.STATUSLINE_CUT_TOKENS) || null;
+// Solo un numero finito > 0: num() descarta "", "abc", "Infinity" y "1e400"; 0 y negativos tambien quedan afuera.
+const CUT_ENV = ((n) => (n !== null && n > 0 ? n : null))(num(process.env.STATUSLINE_CUT_TOKENS));
 const CACHE_READ = 0.1;
+// Tope de cordura para un conteo de tokens del stdin o del transcript (ventanas
+// reales: <= ~1e7). Lo que pase de aca se descarta como dato invalido.
+const MAX_TOKENS = 1e9;
 // Reescribir la cache fria: 1.25x con TTL de 5 min, 2x con TTL de 1 h (prompt_cache.ttl).
 const CACHE_WRITE_5M = 1.25;
 const CACHE_WRITE_1H = 2;
-// ttl puede venir como segundos (3600) o texto ("1h", "60m", "ephemeral_1h"): cualquier cosa >= 1 h cuenta como larga.
+/**
+ * Si el TTL de la cache es largo (>= 1 h), lo que sube el costo de reescribirla.
+ * ttl puede venir como segundos (3600) o texto ("1h", "60m", "ephemeral_1h").
+ * @param {unknown} ttl prompt_cache.ttl tal como llega
+ * @returns {boolean} false si no se puede interpretar
+ */
 function ttlIsLong(ttl) {
   if (typeof ttl === 'number') return ttl >= 3600;
   if (typeof ttl !== 'string') return false;
@@ -52,7 +77,12 @@ const THEMES = {
   // Contrastes elegidos sobre fondo #141414.
   templado:        { dim: '8c877d', label: 'a8a49a', text: 'e8e6dc', model: 'e8e6dc', accent: 'e8e6dc', git: 'a8a49a', ok: '8aa68a', warn: 'b8a070', bad: 'bd8282', rule: '4a4640', dot: 'd97757' },
 };
-// Solo temas propios: `toString`, `__proto__` o `valueOf` no son temas.
+/**
+ * Si `t` es el nombre de un tema de THEMES. Solo claves propias: `toString`,
+ * `__proto__` o `valueOf` (heredadas de Object) no son temas.
+ * @param {unknown} t
+ * @returns {boolean}
+ */
 const isTheme = (t) => typeof t === 'string' && Object.hasOwn(THEMES, t);
 const hex = (h) => `\x1b[38;2;${parseInt(h.slice(0, 2), 16)};${parseInt(h.slice(2, 4), 16)};${parseInt(h.slice(4, 6), 16)}m`;
 // statusline.json se lee una sola vez por proceso (un render o un `mode`) y se
@@ -84,10 +114,26 @@ function bar(pct, color, width = 10) {
   return paint(color, '▰'.repeat(filled)) + paint(RULE, '▱'.repeat(width - filled));
 }
 
+/**
+ * Tokens en corto: < 1000 redondeado a entero, k con 1 decimal, M exacto sin
+ * decimales ("1M") y M no exacto con 2 ("1.50M"). Lo que en k redondearia a
+ * "1000.0k" (999_950..999_999) sube a "1.00M"; igual 1_004_999 -> "1.00M": solo
+ * un multiplo exacto de 1M va sin decimales. Fuera de dominio (no number, NaN,
+ * Infinity, negativo, o un texto de mas de 8 caracteres o con notacion
+ * cientifica, p. ej. >= 1e10) = "—".
+ * Mismo cuerpo que fmtTokens de hooks/register.tsx (paridad exacta:
+ * test/fmt_tokens_parity.test.js).
+ * @param {unknown} n
+ * @returns {string} a lo sumo 8 caracteres
+ */
 function fmtTokens(n) {
-  if (n >= 1e6) return (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
-  return String(n);
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return '—';
+  const k = (n / 1e3).toFixed(1);
+  let s;
+  if (n < 999.5) s = String(Math.round(n));
+  else if (n < 1e6 && k !== '1000.0') s = k + 'k';
+  else s = (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2) + 'M';
+  return s.length <= 8 && /^\d+(\.\d+)?[kM]?$/.test(s) ? s : '—';
 }
 
 const hhmm = (ms) => {
@@ -95,46 +141,86 @@ const hhmm = (ms) => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}hs`;
 };
 
-// Solo un objeto plano cuenta como estado: un numero, un array o null = {} (asi
-// `mode` siempre escribe un objeto valido en vez de "guardar" en un primitivo).
+/**
+ * JSON.parse sin el BOM UTF-8 inicial (lo agregan Notepad o PowerShell 5 con
+ * `-Encoding utf8`; readFileSync 'utf8' no lo saca y JSON.parse lo rechaza).
+ * Lo usan todas las lecturas de JSON de la barra: statusline.json, los flags,
+ * las lineas del transcript y el stdin. Es declaracion de funcion (hoisted)
+ * porque readState() corre antes de esta linea.
+ * @param {string} text
+ * @returns {unknown}
+ * @throws SyntaxError si no es JSON
+ */
+function parseJson(text) {
+  return JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
+}
+
+/**
+ * Lee ~/.claude/fluency4d/statusline.json (con o sin BOM). Solo un objeto plano
+ * cuenta como estado: un numero, un array o null = {} (asi `mode` siempre escribe
+ * un objeto valido en vez de "guardar" en un primitivo). Cada clave se valida
+ * donde se usa (isTheme, MODES, quiet === false, cutFraction via num()).
+ * @returns {object} el estado, o {} si falta, es ilegible o no es un objeto
+ */
 function readState() {
   try {
-    const st = JSON.parse(fs.readFileSync(MODE_FILE, 'utf8'));
+    const st = parseJson(fs.readFileSync(MODE_FILE, 'utf8'));
     return st && typeof st === 'object' && !Array.isArray(st) ? st : {};
   } catch { return {}; } // sin archivo = default
 }
 
-// Texto de stdin o de archivos: sin caracteres de control (ESC, CR, BEL...) que
-// rompan o falsifiquen la barra. No-string = null.
+/**
+ * Sanea texto de stdin o de archivos: saca los caracteres de control C0/C1
+ * (ESC, CR, BEL...) que rompan o falsifiquen la barra con secuencias ANSI.
+ * @param {unknown} s
+ * @returns {string|null} el texto limpio; null si no es string
+ */
 const clean = (s) => (typeof s === 'string' ? s.replace(/[\x00-\x1f\x7f-\x9f]/g, '') : null);
-// Numero finito (los strings numericos se convierten); cualquier otra cosa = null.
+/**
+ * Numero finito (los strings numericos se convierten; "" no cuenta como 0).
+ * @param {unknown} v
+ * @returns {number|null} cualquier otra cosa (NaN, Infinity, objetos) = null
+ */
 function num(v) {
   if (typeof v === 'string' && v.trim() === '') return null;
   const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
   return Number.isFinite(n) ? n : null;
 }
-// Epoch en segundos (> 1e11 se toma como ms); fuera de rango = null.
+/**
+ * Normaliza un epoch a segundos: un valor > 1e11 se toma como milisegundos.
+ * @param {unknown} v
+ * @returns {number|null} null si no es numero, es <= 0 o queda fuera de rango (>= 1e10 s)
+ */
 function epochSec(v) {
   let n = num(v);
   if (n === null || n <= 0) return null;
   if (n > 1e11) n /= 1000;
   return n < 1e10 ? n : null;
 }
-// Suma de tokens de un `usage`; null si ningun campo es un numero valido.
+/**
+ * Tokens de contexto de un `usage`: input + cache_read + cache_creation (los
+ * campos invalidos, negativos o mayores que MAX_TOKENS se ignoran: un 1e308
+ * haria la suma Infinity y el % saldria en notacion cientifica).
+ * @param {object} u objeto usage de la API
+ * @returns {number|null} null si ningun campo es un numero valido
+ */
 function sumTokens(u) {
-  const parts = [u.input_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens].map(num).filter((n) => n !== null && n >= 0);
+  const parts = [u.input_tokens, u.cache_read_input_tokens, u.cache_creation_input_tokens].map(num).filter((n) => n !== null && n >= 0 && n <= MAX_TOKENS);
   return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
 }
 
+// Modo activo: el del archivo > STATUSLINE_MODE > experto.
 function readMode(st) {
   if (MODES.includes(st.mode)) return st.mode;
   return MODES.includes(process.env.STATUSLINE_MODE) ? process.env.STATUSLINE_MODE : 'experto';
 }
 
 // Fraccion de la ventana para "charla larga": cutFraction del archivo (0 < f < 1), si no la mitad.
+// Solo un number o un string numerico (via num): nunca Number() sobre un objeto,
+// que llama a su toString/valueOf y con {"toString":[]} tira TypeError.
 function cutFraction(st) {
-  const f = Number(st.cutFraction);
-  return f > 0 && f < 1 ? f : 0.5;
+  const f = num(st.cutFraction);
+  return f !== null && f > 0 && f < 1 ? f : 0.5;
 }
 
 // Fallback si el JSON no trae context_window: ultimo turno del hilo principal.
@@ -143,6 +229,9 @@ function contextFromTranscript(file) {
   try { return readTranscriptTail(file); } catch { return null; } // ilegible o no es un archivo
 }
 
+// Lee solo los ultimos 512 KB (el transcript puede pesar decenas de MB y esto
+// corre en cada refresco) y busca de atras para adelante el ultimo `usage` que
+// no sea de un subagente (isSidechain).
 function readTranscriptTail(file) {
   if (!fs.existsSync(file)) return null;
   const size = fs.statSync(file).size;
@@ -154,7 +243,7 @@ function readTranscriptTail(file) {
   const lines = buf.toString('utf8').split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     try {
-      const e = JSON.parse(lines[i]);
+      const e = parseJson(lines[i]);
       const u = e.message && e.message.usage;
       if (!u || typeof u !== 'object' || e.isSidechain) continue;
       const n = sumTokens(u);
@@ -176,6 +265,8 @@ function gitHeadPath(d) {
   if (!st.isFile()) return null;
   try {
     const m = fs.readFileSync(dotgit, 'utf8').match(/^gitdir:\s*(.+?)\s*$/m);
+    // UNC se chequea dos veces: el gitdir escrito puede ser UNC, y uno relativo
+    // queda UNC al resolverse contra un `d` que ya vive en un share de red.
     if (!m || isUnc(m[1])) return null;
     const head = path.join(path.resolve(d, m[1]), 'HEAD');
     return isUnc(head) ? null : head;
@@ -183,9 +274,17 @@ function gitHeadPath(d) {
 }
 
 // Ruta de red (\\host\share o //host/share): en Windows abrirla en cada render
-// intenta una conexion SMB y filtra el hash NTLM. Un gitdir asi no se sigue.
+// intenta una conexion SMB y filtra el hash NTLM. Un gitdir asi no se sigue:
+// un `.git` archivo plantado en un repo clonado bastaria para apuntar a un host
+// del atacante sin que el usuario corra nada.
 const isUnc = (p) => /^[\\/]{2}/.test(p);
 
+/**
+ * Rama de git del dir (o de su repo mas cercano hacia arriba, hasta 25 niveles).
+ * @param {unknown} dir workspace.current_dir o cwd del JSON de sesion
+ * @returns {string|null} la rama, el sha corto si HEAD esta detached, o null si
+ *   no hay repo, no se puede leer o el `.git` no resuelve
+ */
 function gitBranch(dir) {
   if (typeof dir !== 'string' || !dir) return null;
   try {
@@ -215,17 +314,31 @@ function findBranch(dir) {
 // - hook_utils.load_adhd / load_caveman: objeto JSON, on === true y level en el set.
 // - hook_utils.load_verify: objeto JSON y on === true (sin level).
 // - adhd_injector: ADHD cede ante caveman (si caveman esta activo, ADHD no se aplica).
+//   Los dos piden estilos opuestos (pasos completos vs. minimo de texto); si los
+//   dos flags quedan en on (p. ej. editados a mano), gana el ahorro de tokens y
+//   la barra no muestra un ADHD que el hook no inyecta.
 // Casos compartidos con pytest: tests/fluency-4d/fixtures/flags_parity.json.
 const ADHD_LEVELS = ['auto', 'lite', 'full'];
 const CAVEMAN_LEVELS = ['auto', 'lite', 'full', 'ultra'];
 
+/**
+ * Lee el flag ~/.claude/fluency4d/<name>.json, con o sin BOM: el panel
+ * (parseJson) y hook_utils (read_json_safe, utf-8-sig) tambien lo toleran, asi
+ * un flag con BOM da el mismo veredicto en los tres lados.
+ * @param {'adhd'|'caveman'|'verify'} name
+ * @returns {object|null} el objeto si es JSON valido con on === true; si no, null (apagado)
+ */
 function readFlag(name) {
   try {
-    const st = JSON.parse(fs.readFileSync(path.join(FLAGS_DIR, `${name}.json`), 'utf8'));
+    const st = parseJson(fs.readFileSync(path.join(FLAGS_DIR, `${name}.json`), 'utf8'));
     return st && typeof st === 'object' && !Array.isArray(st) && st.on === true ? st : null;
   } catch { return null; } // flag ausente o invalido = apagado
 }
 
+/**
+ * Modos de fluency-4d que los hooks aplicarian ahora, para la etiqueta "4D".
+ * @returns {string[]} p. ej. ['caveman:full', 'verify']; el nivel `auto` no se muestra
+ */
 function fluencyModes() {
   const withLevel = (label, level) => (level !== 'auto' ? `${label}:${level}` : label);
   const caveman = readFlag('caveman');
@@ -242,6 +355,10 @@ function fluencyModes() {
 // Escritura atomica: tmp en el mismo dir + rename (un render concurrente nunca lee un JSON a medias).
 // En Windows el rename falla con EPERM/EBUSY/EACCES si otro proceso tiene el
 // destino abierto: se reintenta 5 veces con una espera corta y sincrona.
+// Pasa seguido: la barra se re-ejecuta cada pocos segundos y lee justo este
+// archivo, y antivirus/indexador lo abren al cambiar. El handle dura
+// milisegundos, asi que reintentar alcanza; fallar seria perder un `/barra`.
+// Atomics.wait duerme sin event loop (todo aca es sincrono) y sin busy-wait.
 const RENAME_RETRY = new Set(['EPERM', 'EBUSY', 'EACCES']);
 const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 function renameRetry(from, to) {
@@ -253,6 +370,13 @@ function renameRetry(from, to) {
   }
 }
 
+/**
+ * Escribe `obj` como JSON en `file` de forma atomica (tmp + rename con reintento).
+ * El tmp lleva pid + hora para que dos `mode` simultaneos no compartan archivo.
+ * @param {string} file ruta destino (crea la carpeta si falta)
+ * @param {object} obj
+ * @throws el error de escritura o de rename, despues de borrar el tmp
+ */
 function atomicWriteJson(file, obj) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
@@ -286,6 +410,15 @@ function limit(v) {
   return { used_percentage: p, resets_at: epochSec(v.resets_at) };
 }
 
+/**
+ * Normaliza el JSON de sesion de stdin a los datos que usan los 3 render. Todo
+ * campo se valida (tipo y rango): un JSON parcial, viejo o malicioso nunca tira,
+ * solo deja ese dato en null.
+ * @param {unknown} s JSON de sesion parseado (cualquier cosa no-objeto = {})
+ * @returns {object} model/effort/fast/thinking, uso de contexto (used, windowSize,
+ *   cut, pct), cost, branch, modes, limites del plan (five, week, cap) y cache
+ *   (pc, hit, minsLeft, cold, missCause, recache, ttlLong)
+ */
 function collect(s) {
   if (!isObj(s)) s = {};
   const m = isObj(s.model) ? s.model : {};
@@ -293,7 +426,8 @@ function collect(s) {
   const modelId = clean(m.id) || '';
   const cw = isObj(s.context_window) ? s.context_window : {};
   const size = num(cw.context_window_size);
-  const windowSize = size !== null && size > 0 ? size : (/\[1m\]|1M/i.test(modelId + model) ? 1_000_000 : 200_000);
+  // 1..MAX_TOKENS: una ventana de 1e-300 o 1e308 daria un % Infinity o 0 sin sentido.
+  const windowSize = size !== null && size >= 1 && size <= MAX_TOKENS ? size : (/\[1m\]|1M/i.test(modelId + model) ? 1_000_000 : 200_000);
   let used = isObj(cw.current_usage) ? sumTokens(cw.current_usage) : null;
   if (used === null) used = contextFromTranscript(s.transcript_path);
 
@@ -311,7 +445,9 @@ function collect(s) {
   if (!missCause && pc && isObj(pc.miss_causes)) {
     missCause = clean(Object.entries(pc.miss_causes).sort((a, b) => (num(b[1]) || 0) - (num(a[1]) || 0)).map(([k]) => k)[0]);
   }
-  const cost = isObj(s.cost) ? num(s.cost.total_cost_usd) : null;
+  // 0 <= costo < 1e9: toFixed(2) de un numero >= 1e21 sale en notacion cientifica.
+  const rawCost = isObj(s.cost) ? num(s.cost.total_cost_usd) : null;
+  const cost = rawCost !== null && rawCost >= 0 && rawCost < 1e9 ? rawCost : null;
   const recache = pc ? num(pc.recache_tokens_if_cold) : null;
   const ws = isObj(s.workspace) ? s.workspace.current_dir : undefined;
 
@@ -326,7 +462,12 @@ function collect(s) {
   };
 }
 
-// Cuanto gasta el proximo mensaje solo por releer el contexto (en tokens de input equivalentes), en palabras.
+/**
+ * Cuanto gasta el proximo mensaje solo por releer el contexto (en tokens de
+ * input equivalentes), en palabras: poco < 25k <= medio < 100k <= mucho.
+ * @param {object} d datos de collect()
+ * @returns {{word: string, color: string}|null} null si no se conoce el uso de contexto
+ */
 function spend(d) {
   if (d.used === null) return null;
   const eq = d.used * (d.cold ? (d.ttlLong ? CACHE_WRITE_1H : CACHE_WRITE_5M) : CACHE_READ);
@@ -335,8 +476,15 @@ function spend(d) {
   return { word: 'mucho', color: S.bad };
 }
 
-// El consejo mas urgente, en castellano llano: { level: ok|warn|bad, msg, action? }.
-// skipHeavy: el modo experto ya marca la charla larga con su etiqueta.
+/**
+ * El consejo mas urgente, en castellano llano. El orden de los `if` es la
+ * prioridad: primero el plan (bad), despues cache fria, charla larga, cache por
+ * vencer, hit ratio bajo y plan al 75% (warn).
+ * @param {object} d datos de collect()
+ * @param {{skipHeavy?: boolean}} [opts] skipHeavy: el modo experto ya marca la
+ *   charla larga con su etiqueta
+ * @returns {{level: 'ok'|'warn'|'bad', msg: string, action?: string}}
+ */
 function advice(d, { skipHeavy = false } = {}) {
   const reset = d.five && d.five.resets_at ? hhmm(d.five.resets_at * 1000) : null;
   if (d.cap) {
@@ -376,6 +524,8 @@ const LEVEL = { ok: [glyph('ok'), () => S.ok], warn: [glyph('warn'), () => S.war
 // Silencio por default: los avisos se ven solo con quiet:false (`mode avisos`).
 const QUIET = STATE.quiet !== false;
 
+// Lineas del consejo (icono + mensaje, y "→ accion" debajo). En silencio, o si
+// es "Todo bien" y no se pide withOk, ninguna.
 function adviceLines(a, { withOk }) {
   if (QUIET || (a.level === 'ok' && !withOk)) return [];
   const [icon, col] = LEVEL[a.level];
@@ -385,6 +535,12 @@ function adviceLines(a, { withOk }) {
 }
 
 // --- Modo simple: semaforo + accion ---
+/**
+ * Con un consejo pendiente (y avisos on) muestra solo el consejo; si no, una
+ * linea con el estado del plan y cuanto gasta cada mensaje.
+ * @param {object} d datos de collect()
+ * @returns {string[]} lineas ya coloreadas
+ */
 function renderSimple(d) {
   const a = advice(d);
   if (a.level !== 'ok' && !QUIET) return adviceLines(a, { withOk: true });
@@ -399,6 +555,12 @@ function renderSimple(d) {
 }
 
 // --- Modo normal: barras con etiquetas faciles ---
+/**
+ * Una linea: modelo, peso de la charla, plan 5h/semana y modos 4D; el consejo
+ * (si no es "Todo bien") va debajo.
+ * @param {object} d datos de collect()
+ * @returns {string[]} lineas ya coloreadas
+ */
 function renderNormal(d) {
   let head = paint(S.model + S.bold, `◆ ${d.model}`);
   if (d.effort) head += DOT + paint(S.text, d.effort);
@@ -425,6 +587,13 @@ function renderNormal(d) {
 }
 
 // --- Modo experto: todos los numeros ---
+/**
+ * Linea 1: modelo, contexto, costo, rama y modos 4D. Linea 2: plan (5h con
+ * proyeccion del tope, 7d) y cache. Debajo, el consejo si hay. Las lineas
+ * vacias se descartan.
+ * @param {object} d datos de collect()
+ * @returns {string[]} lineas ya coloreadas
+ */
 function renderExpert(d) {
   let head = paint(S.model + S.bold, `◆ ${d.model}`);
   if (d.effort) head += DOT + paint(S.text, d.effort);
@@ -483,7 +652,10 @@ function renderExpert(d) {
 
 const RENDER = { simple: renderSimple, normal: renderNormal, experto: renderExpert };
 
-// CLI: node statusline.js mode <simple|normal|experto>
+// CLI: node statusline.js mode <simple|normal|experto|silencio|avisos|tema>
+// (lo usa la skill /barra). Sin argumento imprime el estado (con el tema
+// efectivo, THEME, el mismo que pinta el render) y sale 0; con uno
+// invalido, el uso y sale 1. Preserva las demas claves del archivo.
 if (process.argv[2] === 'mode') {
   const m = process.argv[3];
   const st = STATE;
@@ -495,7 +667,7 @@ if (process.argv[2] === 'mode') {
   } else if (isTheme(m)) {
     st.theme = m;
   } else {
-    console.log(`Modo actual: ${readMode(st)} (${avisos()}, tema ${clean(st.theme) || THEME}). Uso: node statusline.js mode ${MODES.join('|')}|silencio|avisos|<tema: ${Object.keys(THEMES).join(', ')}>`);
+    console.log(`Modo actual: ${readMode(st)} (${avisos()}, tema ${THEME}). Uso: node statusline.js mode ${MODES.join('|')}|silencio|avisos|<tema: ${Object.keys(THEMES).join(', ')}>`);
     process.exit(m ? 1 : 0);
   }
   try {
@@ -510,13 +682,17 @@ if (process.argv[2] === 'mode') {
 }
 
 // Render con lo que llego; si stdin no cierra en 2 s se pinta igual y se sale.
+// Por que el timeout: si Claude Code (u otro runner) no cierra stdin, el proceso
+// quedaria colgado y la barra en blanco; mejor una barra con datos parciales que
+// ninguna. `done` evita pintar dos veces (timeout + end), y `unref` no deja que
+// el timer mantenga vivo el proceso cuando stdin ya termino.
 let input = '';
 let done = false;
 function render() {
   if (done) return;
   done = true;
   let s = {};
-  try { s = (JSON.parse(input) || {}); } catch { /* sin datos o cortado */ }
+  try { s = (parseJson(input) || {}); } catch { /* sin datos o cortado */ }
   process.stdout.write(RENDER[readMode(STATE)](collect(s)).join('\n'), () => process.exit(0));
 }
 const STDIN_TIMEOUT_MS = 2000;

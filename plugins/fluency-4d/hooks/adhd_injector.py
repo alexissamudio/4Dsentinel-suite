@@ -16,6 +16,15 @@ el flag.
 
 Precedencia: caveman gana si ambos flags estan ON (mutex de facto). Los
 subagentes no reciben la directiva.
+
+Evento: UserPromptSubmit (matcher .*), registrado en hooks/hooks.json.
+Stdin: payload del evento; solo mira `agent_type`.
+Stdout: {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+"additionalContext": DIRECTIVA[level]}}.
+Estado: lee ~/.claude/fluency4d/adhd.json y caveman.json (load_adhd /
+load_caveman); no escribe nada.
+Pass-through (exit 0 sin stdout): payload vacio o invalido, subagente, caveman
+ON, o adhd.json ausente / OFF / con level fuera de auto|lite|full.
 """
 
 from __future__ import annotations

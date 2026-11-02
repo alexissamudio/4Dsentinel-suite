@@ -26,6 +26,22 @@ Re-armado dual (v0.4):
 El hook solo inyecta la instruccion: Claude escribe los archivos. El estado
 se escribe en cada tool call (refresca el TTL de 4 h en sesiones activas:
 efecto benigno).
+
+En la practica corre en modo fallback: la version actual de Claude Code no
+manda context_window.used_percentage al hook, pero si transcript_path.
+
+Evento: PostToolUse (matcher .*), registrado en hooks/hooks.json.
+Stdin: payload del evento; usa `context_window.used_percentage` o
+`transcript_path` (solo su tamano), `permission_mode`, `cwd`, `agent_type` y
+`session_id` para la clave.
+Stdout: {"hookSpecificOutput": {"hookEventName": "PostToolUse",
+"additionalContext": checkpoint_text(...)}} cuando dispara.
+Estado: <temp>/fluency4d/<clave>-ckpt.json. Nativo: `fired`, `last_seen_pct`.
+Fallback: `last_seen_tokens`, `last_fired_tokens`. Compartido: `disparos`
+(cuantas veces disparo, en cualquier modo). Legado v0.2: `checkpoint_disparado`.
+Pass-through: payload vacio o invalido, subagente, FLUENCY_4D_SAVE_PCT <= 0,
+plan mode (sin tocar el estado), cwd sin carpeta .claude/, sin dato de uso, o
+no se cruzo el umbral / la cadencia.
 """
 
 from __future__ import annotations
@@ -47,6 +63,7 @@ from hook_utils import (
     read_stdin_safe,
     save_state,
     session_key,
+    state_num,
 )
 
 DEFAULT_THRESHOLD = 50
@@ -76,7 +93,12 @@ def _checkpoint_interval_tokens() -> int:
 
 
 def usage_value(data: dict[str, Any]) -> tuple[float, bool] | None:
-    """Devuelve (valor, es_nativo): pct nativo, o tokens estimados SIN cap."""
+    """Devuelve (valor, es_nativo): pct nativo, o tokens estimados SIN cap.
+
+    El fallback estima tokens como bytes/4 del transcript. Sin cap a proposito:
+    topearlo (p. ej. a la ventana) congelaba el valor y la cadencia de tokens
+    dejaba de re-disparar. None si no hay ningun dato utilizable.
+    """
     context_window = data.get("context_window")
     if isinstance(context_window, dict):
         pct = context_window.get("used_percentage")
@@ -99,6 +121,11 @@ def usage_value(data: dict[str, Any]) -> tuple[float, bool] | None:
 
 
 def parse_threshold() -> int:
+    """Umbral de % del modo nativo (FLUENCY_4D_SAVE_PCT, default 50).
+
+    Acepta "50" o "50.5" (se trunca). <= 0 desactiva el hook en ambos modos;
+    un valor invalido cae al default en vez de desactivarlo.
+    """
     raw = os.environ.get("FLUENCY_4D_SAVE_PCT", str(DEFAULT_THRESHOLD))
     try:
         return int(float(raw))
@@ -110,6 +137,7 @@ def parse_threshold() -> int:
 
 
 def checkpoint_text(value: float, es_nativo: bool) -> str:
+    """Texto de la instruccion: % de contexto (nativo) o tokens acumulados (fallback)."""
     if es_nativo:
         head = f"Contexto ~{min(value, 100.0):.0f}% usado (fluency-4d)."
     else:
@@ -166,7 +194,9 @@ def main() -> None:
         # El re-arme por compactacion (abajo) lo vuelve a armar si corresponde.
         if "last_seen_pct" not in state and state.get("disparos"):
             state["fired"] = True
-        last_seen = float(state.get("last_seen_pct", 0))
+        # state_num: un campo de tipo raro (last_seen_pct = "abc") hacia
+        # lanzar float() antes de save_state -> pass-through hasta vencer el TTL.
+        last_seen = state_num(state.get("last_seen_pct"))
         if pct < last_seen - NATIVE_DROP_POINTS:
             state["fired"] = False  # compactacion detectada: re-armar
         state["last_seen_pct"] = pct
@@ -177,8 +207,8 @@ def main() -> None:
     else:
         tokens = value
         interval = _checkpoint_interval_tokens()  # cadencia absoluta, no % de ventana
-        last_seen = float(state.get("last_seen_tokens", 0))
-        last_fired = float(state.get("last_fired_tokens", 0))
+        last_seen = state_num(state.get("last_seen_tokens"))
+        last_fired = state_num(state.get("last_fired_tokens"))
         # Migracion desde estado v0.2 (flag viejo sin ancla) O un disparo previo
         # del OTRO modo (nativo): sembrar el ancla de tokens en la PRIMERA
         # observacion fallback para no duplicar al togglear. Tras el primer fire
@@ -198,7 +228,7 @@ def main() -> None:
         display_value = tokens
 
     if fire:
-        state["disparos"] = int(state.get("disparos", 0)) + 1
+        state["disparos"] = int(state_num(state.get("disparos"))) + 1
     save_state(key, state)  # last_seen se persiste SIEMPRE, en ambos modos
 
     if fire:

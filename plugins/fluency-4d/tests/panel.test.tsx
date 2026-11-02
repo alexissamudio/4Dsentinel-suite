@@ -443,6 +443,29 @@ test('el esfuerzo actual sale de modelSettings, que pisa al global', async ($, o
   await ui.unmount()
 })
 
+// Mismo formato que fmtTokens de statusline.js: M exacto sin decimales ("1M",
+// como la barra), M no exacto con 2 y k con 1.
+for (const [window, shown] of [
+  [1_000_000, '1M'],
+  [1_500_000, '1.50M'],
+  [250_000, '250.0k'],
+] as const) {
+  test(`auto-compact fuera de las opciones (${window}) se muestra como ${shown}`, async ($, on) => {
+    engine(on, { autoCompactWindow: window })
+    await $.command.run(panel('sesion'))
+    const ui = await $.ui.mount({
+      plugin: PLUGIN,
+      component: 'Pane',
+      requestId: PANE_ID,
+      surface: 'terminal',
+      props: paneProps(),
+    })
+    const text = (await ui.find({ type: 'Button', key: 'session.autocompact' }))?.text
+    expect(text).toMatch(new RegExp(`‹ ${shown.replace('.', '\\.')} › *$`))
+    await ui.unmount()
+  })
+}
+
 test('la fila Tema de Claude aplica config.set solo al Guardar', async ($, on) => {
   const eng = engine(on)
   await $.command.run(panel('barra'))
@@ -1355,4 +1378,123 @@ test('aviso de caché: tras recargar el mod usa el TTL real del archivo (60 min)
   const mins = Number(/~(\d+) min/.exec(cacheToasts()[0] ?? '')?.[1])
   expect(mins).toBeGreaterThanOrEqual(1)
   expect(mins).toBeLessThanOrEqual(4)
+})
+
+// Un valor de statusline.json con toString/valueOf no callable ({"toString":[]})
+// hacía tirar Number(); el panel lo trata como sin dato (50%, igual que la barra).
+for (const raw of [
+  '{"toString":[]}',
+  '{"valueOf":[]}',
+  '[0.25]',
+  '"Infinity"',
+  '"1e400"',
+  '"abc"',
+  '""',
+  'true',
+  '1',
+  '-0.25',
+]) {
+  test(`cutFraction hostil (${raw}) en statusline.json: el panel muestra 50% y no se cae`, async ($, on) => {
+    const eng = engine(on)
+    eng.files[`${DIR}/statusline.json`] = `{"mode":"normal","cutFraction":${raw}}`
+    await $.command.run(panel('barra'))
+    const ui = await $.ui.mount({
+      plugin: PLUGIN,
+      component: 'Pane',
+      requestId: PANE_ID,
+      surface: 'terminal',
+      props: paneProps(),
+    })
+    expect((await ui.find({ type: 'Button', key: 'bar.cut' }))?.text).toMatch(/‹ 50% › *$/)
+    expect((await ui.find({ type: 'Button', key: 'bar.mode' }))?.text).toMatch(/‹ normal › *$/)
+    await ui.unmount()
+  })
+}
+
+test('cutFraction como string numérico ("0.25") vale igual que el número', async ($, on) => {
+  const eng = engine(on)
+  eng.files[`${DIR}/statusline.json`] = '{"cutFraction":"0.25"}'
+  await $.command.run(panel('barra'))
+  const ui = await $.ui.mount({
+    plugin: PLUGIN,
+    component: 'Pane',
+    requestId: PANE_ID,
+    surface: 'terminal',
+    props: paneProps(),
+  })
+  expect((await ui.find({ type: 'Button', key: 'bar.cut' }))?.text).toMatch(/‹ 25% › *$/)
+  await ui.unmount()
+})
+
+// autoCompactWindow no finito: antes pasaba el guard Number(value) > 0 y salía "InfinityM".
+for (const window of ['Infinity', '1e400', '-5', 'abc']) {
+  test(`auto-compact no finito o inválido (${window}) se muestra tal cual, sin "InfinityM"`, async ($, on) => {
+    engine(on, { autoCompactWindow: window })
+    await $.command.run(panel('sesion'))
+    const ui = await $.ui.mount({
+      plugin: PLUGIN,
+      component: 'Pane',
+      requestId: PANE_ID,
+      surface: 'terminal',
+      props: paneProps(),
+    })
+    const text = (await ui.find({ type: 'Button', key: 'session.autocompact' }))?.text ?? ''
+    expect(text).not.toMatch(/InfinityM|—M/)
+    expect(text).toMatch(new RegExp(`‹ ${window} › *$`))
+    await ui.unmount()
+  })
+}
+
+test('auto-compact 999_999 se muestra 1.00M (no 1000.0k), como la barra', async ($, on) => {
+  engine(on, { autoCompactWindow: 999_999 })
+  await $.command.run(panel('sesion'))
+  const ui = await $.ui.mount({
+    plugin: PLUGIN,
+    component: 'Pane',
+    requestId: PANE_ID,
+    surface: 'terminal',
+    props: paneProps(),
+  })
+  expect((await ui.find({ type: 'Button', key: 'session.autocompact' }))?.text).toMatch(
+    /‹ 1\.00M › *$/,
+  )
+  await ui.unmount()
+})
+
+test('BOM: statusline.json, flags y panel4d.json con BOM se leen; Guardar los reescribe sin BOM', async ($, on) => {
+  const eng = engine(on)
+  eng.files[`${DIR}/statusline.json`] = '﻿{"mode":"simple","theme":"gruvbox","cutFraction":0.75,"extra":1}'
+  eng.files[`${DIR}/caveman.json`] = '﻿{"on": true, "level": "full"}'
+  eng.files[`${DIR}/verify.json`] = '﻿{"on": true}'
+  eng.files[`${DIR}/panel4d.json`] = '﻿{"notify":true,"cacheTtlMin":60}'
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: HOME, surface: 'terminal', isInteractive: true })
+  await $.command.run(panel('barra'))
+  const ui = await $.ui.mount({
+    plugin: PLUGIN,
+    component: 'Pane',
+    requestId: PANE_ID,
+    surface: 'terminal',
+    props: paneProps(),
+  })
+  expect((await ui.find({ type: 'Button', key: 'bar.mode' }))?.text).toMatch(/‹ simple › *$/)
+  expect((await ui.find({ type: 'Button', key: 'bar.theme' }))?.text).toMatch(/‹ gruvbox › *$/)
+  expect((await ui.find({ type: 'Button', key: 'bar.cut' }))?.text).toMatch(/‹ 75% › *$/)
+  await ui.press({ key: 'tab-modos' })
+  expect((await ui.find({ type: 'Button', key: 'mode.caveman' }))?.text).toMatch(/‹ full › *$/)
+  expect((await ui.find({ type: 'Button', key: 'mode.verify' }))?.text).toMatch(/‹ on › *$/)
+  await ui.press({ key: 'tab-sesion' })
+  expect((await ui.find({ type: 'Button', key: 'notify.ttl' }))?.text).toMatch(/‹ 1 h › *$/)
+  // Un cambio en la barra: el archivo queda sin BOM y con las claves ajenas.
+  await ui.press({ key: 'tab-barra' })
+  await ui.press({ key: 'bar.mode' }) // simple -> normal
+  await ui.press({ key: 'save' })
+  expect(eng.files[`${DIR}/statusline.json`]?.charCodeAt(0)).not.toBe(0xfeff)
+  expect(eng.json('statusline')).toEqual({
+    mode: 'normal',
+    theme: 'gruvbox',
+    cutFraction: 0.75,
+    extra: 1,
+  })
+  await ui.unmount()
 })

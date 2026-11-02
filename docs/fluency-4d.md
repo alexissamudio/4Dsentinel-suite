@@ -130,6 +130,9 @@ Para releases, sincronizá la versión en los 3 lugares con:
 uv run scripts/fluency_bump_version.py --set X.Y.Z
 ```
 
+Cómo está armado por dentro (hooks, estado en disco, barra, panel, setup y cómo
+extenderlo): [guía de arquitectura](fluency-4d-arquitectura.md).
+
 ## Créditos
 
 - Marco AI Fluency: Rick Dakan (Ringling College) y Joseph Feller (University College Cork),
