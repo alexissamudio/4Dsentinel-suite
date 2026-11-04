@@ -120,7 +120,7 @@ def bridges_oversize_line(cwd: Path) -> str | None:
 
     load_bridges_temas lo ignora entero (solo log_debug con HOOK_DEBUG=1), asi
     que sin esto el usuario no se entera de por que no hay puentes. Solo stat
-    (no lee el archivo): barato dentro del timeout de 5 s. Nunca lanza.
+    (no lee el archivo): barato dentro del timeout del hook. Nunca lanza.
     """
     try:
         path = cwd / ".claude" / "docs" / "bridges.json"
@@ -218,7 +218,7 @@ def tema_lines(cwd: Path, prompt: str, state: dict[str, Any]) -> list[str]:
     La lectura va por load_bridges_temas (hook_utils): BOM UTF-8 tolerado, JSON
     invalido / anidado profundo (RecursionError) / no-objeto -> sin puentes, y
     topes MAX_BRIDGES_BYTES (archivo mas pesado: se ignora) y MAX_BRIDGES_TEMAS
-    (solo los primeros temas) para no pasarse del timeout de 5 s del hook, que
+    (solo los primeros temas) para no pasarse del timeout del hook, que
     se llevaria puesta tambien la inyeccion de arranque. Un `state` con
     `temas_inyectados` de tipo raro se trata como lista vacia (str_list).
     """

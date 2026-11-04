@@ -81,8 +81,10 @@ sumalo a esa tupla (lo verifica `tests/scripts/test_build_harness.py`).
 
 ## 2. Eventos y hooks
 
-Registro: `hooks/hooks.json`. Todos los hooks Python tienen `timeout: 5` y un
-`statusMessage`. Los cinco de `UserPromptSubmit` son grupos separados con `matcher: ".*"`
+Registro: `hooks/hooks.json`. Todos los hooks Python tienen `timeout: 15` y un
+`statusMessage`. El margen es para el arranque en frío de `uv run` en Windows: en el
+primer prompt de una sesión los hooks midieron p90 ≈ 4 s y un pico de 5,07 s, así que con
+`timeout: 5` Claude Code los mataba y se perdía la inyección (en régimen tardan ~0,3 s). Los cinco de `UserPromptSubmit` son grupos separados con `matcher: ".*"`
 (`hooks.json:3-59`); **no dependen del orden entre ellos**: la precedencia ADHD/Caveman se
 resuelve leyendo los flags, no por orden de ejecución.
 
@@ -94,7 +96,7 @@ trampas: [`hooks.md`](../.claude/docs/hooks.md).
 
 | Hook | Evento (`hooks.json`) | Qué hace | Estado que usa |
 |------|----------------------|----------|----------------|
-| `bridge_router.py` | `UserPromptSubmit` (`:4-14`) | Primer prompt: si existen `.claude/docs/lecciones.md` / `estado-sesion.md` del proyecto, pide leerlos (con la edad del estado; > 24 h = "verificá vigencia") (`arranque_lines`, `:111-146`). Cada prompt: matchea keywords de `.claude/docs/bridges.json` (casefold, sin acentos, lookarounds, `keyword_matches` `:87`) e inyecta "LEÉ `<archivo>`"; máx. 2 temas por prompt (`MAX_TEMAS_POR_PROMPT`, `:63`) + 1 sugerencia de tema relacionado (`:233-267`). Campos de `bridges.json` pasan por `sanitize_field` / `safe_doc_path` (`hook_utils.py:96,123`). `bridges.json` se lee con `load_bridges_temas` (`hook_utils.py:238`): BOM tolerado, inválido/anidado profundo → sin puentes, y topes `MAX_BRIDGES_BYTES` = 1 MB (más pesado: se ignora) y `MAX_BRIDGES_TEMAS` = 500 (solo los primeros) para no pasarse del timeout de 5 s, que se llevaría también el arranque. Un `prompt` no-string cuenta como `""` (sin keywords; el arranque sigue). Emisión única al final (`:310-322`) | temp `-bridge`; `stats.json` vía `bump_stats` (`:316`) |
+| `bridge_router.py` | `UserPromptSubmit` (`:4-14`) | Primer prompt: si existen `.claude/docs/lecciones.md` / `estado-sesion.md` del proyecto, pide leerlos (con la edad del estado; > 24 h = "verificá vigencia") (`arranque_lines`, `:111-146`). Cada prompt: matchea keywords de `.claude/docs/bridges.json` (casefold, sin acentos, lookarounds, `keyword_matches` `:87`) e inyecta "LEÉ `<archivo>`"; máx. 2 temas por prompt (`MAX_TEMAS_POR_PROMPT`, `:63`) + 1 sugerencia de tema relacionado (`:233-267`). Campos de `bridges.json` pasan por `sanitize_field` / `safe_doc_path` (`hook_utils.py:96,123`). `bridges.json` se lee con `load_bridges_temas` (`hook_utils.py:238`): BOM tolerado, inválido/anidado profundo → sin puentes, y topes `MAX_BRIDGES_BYTES` = 1 MB (más pesado: se ignora) y `MAX_BRIDGES_TEMAS` = 500 (solo los primeros) para no pasarse del timeout del hook, que se llevaría también el arranque. Un `prompt` no-string cuenta como `""` (sin keywords; el arranque sigue). Emisión única al final (`:310-322`) | temp `-bridge`; `stats.json` vía `bump_stats` (`:316`) |
 | `plan_calibrator.py` | `UserPromptSubmit` (`:15-25`) | Edge-trigger: solo en la transición `permission_mode` no-plan → `plan` (`:83`) inyecta `PROTOCOLO` (`:51`): tarea grande → advisor → plan → critic; chica → plan liviano | temp `-calib` (`last_mode`) |
 | `caveman_injector.py` | `UserPromptSubmit` (`:26-36`) | Si `load_caveman()` devuelve el flag, reinyecta `DIRECTIVA[level]` (`:52`) **en cada turno** (sin edge-trigger: eso es la persistencia) | lee `caveman.json` |
 | `adhd_injector.py` | `UserPromptSubmit` (`:37-47`) | Igual que caveman con `DIRECTIVA` (`:58`), pero cede si caveman está activo (`:95`) | lee `adhd.json`, `caveman.json` |

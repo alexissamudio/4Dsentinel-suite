@@ -57,12 +57,12 @@ MAX_STDIN_BYTES = 1024 * 1024
 _BOM = chr(0xFEFF)  # BOM UTF-8 ya decodificado (chr: los .py son ASCII)
 STATE_TTL_SECONDS = 4 * 60 * 60  # 4 horas
 
-# Topes de bridges.json. Los hooks tienen timeout de 5 s en hooks.json (y uv se
-# come parte en el arranque): un bridges.json de 5 MB / 60k temas tardaba > 5 s
-# en tema_lines, Claude Code mataba el hook y se perdia TAMBIEN la inyeccion de
-# arranque. Un bridges.json real pesa unos KB con decenas de temas; por encima
-# de estos topes se ignora (archivo) o se trunca (temas) en vez de arriesgar el
-# timeout.
+# Topes de bridges.json. El timeout del hook en hooks.json tambien paga el
+# arranque de uv (hasta ~5 s en frio en Windows): un bridges.json de 5 MB / 60k
+# temas tardaba > 5 s en tema_lines y, con el timeout de 5 s de entonces, Claude
+# Code mataba el hook y se perdia TAMBIEN la inyeccion de arranque. Un
+# bridges.json real pesa unos KB con decenas de temas; por encima de estos topes
+# se ignora (archivo) o se trunca (temas) en vez de arriesgar el timeout.
 MAX_BRIDGES_BYTES = 1024 * 1024
 MAX_BRIDGES_TEMAS = 500
 
