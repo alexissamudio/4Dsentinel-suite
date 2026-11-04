@@ -57,12 +57,12 @@ MAX_STDIN_BYTES = 1024 * 1024
 _BOM = chr(0xFEFF)  # BOM UTF-8 ya decodificado (chr: los .py son ASCII)
 STATE_TTL_SECONDS = 4 * 60 * 60  # 4 horas
 
-# Topes de bridges.json. Los hooks tienen timeout de 5 s en hooks.json (y uv se
-# come parte en el arranque): un bridges.json de 5 MB / 60k temas tardaba > 5 s
-# en tema_lines, Claude Code mataba el hook y se perdia TAMBIEN la inyeccion de
-# arranque. Un bridges.json real pesa unos KB con decenas de temas; por encima
-# de estos topes se ignora (archivo) o se trunca (temas) en vez de arriesgar el
-# timeout.
+# Topes de bridges.json. El timeout del hook en hooks.json tambien paga el
+# arranque de uv (hasta ~5 s en frio en Windows): un bridges.json de 5 MB / 60k
+# temas tardaba > 5 s en tema_lines y, con el timeout de 5 s de entonces, Claude
+# Code mataba el hook y se perdia TAMBIEN la inyeccion de arranque. Un
+# bridges.json real pesa unos KB con decenas de temas; por encima de estos topes
+# se ignora (archivo) o se trunca (temas) en vez de arriesgar el timeout.
 MAX_BRIDGES_BYTES = 1024 * 1024
 MAX_BRIDGES_TEMAS = 500
 
@@ -155,12 +155,22 @@ def read_stdin_safe(timeout: float = 5.0) -> str:
 
     Lee como maximo MAX_STDIN_BYTES. Devuelve "" si vence el timeout o la lectura
     falla: el hilo daemon queda colgado pero no impide que el proceso termine.
+
+    Decodifica SIEMPRE como UTF-8 (el harness manda el JSON en UTF-8): leer con
+    sys.stdin.read() usaba el encoding del locale (cp1252 en Windows) y los
+    prompts con tildes, enie o signos invertidos llegaban como mojibake (keywords con tilde sin
+    matchear, saludos no reconocidos). Bytes invalidos -> U+FFFD, sin excepcion.
+    Si stdin no tiene .buffer (p. ej. reemplazado por un StringIO), se lee texto.
     """
     result = {"data": ""}
 
     def _read() -> None:
         try:
-            result["data"] = sys.stdin.read(MAX_STDIN_BYTES)
+            buf = getattr(sys.stdin, "buffer", None)
+            if buf is not None:
+                result["data"] = buf.read(MAX_STDIN_BYTES).decode("utf-8", "replace")
+            else:
+                result["data"] = sys.stdin.read(MAX_STDIN_BYTES)
         except Exception:
             result["data"] = ""
 

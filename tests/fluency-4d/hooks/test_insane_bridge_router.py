@@ -227,7 +227,13 @@ def test_fuzz_prompt_arbitrario(prompt: str) -> None:
     with fresh_root() as d:
         root = Path(d)
         project = make_project(root, json.dumps(doc))
-        assert_arranque(run_inproc(root, project, prompt))
+        out = run_inproc(root, project, prompt)
+        # Un saludo/acuse corto NO consume el arranque (queda para el pedido real);
+        # cualquier otro prompt lo inyecta.
+        if bridge_router.es_prompt_trivial(prompt):
+            assert LECCIONES not in context_of(out)
+        else:
+            assert_arranque(out)
         # Con la keyword aislada por espacios en medio de la basura, matchea.
         out = run_inproc(root, project, prompt + " " + VALID_KW + " " + prompt, session="s2")
         assert VALID_FILE in context_of(out)
@@ -451,7 +457,7 @@ def test_5mb_entra_holgado_en_el_timeout_del_hook() -> None:
         lines = bridge_router.tema_lines(project, VALID_KW, {})
         elapsed = time.perf_counter() - t0
         assert lines == []  # > MAX_BRIDGES_BYTES: sin puentes
-        # 1 s in-process deja margen para el arranque de uv dentro de los 5 s.
+        # 1 s in-process deja margen para el arranque de uv dentro del timeout.
         assert elapsed < 1.0, f"tema_lines tardo {elapsed:.2f}s con 5 MB"
         assert_arranque(run_inproc(root, project, VALID_KW))
 

@@ -28,7 +28,12 @@ def fuzz_examples(full: int, floor: int = 25) -> int:
 
 @pytest.fixture()
 def run_hook(tmp_path):
-    def _run(hook_name: str, payload: dict, env_extra: dict | None = None) -> str:
+    def _run(
+        hook_name: str, payload: dict, env_extra: dict | None = None, raw_utf8: bool = False
+    ) -> str:
+        # raw_utf8=True manda el JSON con los no-ASCII crudos (como JSON.stringify
+        # de Node en Claude Code/OpenCode) en vez de escapados \uXXXX: es lo que
+        # expone problemas de encoding del stdin del hook.
         env = {
             **os.environ,
             "TMPDIR": str(tmp_path),
@@ -68,7 +73,7 @@ def run_hook(tmp_path):
             ]
         result = subprocess.run(
             cmd,
-            input=json.dumps(payload),
+            input=json.dumps(payload, ensure_ascii=not raw_utf8),
             capture_output=True,
             text=True,
             encoding="utf-8",
