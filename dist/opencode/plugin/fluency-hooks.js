@@ -46,7 +46,9 @@ const KNOWN_SUBAGENTS = new Set(["advisor", "auditor-de-redaccion", "bug-hunter"
 // Python en Windows lee stdin con la codepage ANSI (cp1252) salvo que se
 // fuerce UTF-8: sin esto los prompts con acentos rompen los keywords.
 const HOOK_ENV = { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" };
-const HOOK_TIMEOUT_MS = 5000; // por hook (corren en paralelo)
+// Por hook (corren en paralelo): el mayor `timeout` de UserPromptSubmit en
+// fluency-4d/hooks/hooks.json, el mismo presupuesto que Claude Code y Codex.
+const HOOK_TIMEOUT_MS = 15000;
 const API_TIMEOUT_MS = 3000; // consultas a la API de OpenCode
 const CACHE_MAX = 500; // entradas por cache (prompts v2, sesiones, cwd)
 // Topes de tamano (en caracteres JS). Los hooks reales emiten ~1-2 KB por

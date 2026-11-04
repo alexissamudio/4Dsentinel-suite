@@ -615,6 +615,15 @@ def oc_rewrite_refs(text: str, skill_dir: Path | None, plugin_root: Path) -> str
     return BACKTICK_REF.sub(sub, text)
 
 
+def hook_timeout_ms(hooks: dict, event: str) -> int:
+    """Mayor `timeout` (s) de los hooks de `event` en hooks.json, en ms (sin
+    timeout explicito cuenta el default de 60 s de Claude Code)."""
+    secs = [hk.get("timeout", 60)
+            for group in hooks.get("hooks", {}).get(event, [])
+            for hk in group.get("hooks", [])]
+    return int(max(secs, default=60) * 1000)
+
+
 def opencode_userprompt_scripts(hooks: dict) -> list[str]:
     """Rutas absolutas de los .py de UserPromptSubmit (para el shim JS)."""
     return [str(FLUENCY_ROOT / "hooks" / name)
@@ -817,7 +826,9 @@ const KNOWN_SUBAGENTS = new Set([@@SUBAGENTS@@]);
 // Python en Windows lee stdin con la codepage ANSI (cp1252) salvo que se
 // fuerce UTF-8: sin esto los prompts con acentos rompen los keywords.
 const HOOK_ENV = { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" };
-const HOOK_TIMEOUT_MS = 5000; // por hook (corren en paralelo)
+// Por hook (corren en paralelo): el mayor `timeout` de UserPromptSubmit en
+// fluency-4d/hooks/hooks.json, el mismo presupuesto que Claude Code y Codex.
+const HOOK_TIMEOUT_MS = @@TIMEOUT_MS@@;
 const API_TIMEOUT_MS = 3000; // consultas a la API de OpenCode
 const CACHE_MAX = 500; // entradas por cache (prompts v2, sesiones, cwd)
 // Topes de tamano (en caracteres JS). Los hooks reales emiten ~1-2 KB por
@@ -1265,6 +1276,7 @@ def build_opencode_plugin(hooks: dict, agent_names: list[str]) -> str:
         OPENCODE_SHIM_TEMPLATE.replace("@@HOOKS@@", js_list)
         .replace("@@REWRITES@@", js_rewrites)
         .replace("@@SUBAGENTS@@", js_sub)
+        .replace("@@TIMEOUT_MS@@", str(hook_timeout_ms(hooks, "UserPromptSubmit")))
         .replace("@@V1@@", M.OPENCODE_V1_VERSION)
         .replace("@@V2@@", M.OPENCODE_V2_VERSION)
     )
