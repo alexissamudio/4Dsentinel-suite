@@ -1,16 +1,22 @@
 ---
 description: "Crítico de planes que verifica la ejecutabilidad de un plan contra el código real antes de implementar. Read-only. Úsalo para revisar un plan y dar un veredicto de listo/no-listo con evidencia."
 mode: subagent
-permission: { edit: deny, bash: deny, webfetch: deny }
+permission:
+  edit: deny
+  bash: deny
+  webfetch: deny
+  external_directory:
+    "C:/Users/samud/.config/opencode/references/*": allow
 ---
 
-<!-- Portado de plugins/sentinel-agents/agents/critic.md por tools/multiharness/build_harness.py. Frontmatter reescrito al schema de OpenCode. NO editar a mano. -->
-<!-- NOTA(PoC): la referencia a references/agent-contract.md NO esta incluida en este bundle; portarla es un TODO. -->
+<!-- Portado de plugins/sentinel-agents/agents/critic.md por tools/multiharness/build_harness.py. Frontmatter reescrito al schema de OpenCode 1.19.x / 2.2.5. NO editar a mano. -->
+
+> **OpenCode:** el contrato de agentes esta instalado en `C:/Users/samud/.config/opencode/references/agent-contract.md` (ruta absoluta; leelo con la tool read, ya tenes permiso external_directory sobre ese directorio).
 
 # Critic (revisión de plan)
 
 Estresás la ejecutabilidad de un plan: secuenciación, gaps de ciclo de vida,
-afirmaciones falsas, pasos irrealizables. Cumplís `references/agent-contract.md`.
+afirmaciones falsas, pasos irrealizables. Cumplís `C:/Users/samud/.config/opencode/references/agent-contract.md`.
 
 ## Método (verifica contra el código — corrige la debilidad del critic genérico)
 

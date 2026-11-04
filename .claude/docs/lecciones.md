@@ -155,3 +155,103 @@ candidato contra lo que ya está mergeado; si es idéntico, no hay delta que shi
 (diff/byte-compare). No vendas una mejora medida en 1 corrida de 3 reps sin verificar que
 el artefacto difiere; y no describas lo que mergeaste sin haber comparado su contenido real
 contra el original (git show BASE:archivo).
+
+## [2026-07-17] — Al delegar implementacion, verifica el LINT ademas de lo funcional
+**Contexto:** un subagente escribio `scripts/check_verdict_enums.py`; lo verifique corriendo el check
+(funcional, 11/11 OK) + ascii + agents, pero NO corri ruff. El CI fallo en "Ruff (lint + format check)"
+por 2 `E501` (lineas >100) -> ida y vuelta extra (fix + re-push + re-watch).
+**Leccion:** verificar el output de un subagente no es solo "funciona": el CI tiene ruff/format/mypy y el
+subagente no siempre los corre. SIN EVIDENCIA = NO ESTA HECHO incluye el LINT del repo, no solo los tests.
+**Como aplicar:** al recibir codigo de un subagente, antes de pushear correr los MISMOS checks que el CI
+(`uvx ruff check .` ; `uvx ruff format --check .` ; mypy) ademas de lo funcional — o instruir al subagente
+a correrlos y pegar la salida.
+
+## [2026-07-17] — Verifica el remoto REAL (clone --mirror) antes de un force-push de reescritura
+**Contexto:** pedido de "sacar un contributor del historial". El repo LOCAL mostraba 21 commits suyos y
+autorice reescribir toda la historia + force-push de todas las refs. Antes de disparar, un `git clone
+--mirror` del remoto mostro que el remoto YA estaba limpio (0 commits suyos): la reescritura se habia hecho
+antes (quedaban `refs/original/*` locales de un filter-branch viejo + remote-tracking stale). El force-push
+habria reescrito ~126 commits para NADA, rompiendo los clones del equipo.
+**Leccion:** el estado LOCAL (ramas stale, `refs/original/*`, reflog) NO es el del remoto. Antes de una
+operacion destructiva/irreversible sobre un repo compartido, verifica el remoto real. La UI de
+"Contributors" de GitHub es cache (se computa del remoto, se recalcula asincrono; un push la gatilla;
+mailmap no la cambia).
+**Como aplicar:** para "sacar X del historial" -> `git clone --mirror <url>` + `git log --author` sobre el
+mirror ANTES de tocar nada. `remote prune` + borrar `refs/original/*` + `gc` limpia el residuo LOCAL sin
+force-push.
+
+## [2026-07-23] — `cat <tmp> | clip` rompe UTF-8 en Windows (codepage OEM)
+**Contexto:** el paso 7 de `/handoff` copiaba al portapapeles con `cat <tmp> | clip`. La captura del
+usuario mostraba mojibake (`Sección`->`Secci├│n`). El archivo en disco estaba bien (UTF-8); solo se
+rompia la COPIA.
+**Leccion:** `clip.exe` decodifica stdin segun la codepage OEM activa de la consola (cp437/cp850); si
+no es UTF-8, mis-decodifica los bytes multibyte y guarda mojibake en el portapapeles. `cp437` reproduce
+byte-por-byte el mojibake. Es dependiente de la codepage, no siempre falla -> trampa intermitente.
+**Como aplicar:** en Windows copiar al portapapeles con `Get-Content -Raw -Encoding UTF8 <tmp> |
+Set-Clipboard` (codepage-independiente), NUNCA `| clip`. Fix aplicado en el skill handoff (commit 72570a9).
+
+## [2026-07-23] — Codex CLI adopto el contrato de hooks de Claude, pero sus hooks son TUI-only
+**Contexto:** al portar la suite a Codex CLI 0.130.0 (multi-harness), `codex exec` headless NO disparaba
+los hooks (ni por `config.toml [hooks]` ni por `hooks.json`), pese a que el `config` parseaba y la feature
+`CodexHooks` estaba activa.
+**Leccion:** (a) Codex adopto el schema de hooks de Claude casi verbatim (verificable con `grep -a` sobre
+el binario: `hook_event_name`/`permission_mode`/`hookSpecificOutput.additionalContext`/enum `plan`...);
+el mecanismo real de descubrimiento es `hooks.json` (formato Claude), no `config.toml [hooks]`. (b) Los
+hooks de Codex son del TUI interactivo; `codex exec` no los dispara (bug/limitacion conocida, openai/codex
+#17532). (c) `codex debug prompt-input` arma el prompt OFFLINE (sin cuenta) pero NO dispara hooks.
+**Como aplicar:** para probar hooks de Codex usar el TUI interactivo, no `exec`. Para un turno real sin la
+cuenta (workspace 402), `codex exec --oss --local-provider ollama -m <modelo>` corre local/gratis. Verificar
+schemas de binarios con `grep -aoE` antes de asumir incompatibilidad.
+
+## [2026-07-23] — Preguntar "mejora o es bloat" antes de construir una feature
+**Contexto:** ante "verifica el diff", el impulso fue planear una feature nueva (2 hooks + skill). El
+usuario freno: "se puede mejorar el plugin en si, para no meter por meter?". La respuesta correcta fue
+AFILAR una pieza existente (`discernment_gate.py`) en vez de agregar maquinaria.
+**Leccion:** muchas "features" ya estan cubiertas por piezas existentes (aca: la politica, el gate, los
+agentes verificadores ya existian; faltaba conectarlos). Los hooks tienen costo real (latencia 5s, tokens
+por turno, mantenimiento). Reusar/afilar > agregar.
+**Como aplicar:** antes de planear, chequear si la pieza ya existe y solo falta afilarla, o si una solucion
+mas barata (regla, flag, reuso) da el 80%. Ofrecer la altitud minima primero, escalar solo con evidencia.
+
+## [2026-11-02] — PRs apilados + squash: no borrar la rama base al mergear
+**Contexto:** se mergeo #19 con `--delete-branch`; GitHub CERRO #20 (apilado sobre esa rama) en vez de
+retargetearlo, y como el squash cambia los hashes hubo que rebasear y abrir #21. Ademas el CI solo corre
+en PRs contra main: el PR apilado nunca tuvo checks, y al llegar a Ubuntu fallaron 4 tests Win32-only.
+**Leccion:** con squash, el PR hijo necesita retarget (`gh pr edit N --base main`) ANTES de borrar la base,
+y luego `git rebase --onto origin/main <commit-squasheado>`. Tests con rutas Win32 llevan `skipif(not IS_NT)`.
+**Como aplicar:** al mergear una pila: retarget -> merge -> rebase del hijo; no confiar en "sin checks".
+Y no confundir el acumulado de tokens del hook de checkpoint con el contexto actual (el del panel).
+
+## [2026-11-02] — Rama ya squasheada en main: no mergear, cherry-pick sobre origin/main
+**Contexto:** `feature/multiharness-codex-opencode` (ae3e6e6) se habia mergeado como squash (#16, 9314eed).
+Al mergear origin/main encima, 9 conflictos add/add (incluido codigo de plugins). Ademas la `main` LOCAL estaba
+vieja: `git rev-list main...HEAD` decia "0 detras" cuando origin/main tenia 4 commits nuevos.
+**Leccion:** `git diff <rama> <squash>` vacio => la rama ya esta en main; el merge solo trae conflictos de
+historia. Rama nueva desde origin/main + cherry-pick del trabajo nuevo = mismo resultado, sin conflictos.
+**Como aplicar:** antes de mergear main, `git fetch` y comparar contra `origin/main` (no `main`); si hubo
+squash, chequear el diff de arbol y preferir cherry-pick.
+
+## [2026-11-02] — OpenCode: el contexto inyectado debe ser `synthetic:true` (y otros gotchas)
+**Contexto:** el shim empujaba el additionalContext como parte text normal en `chat.message` -> la TUI lo
+mostraba como si el usuario lo hubiera escrito. Verificado en el binario: la TUI filtra
+`type==="text" && !synthetic`. Otros: Python en Windows lee stdin cp1252 (acentos rompen keywords);
+sin `session_id` el state de hooks se fuga entre sesiones; `references/` fuera del proyecto requiere
+`permission.external_directory`; los hooks tambien se inyectaban en subagentes.
+**Leccion:** "smoke test con harness Node" no es E2E: estos bugs solo aparecen con `opencode run` +
+`opencode export <sid>` (ver partes reales) y la TUI. Y un archivo que dice "Generado por X" puede no
+serlo: 24 archivos de dist/opencode eran huerfanos; `check_harness` (DRIFT: sobra) lo destapo.
+**Como aplicar:** al portar a OpenCode, verificar por export (synthetic, orden de ids, partes del subagente);
+spawn de Python con `PYTHONUTF8=1`; correr check_harness ANTES de confiar en un dist/.
+
+## [2026-11-03] — Timeout de hooks: medir el arranque en frío, no la corrida en caliente
+**Contexto:** los 4-5 hooks `UserPromptSubmit` (`uv run --script`) dieron timeout a los 5 s en el
+primer prompt de una sesión. A mano y en caliente tardaban ~0,3 s (0,5 s los 5 en paralelo), así que
+"anda rápido" parecía cierto. Los transcripts (`hook_cancelled` / `hook_additional_context` vs el
+timestamp del prompt) mostraron otra cosa: primer prompt p90 ≈ 4 s, pico 5,07 s; el resto p99 ≈ 3,4 s.
+**Lección:** el presupuesto de un hook lo fija su peor caso (arranque en frío de uv/Python con la
+máquina ocupada abriendo la sesión), no la medición en caliente. Un timeout pegado a la cola descarta
+la salida en silencio.
+**Cómo aplicar:** antes de fijar o diagnosticar un `timeout`, medir la distribución de latencia desde
+los transcripts de `~/.claude/projects/*/*.jsonl` (separar primer prompt del resto) y dejar margen ≥ 2x
+sobre el pico. Un valor de timeout compartido entre harnesses (shim OpenCode, Codex) se deriva de
+`hooks.json`, no se copia.

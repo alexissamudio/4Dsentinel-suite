@@ -132,6 +132,131 @@ def validate_bundle(label: str, root: Path) -> bool:
     return err
 
 
+# Guardas OpenCode: fallan si vuelven los defectos del port verificados en
+# runtime real (contexto visible como texto del usuario, stdin cp1252, estado
+# fugado entre sesiones, nombres/rutas de Claude Code, commands-wrapper).
+OC_FORBIDDEN = (B.SENTINEL_NS, B.M.PLUGIN_ROOT_VAR)
+OC_PUSH_SYNTHETIC = re.compile(r"output\.parts\.push\(\{[^}]*\bsynthetic:\s*true\b", re.S)
+# Un solo archivo para OpenCode v1 (lee default.server) y v2 (exige default.id y
+# lee default.setup): sin `id`/`setup` la v2 lo marca "failed"; sin `server` la
+# v1 no lo carga.
+OC_DEFAULT_DUAL = re.compile(
+    r"export default \{\s*id:\s*\"[^\"]+\",\s*server:\s*\w+,\s*setup:\s*\w+,?\s*\};"
+)
+OC_SHIM_REQUIRED = (
+    ("session_id:", "el payload no pasa session_id (el estado se keyea por cwd)"),
+    ('PYTHONUTF8: "1"', "el hook corre sin PYTHONUTF8=1 (stdin cp1252 en Windows)"),
+    ("hook_event_name:", "el payload no pasa hook_event_name"),
+    ("permission_mode:", "el payload no pasa permission_mode (plan_calibrator)"),
+    ("isSubagent(sid, agent)", "v1: no se saltea la inyeccion en subagentes"),
+    ("isSubagent(r.sessionID, r.agent)", "v2: no se saltea la inyeccion en subagentes"),
+    ('"chat.message":', "v1: falta el hook chat.message"),
+    ('api.session.hook("context"', "v2: falta api.session.hook(\"context\")"),
+    ("Promise.all(USER_PROMPT_HOOKS", "los hooks no corren en paralelo"),
+)
+OC_SHIM_FORBIDDEN = (
+    ("spawnSync(", "spawnSync bloquea el event loop de OpenCode (usar spawn async)"),
+    ("session.synthetic(", "v2: api.session.synthetic persiste/duplica la inyeccion"),
+)
+
+
+def validate_opencode(root: Path) -> bool:
+    """Guardas especificas del bundle OpenCode. Devuelve True si hay error."""
+    err = False
+
+    def fail(msg: str) -> None:
+        nonlocal err
+        print("OPENCODE: " + msg)
+        err = True
+
+    shim = root / "plugin" / "fluency-hooks.js"
+    text = shim.read_text(encoding="utf-8") if shim.is_file() else ""
+    if not text:
+        fail("falta plugin/fluency-hooks.js")
+    else:
+        if not OC_PUSH_SYNTHETIC.search(text):
+            fail("la parte inyectada en output.parts no lleva synthetic: true")
+        if not OC_DEFAULT_DUAL.search(text):
+            fail("shim: el default export no es { id, server, setup } (v1 + v2)")
+        for needle, why in OC_SHIM_REQUIRED:
+            if needle not in text:
+                fail("shim: " + why)
+        for needle, why in OC_SHIM_FORBIDDEN:
+            if needle in text:
+                fail("shim: " + why)
+
+    kb = root / "references" / "iso-27000"
+    for f in sorted(root.rglob("*")):
+        if not f.is_file() or kb in f.parents:
+            continue  # la KB ISO es copia byte-a-byte (manifest), no se traduce
+        rel = f.relative_to(root).as_posix()
+        body = f.read_text(encoding="utf-8")
+        for bad in OC_FORBIDDEN:
+            if bad in body:
+                fail("%s contiene %r (no traducido a OpenCode)" % (rel, bad))
+        if rel.startswith("command/"):
+            if "SKILL.md" in body:
+                fail("%s referencia un SKILL.md en vez de incrustarlo" % rel)
+            if "$ARGUMENTS" not in body:
+                fail("%s no recibe $ARGUMENTS" % rel)
+        if rel.startswith("agent/") and "external_directory:" not in body:
+            fail("%s sin permiso external_directory para references/" % rel)
+
+    for skipped in B.unsupported_skills("opencode"):
+        if (root / "command" / (skipped + ".md")).exists():
+            fail("command/%s.md no deberia emitirse (SKILLS_UNSUPPORTED)" % skipped)
+
+    if not err:
+        print("OK dist/opencode/ : guardas OpenCode (default {id,server,setup}, "
+              "v1 synthetic, v2 context, hooks async, session_id, "
+              "PYTHONUTF8, subagentes, sin nombres/rutas de Claude, commands "
+              "autocontenidos)")
+    return err
+
+
+def validate_hermes(root: Path) -> bool:
+    """Valida el bundle hermes: cada skill tiene SKILL.md con frontmatter
+    (abierto y cerrado con ---) que declara `name` y `description`.
+
+    Usa el parser minimo de build_harness (sin pyyaml). Devuelve True si hay error.
+    """
+    err = False
+
+    def fail(msg: str) -> None:
+        nonlocal err
+        print("ERROR dist/hermes/" + msg)
+        err = True
+
+    skills_dir = root / "skills"
+    if not skills_dir.is_dir():
+        fail(" : no existe skills/")
+        return err
+
+    skill_count = 0
+    for skill_dir in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
+        skill_md = skill_dir / "SKILL.md"
+        where = "skills/%s : " % skill_dir.name
+        if not skill_md.exists():
+            fail(" : falta SKILL.md en %s" % skill_dir.name)
+            continue
+        skill_count += 1
+        text = skill_md.read_text(encoding="utf-8")
+        if not text.startswith("---"):
+            fail(where + "frontmatter no empieza con ---")
+            continue
+        if text.find("\n---", 3) == -1:
+            fail(where + "frontmatter sin cierre ---")
+            continue
+        fm = B.parse_frontmatter(text)
+        for key in ("name", "description"):
+            if key not in fm:
+                fail(where + "frontmatter sin '%s'" % key)
+
+    if not err:
+        print("OK dist/hermes/ : %d skills con frontmatter valido" % skill_count)
+    return err
+
+
 def main() -> int:
     targets = [
         ("codex", B.DEFAULT_DIST, B.build),
@@ -149,12 +274,20 @@ def main() -> int:
             build_fn(fresh)
             drift = compare_bundle(label, committed, fresh) or drift
             invalid = validate_bundle(label, committed) or invalid
+            if label == "opencode":
+                invalid = validate_opencode(committed) or invalid
+
+    # Validar hermes (skills, no drift — los skills no se generan, se copian)
+    if B.DEFAULT_HERMES_DIST.exists():
+        invalid = validate_hermes(B.DEFAULT_HERMES_DIST) or invalid
+    else:
+        print("INFO: dist/hermes/ no existe; ejecuta build_harness.py primero")
 
     if drift:
         print("RESULTADO: DRIFT detectado (regenera con build_harness.py)")
         return 1
     if invalid:
-        print("RESULTADO: bundle INVALIDO (JSON/TOML roto o hook .py inexistente)")
+        print("RESULTADO: bundle INVALIDO (JSON/TOML roto, hook .py inexistente o guarda OpenCode)")
         return 1
     print("RESULTADO: OK, sin drift y bundles validos")
     return 0

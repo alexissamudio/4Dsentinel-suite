@@ -6,7 +6,7 @@ Bundle regenerable que porta parte de la suite de plugins de Claude Code a **Cod
 
 - **Skill** `handoff` -> `.agents/skills/handoff/SKILL.md` (rutas `~/.claude` reescritas a `~/.codex`).
 - **Slash command** `handoff` -> `prompts/handoff.md`.
-- **Hooks** -> `hooks.json` (formato Claude Code): `UserPromptSubmit` (bridge_router, plan_calibrator, caveman_injector, suite_playbook), `PostToolUse` (doc_drift, memory_checkpoint) y `Stop` (discernment_gate), con rutas absolutas a esta maquina.
+- **Hooks** -> `hooks.json` (formato Claude Code): `UserPromptSubmit` (bridge_router, plan_calibrator, caveman_injector, adhd_injector, suite_playbook), `PostToolUse` (doc_drift, memory_checkpoint) y `Stop` (discernment_gate), con rutas absolutas a esta maquina.
 - **Subagente** `critic` -> `[agents.critic]` en `config.toml` + `critic.config.toml` + `agents/critic.md`.
 - **AGENTS.md** con las reglas duras del proyecto.
 

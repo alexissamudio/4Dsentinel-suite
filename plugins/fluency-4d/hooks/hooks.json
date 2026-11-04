@@ -8,7 +8,7 @@
             "type": "command",
             "statusMessage": "Buscando puentes de documentación...",
             "command": "uv run --script \"${CLAUDE_PLUGIN_ROOT}/hooks/bridge_router.py\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -19,7 +19,7 @@
             "type": "command",
             "statusMessage": "Calibrando el nivel de plan...",
             "command": "uv run --script \"${CLAUDE_PLUGIN_ROOT}/hooks/plan_calibrator.py\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -30,7 +30,7 @@
             "type": "command",
             "statusMessage": "Modo caveman...",
             "command": "uv run --script \"${CLAUDE_PLUGIN_ROOT}/hooks/caveman_injector.py\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -41,7 +41,7 @@
             "type": "command",
             "statusMessage": "Modo ADHD...",
             "command": "uv run --script \"${CLAUDE_PLUGIN_ROOT}/hooks/adhd_injector.py\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -52,7 +52,7 @@
             "type": "command",
             "statusMessage": "Ofreciendo capacidades de la suite...",
             "command": "uv run --script \"${CLAUDE_PLUGIN_ROOT}/hooks/suite_playbook.py\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       }
@@ -65,7 +65,7 @@
             "type": "command",
             "statusMessage": "Chequeando docs del tema...",
             "command": "uv run --script \"${CLAUDE_PLUGIN_ROOT}/hooks/doc_drift.py\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -76,7 +76,7 @@
             "type": "command",
             "statusMessage": "Checkpoint de memoria...",
             "command": "uv run --script \"${CLAUDE_PLUGIN_ROOT}/hooks/memory_checkpoint.py\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       }
@@ -89,7 +89,7 @@
             "type": "command",
             "statusMessage": "Gate de discernimiento (opt-in)...",
             "command": "uv run --script \"${CLAUDE_PLUGIN_ROOT}/hooks/discernment_gate.py\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       }
