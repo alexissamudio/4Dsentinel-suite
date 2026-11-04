@@ -242,3 +242,16 @@ sin `session_id` el state de hooks se fuga entre sesiones; `references/` fuera d
 serlo: 24 archivos de dist/opencode eran huerfanos; `check_harness` (DRIFT: sobra) lo destapo.
 **Como aplicar:** al portar a OpenCode, verificar por export (synthetic, orden de ids, partes del subagente);
 spawn de Python con `PYTHONUTF8=1`; correr check_harness ANTES de confiar en un dist/.
+
+## [2026-11-03] — Timeout de hooks: medir el arranque en frío, no la corrida en caliente
+**Contexto:** los 4-5 hooks `UserPromptSubmit` (`uv run --script`) dieron timeout a los 5 s en el
+primer prompt de una sesión. A mano y en caliente tardaban ~0,3 s (0,5 s los 5 en paralelo), así que
+"anda rápido" parecía cierto. Los transcripts (`hook_cancelled` / `hook_additional_context` vs el
+timestamp del prompt) mostraron otra cosa: primer prompt p90 ≈ 4 s, pico 5,07 s; el resto p99 ≈ 3,4 s.
+**Lección:** el presupuesto de un hook lo fija su peor caso (arranque en frío de uv/Python con la
+máquina ocupada abriendo la sesión), no la medición en caliente. Un timeout pegado a la cola descarta
+la salida en silencio.
+**Cómo aplicar:** antes de fijar o diagnosticar un `timeout`, medir la distribución de latencia desde
+los transcripts de `~/.claude/projects/*/*.jsonl` (separar primer prompt del resto) y dejar margen ≥ 2x
+sobre el pico. Un valor de timeout compartido entre harnesses (shim OpenCode, Codex) se deriva de
+`hooks.json`, no se copia.
