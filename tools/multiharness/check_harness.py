@@ -5,7 +5,7 @@
 # ///
 """check_harness.py - Detector de drift + validador de los bundles multiharness.
 
-Dos comprobaciones sobre dist/codex/ y dist/opencode/:
+Dos comprobaciones sobre dist/codex/, dist/opencode/ y dist/antigravity/:
 
 1) DRIFT: regenera cada bundle a un directorio temporal y lo compara byte-a-byte
    contra el commiteado. Falla (exit 1) si difieren -> el bundle commiteado no
@@ -14,9 +14,10 @@ Dos comprobaciones sobre dist/codex/ y dist/opencode/:
 2) VALIDACION del bundle commiteado (evita falsos-verdes): parsea cada `.json`
    (json.loads) y cada `.toml` (tomllib.load) generado, y verifica que los `.py`
    referenciados por ruta absoluta dentro de los artefactos (commands de
-   hooks.json/config.toml y USER_PROMPT_HOOKS del shim fluency-hooks.js) EXISTAN.
-   Un cambio futuro con caracteres de control en una `description` produciria
-   TOML/JSON invalido; sin este paso, el drift-check por bytes seguiria verde.
+   hooks.json/config.toml y listas de hooks de los shims fluency-hooks.js y
+   fluency_hooks.py) EXISTAN. Un cambio futuro con caracteres de control en una
+   `description` produciria TOML/JSON invalido; sin este paso, el drift-check
+   por bytes seguiria verde.
 
 Uso: uv run --script tools/multiharness/check_harness.py
 
@@ -113,12 +114,14 @@ def validate_bundle(label: str, root: Path) -> bool:
         for p in py_paths_in_obj(data):
             py_refs.append((f.relative_to(root), p))
 
-    # Shim JS: las entradas de USER_PROMPT_HOOKS son literales JS "C:\\...\\x.py".
-    # No es JSON: extraemos las rutas .py entrecomilladas y des-escapamos \\ -> \\.
-    for f in sorted(root.rglob("*.js")):
-        text = f.read_text(encoding="utf-8")
-        for raw in PY_QUOTED.findall(text):
-            py_refs.append((f.relative_to(root), raw.replace("\\\\", "\\")))
+    # Shims (JS de OpenCode y PY de Antigravity): las entradas de hooks son
+    # literales "C:\\...\\x.py". Extraemos las rutas .py entrecomilladas y
+    # des-escapamos \\\\ -> \\.
+    for ext in ("*.js", "*.py"):
+        for f in sorted(root.rglob(ext)):
+            text = f.read_text(encoding="utf-8")
+            for raw in PY_QUOTED.findall(text):
+                py_refs.append((f.relative_to(root), raw.replace("\\\\", "\\")))
 
     for origen, p in py_refs:
         if not Path(p).exists():
@@ -132,10 +135,81 @@ def validate_bundle(label: str, root: Path) -> bool:
     return err
 
 
+AG_ALLOWED_PLUGIN_KEYS = {
+    "name",
+    "description",
+    "logo",
+    "suggestedPrompts",
+    "displayName",
+    "version",
+    "author",
+    "homepage",
+    "repository",
+    "disabled",
+}
+
+AG_SHIM_REQUIRED: tuple[tuple[str, str], ...] = (
+    ('"PYTHONUTF8": "1"', "falta PYTHONUTF8=1 al lanzar hooks en Windows"),
+    ('"hook_event_name":', "falta hook_event_name en el payload"),
+    ('"session_id":', "falta session_id en el payload"),
+    ("HOOK_TIMEOUT_S =", "falta HOOK_TIMEOUT_S derivado de hooks.json"),
+    ('"injectSteps":', "falta traduccion a injectSteps en PreInvocation"),
+    ('"decision": "continue"', "falta traduccion a decision:continue en Stop"),
+)
+
+
+def validate_antigravity(root: Path) -> bool:
+    """Guardas anti-regresion del bundle Antigravity. Devuelve True si falla."""
+    err = False
+
+    def fail(msg: str) -> None:
+        nonlocal err
+        print("ANTIGRAVITY: " + msg)
+        err = True
+
+    plugin_path = root / "plugin.json"
+    if not plugin_path.is_file():
+        fail("falta plugin.json en la raiz")
+    else:
+        pdata = json.loads(plugin_path.read_text(encoding="utf-8"))
+        extra = set(pdata) - AG_ALLOWED_PLUGIN_KEYS
+        if extra:
+            fail("plugin.json tiene claves no soportadas: %s" % sorted(extra))
+
+    hooks_path = root / "hooks.json"
+    if not hooks_path.is_file():
+        fail("falta hooks.json en la raiz")
+    else:
+        hdata = json.loads(hooks_path.read_text(encoding="utf-8"))
+        if "hooks" in hdata or "fluency-4d" not in hdata:
+            fail("hooks.json debe usar 'fluency-4d' como clave raiz, no 'hooks'")
+
+    shim_path = root / "hooks" / "fluency_hooks.py"
+    if not shim_path.is_file():
+        fail("falta hooks/fluency_hooks.py")
+    else:
+        stext = shim_path.read_text(encoding="utf-8")
+        for needle, why in AG_SHIM_REQUIRED:
+            if needle not in stext:
+                fail("shim: " + why)
+
+    rules_path = root / "rules" / "AGENTS.md"
+    if not rules_path.is_file():
+        fail("falta rules/AGENTS.md")
+    elif rules_path.read_text(encoding="utf-8").startswith("---"):
+        fail("rules/AGENTS.md no debe llevar frontmatter YAML (always_on)")
+
+    if not err:
+        print("OK dist/antigravity/ : guardas Antigravity (plugin.json, hooks.json, "
+              "shim PYTHONUTF8/session_id/hook_event_name/timeout, rules sin frontmatter)")
+    return err
+
+
 def main() -> int:
     targets = [
         ("codex", B.DEFAULT_DIST, B.build),
         ("opencode", B.DEFAULT_OPENCODE_DIST, B.build_opencode),
+        ("antigravity", B.DEFAULT_ANTIGRAVITY_DIST, B.build_antigravity),
     ]
     drift = False
     invalid = False
@@ -149,6 +223,8 @@ def main() -> int:
             build_fn(fresh)
             drift = compare_bundle(label, committed, fresh) or drift
             invalid = validate_bundle(label, committed) or invalid
+            if label == "antigravity":
+                invalid = validate_antigravity(committed) or invalid
 
     if drift:
         print("RESULTADO: DRIFT detectado (regenera con build_harness.py)")

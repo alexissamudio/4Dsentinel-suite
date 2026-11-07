@@ -3,10 +3,11 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""build_harness.py - Generador multi-harness: Claude Code suite -> Codex / OpenCode.
+"""build_harness.py - Generador multi-harness: Claude Code suite -> Codex / OpenCode / Antigravity.
 
 Toma la FUENTE canonica de la suite (plugins/*, read-only) y emite bundles
-regenerables bajo dist/: dist/codex/ (Codex CLI) y dist/opencode/ (OpenCode).
+regenerables bajo dist/: dist/codex/ (Codex CLI), dist/opencode/ (OpenCode) y
+dist/antigravity/ (Google Antigravity).
 
 Alcance del PoC (lo demas queda como TODO comentado en el bundle):
   Codex (dist/codex/):
@@ -21,6 +22,14 @@ Alcance del PoC (lo demas queda como TODO comentado en el bundle):
     - hooks  : plugin shim JS (.opencode/plugin/fluency-hooks.js) que puentea
                a los hooks Python via subprocess.
     - config : opencode.json (MCP diferido).
+  Antigravity (dist/antigravity/):
+    - manifest: plugin.json (schema nativo de Google Antigravity)
+    - skill   : handoff (skills/handoff/SKILL.md)
+    - agente  : critic, advisor (agents/*.md, subagentes read-only)
+    - rules   : rules/AGENTS.md (reglas duras de CLAUDE.md, sin frontmatter)
+    - hooks   : hooks.json (en la raiz del plugin) + hooks/fluency_hooks.py
+                (shim Python que puentea PreInvocation -> UserPromptSubmit y
+                Stop -> discernment_gate).
 
 Idempotente: correrlo N veces produce el mismo arbol de salida.
 
@@ -48,6 +57,7 @@ FLUENCY_ROOT = PLUGINS / "fluency-4d"          # resuelve ${CLAUDE_PLUGIN_ROOT}
 SENTINEL_ROOT = PLUGINS / "sentinel-agents"
 DEFAULT_DIST = REPO_ROOT / "dist" / "codex"
 DEFAULT_OPENCODE_DIST = REPO_ROOT / "dist" / "opencode"
+DEFAULT_ANTIGRAVITY_DIST = REPO_ROOT / "dist" / "antigravity"
 
 # ---------------------------------------------------------------------------
 # Exclusion "solo Claude Code"
@@ -483,11 +493,11 @@ def yaml_dq(s: str) -> str:
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def opencode_userprompt_scripts(hooks: dict) -> list[str]:
-    """Rutas absolutas de los .py de UserPromptSubmit (para el shim JS)."""
+def hook_event_scripts(hooks: dict, event: str) -> list[str]:
+    """Rutas absolutas de los .py de un evento de hooks.json (para shims)."""
     marker = M.PLUGIN_ROOT_VAR + "/hooks/"
     out: list[str] = []
-    for group in hooks.get("hooks", {}).get("UserPromptSubmit", []):
+    for group in hooks.get("hooks", {}).get(event, []):
         for hk in group.get("hooks", []):
             cmd = hk.get("command", "")
             idx = cmd.find(marker)
@@ -497,6 +507,22 @@ def opencode_userprompt_scripts(hooks: dict) -> list[str]:
             name = rest.split('"')[0].split(" ")[0]
             out.append(str(FLUENCY_ROOT / "hooks" / name))
     return out
+
+
+def hook_event_timeout(hooks: dict, event: str, default: int = 5) -> int:
+    """Mayor timeout declarado en hooks.json para `event` (fuente unica)."""
+    vals: list[int] = []
+    for group in hooks.get("hooks", {}).get(event, []):
+        for hk in group.get("hooks", []):
+            t = hk.get("timeout")
+            if isinstance(t, int) and t > 0:
+                vals.append(t)
+    return max(vals) if vals else default
+
+
+def opencode_userprompt_scripts(hooks: dict) -> list[str]:
+    """Rutas absolutas de los .py de UserPromptSubmit (para el shim JS)."""
+    return hook_event_scripts(hooks, "UserPromptSubmit")
 
 
 def build_opencode_command_handoff() -> str:
@@ -724,7 +750,8 @@ def build_opencode_readme() -> str:
         "```powershell\n"
         "# Windows PowerShell (por proyecto)\n"
         "New-Item -ItemType Directory -Force .opencode | Out-Null\n"
-        "Copy-Item -Recurse -Force dist\\opencode\\command,dist\\opencode\\agent,dist\\opencode\\plugin .opencode\\\n"
+        "Copy-Item -Recurse -Force "
+        "dist\\opencode\\command,dist\\opencode\\agent,dist\\opencode\\plugin .opencode\\\n"
         "Copy-Item -Force dist\\opencode\\opencode.json .\\opencode.json\n"
         "```\n"
         "\n"
@@ -749,6 +776,420 @@ def build_opencode_readme() -> str:
         "seguro ante fallos. Falta solo el E2E (ver arriba).\n"
         "- **Resto de skills** (`4d`, `4d-init`, `4d-status`, `4d-quiz`, "
         "`caveman`) y **resto de subagentes**: TODO.\n"
+        "- **MCP** (codebase-memory / `cbm`): DIFERIDO, binario no instalado.\n"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Antigravity (dist/antigravity/)
+# ---------------------------------------------------------------------------
+def build_antigravity_plugin_json() -> str:
+    src = json.loads(
+        (FLUENCY_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+    )
+    data = {
+        "name": "4dsentinel-suite",
+        "displayName": "4Dsentinel Suite",
+        "version": src.get("version", "0.22.0"),
+        "description": (
+            "Bundle Google Antigravity de 4Dsentinel-suite (PoC multiharness): "
+            "marco 4D de AI Fluency, hooks de contexto/discernimiento y "
+            "subagentes sentinel read-only."
+        ),
+        "author": src.get("author", {"name": "Alexis Samudio"}),
+        "homepage": src.get(
+            "homepage", "https://github.com/alexissamudio/4Dsentinel-suite"
+        ),
+        "repository": src.get(
+            "repository", "https://github.com/alexissamudio/4Dsentinel-suite"
+        ),
+    }
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+def build_antigravity_hooks_json(hooks: dict | None = None) -> str:
+    """Genera hooks.json en la raiz del plugin con el schema de Antigravity.
+
+    En Antigravity, hooks.json vive en <plugin_dir>/hooks.json (con cwd igual a
+    <plugin_dir> al ejecutar cada comando) y su clave superior es el nombre del
+    grupo ("fluency-4d"), NO "hooks". PreInvocation y Stop reciben listas planas
+    de handlers (sin wrapper matcher). El timeout externo deja margen (>=15 s)
+    para el arranque en frio de uv en Windows mas los sub-hooks en serie.
+    """
+    hk = hooks if hooks is not None else load_hooks()
+    pre_timeout = max(15, hook_event_timeout(hk, "UserPromptSubmit"))
+    stop_timeout = max(15, hook_event_timeout(hk, "Stop"))
+    data = {
+        "fluency-4d": {
+            "PreInvocation": [
+                {
+                    "type": "command",
+                    "command": "uv run --script hooks/fluency_hooks.py PreInvocation",
+                    "timeout": pre_timeout,
+                }
+            ],
+            "Stop": [
+                {
+                    "type": "command",
+                    "command": "uv run --script hooks/fluency_hooks.py Stop",
+                    "timeout": stop_timeout,
+                }
+            ],
+        }
+    }
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+def build_antigravity_shim(hooks: dict) -> str:
+    up_scripts = hook_event_scripts(hooks, "UserPromptSubmit")
+    stop_scripts = hook_event_scripts(hooks, "Stop")
+    hook_timeout = max(
+        hook_event_timeout(hooks, "UserPromptSubmit"),
+        hook_event_timeout(hooks, "Stop"),
+    )
+    up_lines = ",\n".join(
+        '    "' + s.replace("\\", "\\\\") + '"' for s in up_scripts
+    )
+    stop_lines = ",\n".join(
+        '    "' + s.replace("\\", "\\\\") + '"' for s in stop_scripts
+    )
+    return (
+        "#!/usr/bin/env -S uv run --script\n"
+        "# /// script\n"
+        '# requires-python = ">=3.11"\n'
+        "# dependencies = []\n"
+        "# ///\n"
+        '"""fluency_hooks - shim de hooks Google Antigravity para fluency-4d.\n'
+        "\n"
+        "Generado por tools/multiharness/build_harness.py. NO editar a mano.\n"
+        "\n"
+        "Proposito: PUENTEAR (no reescribir) los hooks Python canonicos de\n"
+        "fluency-4d al contrato de hooks de Google Antigravity:\n"
+        "  - PreInvocation (cuando invocationNum == 0, inicio del turno del\n"
+        "    usuario) -> ejecuta los hooks de UserPromptSubmit y traduce\n"
+        "    hookSpecificOutput.additionalContext a\n"
+        '    {"injectSteps": [{"ephemeralMessage": "..."}]}.\n'
+        "  - Stop -> ejecuta discernment_gate y traduce\n"
+        '    {"decision": "block", "reason": "..."} a\n'
+        '    {"decision": "continue", "reason": "..."}.\n'
+        "\n"
+        "Ante cualquier error el shim degrada a NO-OP ({}) y nunca rompe la sesion.\n"
+        "ASCII puro (regla de CLAUDE.md).\n"
+        '"""\n'
+        "\n"
+        "from __future__ import annotations\n"
+        "\n"
+        "import json\n"
+        "import os\n"
+        "import subprocess\n"
+        "import sys\n"
+        "from typing import Any\n"
+        "\n"
+        "HOOK_TIMEOUT_S = %d\n"
+        "\n"
+        "USER_PROMPT_HOOKS: tuple[str, ...] = (\n"
+        + up_lines + ",\n"
+        ")\n"
+        "\n"
+        "STOP_HOOKS: tuple[str, ...] = (\n"
+        + stop_lines + ",\n"
+        ")\n"
+        "\n"
+        "\n"
+        "def _read_stdin() -> dict[str, Any]:\n"
+        "    try:\n"
+        '        raw = sys.stdin.buffer.read().decode("utf-8", errors="replace").strip()\n'
+        "        if not raw:\n"
+        "            return {}\n"
+        "        data = json.loads(raw)\n"
+        "        return data if isinstance(data, dict) else {}\n"
+        "    except Exception:\n"
+        "        return {}\n"
+        "\n"
+        "\n"
+        "def _to_claude_payload(data: dict[str, Any], event_name: str) -> dict[str, Any]:\n"
+        '    ws = data.get("workspacePaths")\n'
+        "    cwd = (\n"
+        "        ws[0]\n"
+        "        if isinstance(ws, list) and ws and isinstance(ws[0], str)\n"
+        '        else ""\n'
+        "    )\n"
+        "    return {\n"
+        '        "session_id": str(data.get("conversationId") or ""),\n'
+        '        "hook_event_name": event_name,\n'
+        "        \"cwd\": cwd or os.getcwd(),\n"
+        '        "transcript_path": str(data.get("transcriptPath") or ""),\n'
+        '        "prompt": str(data.get("lastUserInput") or ""),\n'
+        "    }\n"
+        "\n"
+        "\n"
+        "def _run_hook(script_path: str, payload: dict[str, Any]) -> dict[str, Any]:\n"
+        "    try:\n"
+        "        res = subprocess.run(\n"
+        "            [sys.executable, script_path],\n"
+        "            input=json.dumps(payload, ensure_ascii=False),\n"
+        "            text=True,\n"
+        '            encoding="utf-8",\n'
+        "            capture_output=True,\n"
+        '            env={**os.environ, "PYTHONUTF8": "1"},\n'
+        "            timeout=HOOK_TIMEOUT_S,\n"
+        "            check=False,\n"
+        "        )\n"
+        "        if res.returncode != 0 or not res.stdout.strip():\n"
+        "            return {}\n"
+        "        out = json.loads(res.stdout)\n"
+        "        return out if isinstance(out, dict) else {}\n"
+        "    except Exception:\n"
+        "        return {}\n"
+        "\n"
+        "\n"
+        "def _handle_pre_invocation(data: dict[str, Any]) -> dict[str, Any]:\n"
+        '    inv = data.get("invocationNum", 0)\n'
+        "    try:\n"
+        "        if int(inv or 0) > 0:\n"
+        "            return {}\n"
+        "    except (TypeError, ValueError):\n"
+        "        pass\n"
+        '    payload = _to_claude_payload(data, "UserPromptSubmit")\n'
+        "    chunks: list[str] = []\n"
+        "    for script in USER_PROMPT_HOOKS:\n"
+        "        out = _run_hook(script, payload)\n"
+        '        spec = out.get("hookSpecificOutput")\n'
+        "        if isinstance(spec, dict):\n"
+        '            ctx = spec.get("additionalContext")\n'
+        "            if isinstance(ctx, str) and ctx.strip():\n"
+        "                chunks.append(ctx)\n"
+        "    if not chunks:\n"
+        "        return {}\n"
+        '    return {"injectSteps": [{"ephemeralMessage": "\\n\\n".join(chunks)}]}\n'
+        "\n"
+        "\n"
+        "def _handle_stop(data: dict[str, Any]) -> dict[str, Any]:\n"
+        '    payload = _to_claude_payload(data, "Stop")\n'
+        "    for script in STOP_HOOKS:\n"
+        "        out = _run_hook(script, payload)\n"
+        '        if out.get("decision") == "block" and out.get("reason"):\n'
+        "            return {\n"
+        '                "decision": "continue",\n'
+        '                "reason": str(out["reason"]),\n'
+        "            }\n"
+        "    return {}\n"
+        "\n"
+        "\n"
+        "def main() -> int:\n"
+        "    try:\n"
+        '        event = sys.argv[1] if len(sys.argv) > 1 else "PreInvocation"\n'
+        "        data = _read_stdin()\n"
+        '        if event == "PreInvocation":\n'
+        "            res = _handle_pre_invocation(data)\n"
+        '        elif event == "Stop":\n'
+        "            res = _handle_stop(data)\n"
+        "        else:\n"
+        "            res = {}\n"
+        "        sys.stdout.write(json.dumps(res, ensure_ascii=True) + \"\\n\")\n"
+        "    except Exception:\n"
+        '        sys.stdout.write("{}\\n")\n'
+        "    return 0\n"
+        "\n"
+        "\n"
+        'if __name__ == "__main__":\n'
+        "    raise SystemExit(main())\n"
+    ) % hook_timeout
+
+
+def build_antigravity_handoff_skill() -> str:
+    src = (FLUENCY_ROOT / "skills" / "handoff" / "SKILL.md").read_text(encoding="utf-8")
+    out = src
+    for src_home, dst_home in M.ANTIGRAVITY_HOME_MAP.items():
+        out = out.replace(src_home, dst_home)
+    marker = "en `~/.gemini/antigravity/plans/` (por mtime), o el de la tarea."
+    note = (
+        " **NOTA (Antigravity): Antigravity guarda artefactos de sesion bajo "
+        "`<appDataDir>/brain/<conversation-id>/`; si "
+        "`~/.gemini/antigravity/plans/` no esta poblado, usa el plan de "
+        "artefactos de la conversacion o degrada a 'sin plan'.**"
+    )
+    if marker in out:
+        out = out.replace(marker, marker + note, 1)
+    banner = (
+        "<!-- Portado de plugins/fluency-4d/skills/handoff/SKILL.md por "
+        "tools/multiharness/build_harness.py. Rutas ~/.claude reescritas a "
+        "~/.gemini/antigravity. La seccion de clipboard NO se toco. "
+        "NO editar a mano. -->\n"
+    )
+    if out.startswith("---"):
+        end = out.find("\n---", 3)
+        nl = out.find("\n", end + 1)
+        out = out[: nl + 1] + banner + out[nl + 1:]
+    else:
+        out = banner + out
+    return out
+
+
+def build_antigravity_agent(agents: dict[str, dict[str, str]], name: str) -> str:
+    meta = agents.get(name, {})
+    if not meta:
+        raise SystemExit("ERROR: no se encontro el agente '%s'" % name)
+    desc = meta.get("description", "")
+    src = Path(meta["_path"]).read_text(encoding="utf-8")
+    body = strip_frontmatter(src).lstrip("\n")
+    banner = (
+        "<!-- Portado de plugins/sentinel-agents/agents/%s.md por "
+        "tools/multiharness/build_harness.py. Frontmatter adaptado al schema "
+        "de subagentes de Google Antigravity (read-only por defecto). "
+        "NO editar a mano. -->\n"
+        "<!-- NOTA(PoC): la referencia a references/agent-contract.md NO esta "
+        "incluida en este bundle; portarla es un TODO. -->\n\n" % name
+    )
+    return (
+        "---\n"
+        "name: " + name + "\n"
+        "description: " + yaml_dq(desc) + "\n"
+        "---\n\n"
+        + banner + body
+    )
+
+
+def build_antigravity_agents_md() -> str:
+    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    rules, bridges = extract_hard_rules(claude_md)
+    parts = [
+        "# AGENTS.md - contrato del proyecto (bundle Antigravity)",
+        "",
+        "> Generado por `tools/multiharness/build_harness.py` desde los "
+        "innegociables de `CLAUDE.md`. En Antigravity vive bajo "
+        "`rules/AGENTS.md` (markdown plano sin frontmatter, activo siempre "
+        "que el plugin este habilitado).",
+        "",
+        "## Reglas del proyecto (siempre)",
+        "",
+    ]
+    parts += rules if rules else ["- (sin reglas detectadas en CLAUDE.md)"]
+    parts += [
+        "",
+        "## Puentes de documentacion",
+        "",
+        "> NOTA (Antigravity): los puentes apuntan a `.claude/docs/*` del "
+        "proyecto. El shim `hooks/fluency_hooks.py` invoca `bridge_router.py` "
+        "en `PreInvocation`; tambien podes leerlos a mano si la tarea toca "
+        "ese tema.",
+        "",
+    ]
+    parts += bridges if bridges else ["(sin tabla de puentes)"]
+    parts += [
+        "",
+        "## Notas de portabilidad",
+        "",
+        "- Hooks: emitidos como `hooks.json` en la raiz del plugin "
+        "(`<plugin_dir>/hooks.json`, clave raiz `\"fluency-4d\"`) junto al "
+        "shim `hooks/fluency_hooks.py`, que puentea `PreInvocation` -> "
+        "`UserPromptSubmit` (`injectSteps`) y `Stop` -> `discernment_gate` "
+        "(`decision: continue`).",
+        "- Subagentes: `agents/<name>.md` con frontmatter `name` y "
+        "`description` (read-only por defecto en Antigravity).",
+        "- Skills: `skills/<name>/SKILL.md` (mismo formato que Claude Code).",
+        "- MCP (codebase-memory): DIFERIDO (binario `cbm` no instalado).",
+        "",
+    ]
+    return "\n".join(parts)
+
+
+def build_antigravity_readme() -> str:
+    return (
+        "# Bundle Antigravity de la suite 4Dsentinel (PoC)\n"
+        "\n"
+        "Bundle regenerable que porta parte de la suite de plugins de Claude "
+        "Code a **Google Antigravity**. Generado por "
+        "`tools/multiharness/build_harness.py` desde la fuente canonica en "
+        "`plugins/*` (read-only).\n"
+        "\n"
+        "## Que incluye este PoC\n"
+        "\n"
+        "- **Manifest** -> `plugin.json` (schema nativo de plugins de "
+        "Antigravity: `name`, `displayName`, `version`, `description`, "
+        "`author`, `homepage`, `repository`).\n"
+        "- **Skill** `handoff` -> `skills/handoff/SKILL.md` (rutas "
+        "`~/.claude` reescritas a `~/.gemini/antigravity`).\n"
+        "- **Agentes** `critic` y `advisor` -> `agents/*.md` (frontmatter "
+        "`name` + `description`; los subagentes Markdown en Antigravity son "
+        "read-only por defecto).\n"
+        "- **Rules** -> `rules/AGENTS.md` (reglas duras y tabla de puentes "
+        "de `CLAUDE.md`, sin frontmatter YAML para que Antigravity las "
+        "aplique como `always_on`).\n"
+        "- **Hooks** -> `hooks.json` (en la raiz del plugin, clave superior "
+        "`\"fluency-4d\"`) + `hooks/fluency_hooks.py` (shim Python que "
+        "puentea `PreInvocation` -> `UserPromptSubmit` y `Stop` -> "
+        "`discernment_gate` por subprocess, sin duplicar la logica).\n"
+        "\n"
+        "## Como descubre Antigravity los hooks\n"
+        "\n"
+        "A diferencia de Claude Code (donde `hooks.json` vive en `hooks/` y "
+        "usa `\"hooks\"` como clave raiz), Antigravity exige `hooks.json` en "
+        "la **raiz del plugin** (`<plugin_dir>/hooks.json`) con el nombre del "
+        "grupo como clave superior (`\"fluency-4d\"`). Al disparar un hook, "
+        "Antigravity ejecuta el comando con `cwd = <plugin_dir>` y pasa el "
+        "payload en protojson camelCase por stdin (`conversationId`, "
+        "`workspacePaths`, `transcriptPath`, `lastUserInput`, "
+        "`invocationNum`).\n"
+        "\n"
+        "El shim `hooks/fluency_hooks.py` traduce ese payload al contrato de "
+        "Claude Code (`session_id`, `cwd`, `transcript_path`, `prompt`) y "
+        "adapta la salida:\n"
+        "\n"
+        "- En `PreInvocation` (solo cuando `invocationNum == 0`, inicio del "
+        "turno del usuario): corre `bridge_router`, `plan_calibrator`, "
+        "`caveman_injector`, `adhd_injector` y `suite_playbook`, y devuelve "
+        "`{\"injectSteps\": [{\"ephemeralMessage\": \"...\"}]}`.\n"
+        "- En `Stop`: corre `discernment_gate` y traduce `{\"decision\": "
+        "\"block\", \"reason\": \"...\"}` a `{\"decision\": \"continue\", "
+        "\"reason\": \"...\"}`.\n"
+        "\n"
+        "## Instalacion\n"
+        "\n"
+        "1. Regenera el bundle en tu maquina para que las rutas absolutas de "
+        "`hooks/fluency_hooks.py` apunten a tu clon local:\n"
+        "\n"
+        "```bash\n"
+        "uv run --script tools/multiharness/build_harness.py\n"
+        "```\n"
+        "\n"
+        "2. Copia `dist/antigravity/` al directorio de plugins de Antigravity "
+        "(global en `~/.gemini/config/plugins/4dsentinel-suite/` o por "
+        "proyecto en `<proyecto>/.agents/plugins/4dsentinel-suite/`):\n"
+        "\n"
+        "```bash\n"
+        "# Linux/macOS (global)\n"
+        "mkdir -p \"$HOME/.gemini/config/plugins/4dsentinel-suite\"\n"
+        "cp -r dist/antigravity/. \"$HOME/.gemini/config/plugins/4dsentinel-suite/\"\n"
+        "```\n"
+        "\n"
+        "```powershell\n"
+        "# Windows PowerShell (global)\n"
+        "$dst = \"$HOME\\.gemini\\config\\plugins\\4dsentinel-suite\"\n"
+        "New-Item -ItemType Directory -Force $dst | Out-Null\n"
+        "Copy-Item -Recurse -Force dist\\antigravity\\* $dst\n"
+        "```\n"
+        "\n"
+        "## Que se verifico\n"
+        "\n"
+        "- El generador corre sin error y es idempotente (`check_harness.py` no "
+        "reporta drift).\n"
+        "- `plugin.json` y `hooks.json` parsean como JSON y respetan las claves "
+        "top-level de Antigravity.\n"
+        "- Las rutas de los hooks en `hooks/fluency_hooks.py` son absolutas y "
+        "apuntan a `.py` existentes.\n"
+        "- El shim `hooks/fluency_hooks.py` fue probado extremo a extremo por "
+        "subprocess simulando `PreInvocation` (`invocationNum` 0 y >0) y `Stop`.\n"
+        "\n"
+        "## Pendiente / no verificado\n"
+        "\n"
+        "- **Hooks `PostToolUse`** (`doc_drift`, `memory_checkpoint`): en "
+        "Antigravity `PostToolUse` solo acepta `{}` en stdout (no soporta "
+        "`injectSteps`), por lo que correr `doc_drift` ahi consumiria el "
+        "estado de sesion sin poder inyectar el aviso. Queda como TODO "
+        "puentearlos via cola hacia `PostInvocation`/`PreInvocation`.\n"
+        "- **Resto de skills** (`4d`, `4d-init`, `4d-status`, `caveman`, "
+        "`adhd`, `verify-diff`) y **resto de subagentes**: TODO.\n"
         "- **MCP** (codebase-memory / `cbm`): DIFERIDO, binario no instalado.\n"
     )
 
@@ -804,12 +1245,44 @@ def build_opencode(dist_dir: Path) -> list[Path]:
     return written
 
 
+def build_antigravity(dist_dir: Path) -> list[Path]:
+    """Genera el bundle Antigravity bajo dist_dir. Devuelve las rutas escritas."""
+    skills = discover_skills()
+    agents = discover_agents()
+    hooks = load_hooks()
+
+    if "critic" not in agents:
+        raise SystemExit("ERROR: no se encontro el agente 'critic' en sentinel-agents")
+    if "advisor" not in agents:
+        raise SystemExit("ERROR: no se encontro el agente 'advisor' en sentinel-agents")
+    if not any(p.parent.name == "handoff" for p in skills):
+        raise SystemExit("ERROR: no se encontro el skill 'handoff'")
+
+    written: list[Path] = []
+    written.append(write(dist_dir / "plugin.json", build_antigravity_plugin_json()))
+    written.append(write(dist_dir / "hooks.json", build_antigravity_hooks_json(hooks)))
+    written.append(write(dist_dir / "hooks" / "fluency_hooks.py",
+                         build_antigravity_shim(hooks)))
+    written.append(write(dist_dir / "skills" / "handoff" / "SKILL.md",
+                         build_antigravity_handoff_skill()))
+    written.append(write(dist_dir / "agents" / "critic.md",
+                         build_antigravity_agent(agents, "critic")))
+    written.append(write(dist_dir / "agents" / "advisor.md",
+                         build_antigravity_agent(agents, "advisor")))
+    written.append(write(dist_dir / "rules" / "AGENTS.md",
+                         build_antigravity_agents_md()))
+    written.append(write(dist_dir / "README.md", build_antigravity_readme()))
+    return written
+
+
 def main() -> int:
     written = build(DEFAULT_DIST)
     written_oc = build_opencode(DEFAULT_OPENCODE_DIST)
+    written_ag = build_antigravity(DEFAULT_ANTIGRAVITY_DIST)
     print("Repo root : %s" % REPO_ROOT)
     print("Bundle    : %s" % DEFAULT_DIST)
     print("Bundle OC : %s" % DEFAULT_OPENCODE_DIST)
+    print("Bundle AG : %s" % DEFAULT_ANTIGRAVITY_DIST)
     print("Skills    : %d descubiertos" % len(discover_skills()))
     print("Agentes   : %d descubiertos" % len(discover_agents()))
     print("Archivos escritos (codex):")
@@ -817,6 +1290,9 @@ def main() -> int:
         print("  - %s" % p.relative_to(REPO_ROOT))
     print("Archivos escritos (opencode):")
     for p in written_oc:
+        print("  - %s" % p.relative_to(REPO_ROOT))
+    print("Archivos escritos (antigravity):")
+    for p in written_ag:
         print("  - %s" % p.relative_to(REPO_ROOT))
     return 0
 
