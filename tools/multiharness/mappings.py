@@ -2,11 +2,12 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""mappings.py - Tablas de mapeo Claude Code -> Codex CLI.
+"""mappings.py - Tablas de mapeo Claude Code -> Codex CLI / Antigravity.
 
 Este modulo es DATOS puros (sin efectos): lo importa build_harness.py para
 saber como traducir cada artefacto de la suite (skills, agentes, hooks, home)
-del contrato de Claude Code al contrato que Codex CLI 0.130 adopto.
+del contrato de Claude Code al contrato de otros harnesses (Codex CLI 0.130,
+OpenCode y Google Antigravity).
 
 IMPORTANTE - que gobierna de verdad la salida y que es solo documentacion:
 Cada tabla esta marcada abajo con uno de estos rotulos:
@@ -14,8 +15,9 @@ Cada tabla esta marcada abajo con uno de estos rotulos:
   [DOC-ONLY]   -> referencia para humanos; el generador NO la consume, editarla
                   NO cambia la salida (la traduccion real esta en otro lado o
                   esta hardcodeada de forma equivalente). No asumas lo contrario.
-Consumidas hoy: HOME_MAP, HOOK_FEATURE_FLAG, PLUGIN_ROOT_VAR. El resto es
-DOC-ONLY hasta que alguien las cablee en build_harness.py.
+Consumidas hoy: HOME_MAP, ANTIGRAVITY_HOME_MAP, HOOK_FEATURE_FLAG,
+PLUGIN_ROOT_VAR. El resto es DOC-ONLY hasta que alguien las cablee en
+build_harness.py.
 
 ASCII puro (regla de CLAUDE.md): sin acentos en los strings de este archivo.
 """
@@ -136,3 +138,30 @@ AGENT_FIELD_MAP: dict[str, str] = {
 # El binario `cbm` (codebase-memory) NO esta instalado en esta maquina.
 # No se incluye ninguna seccion [mcp_servers] en el bundle. Queda como TODO.
 MCP_DEFERRED = True
+
+# ---------------------------------------------------------------------------
+# 7) Antigravity (Google Antigravity IDE / CLI)
+# ---------------------------------------------------------------------------
+# [CONSUMIDA] build_harness.build_antigravity_handoff_skill() itera esta tabla
+# para reescribir el home en el SKILL.md portado (~/.claude -> ~/.gemini/antigravity).
+ANTIGRAVITY_HOME_MAP: dict[str, str] = {
+    "~/.claude": "~/.gemini/antigravity",
+    "$CLAUDE_HOME": "$ANTIGRAVITY_HOME",
+    "${CLAUDE_HOME}": "${ANTIGRAVITY_HOME}",
+}
+
+# [DOC-ONLY] referencia del contrato de eventos Claude Code -> Antigravity.
+# En Antigravity, hooks.json vive en la raiz del plugin (<plugin_dir>/hooks.json)
+# y su clave raiz es el nombre del grupo (p. ej. "fluency-4d"), NO "hooks".
+# PreInvocation y Stop usan listas planas de handlers (sin wrapper matcher).
+# PostToolUse solo acepta {} en stdout (no soporta injectSteps).
+ANTIGRAVITY_HOOK_EVENT_MAP: dict[str, str] = {
+    "UserPromptSubmit": "PreInvocation",
+    "PostToolUse": "PostToolUse",
+    "PreToolUse": "PreToolUse",
+    "Stop": "Stop",
+}
+
+# [DOC-ONLY] eventos puenteados por el shim Python de Antigravity (fluency_hooks.py).
+ANTIGRAVITY_HOOK_EVENTS_PORTED: tuple[str, ...] = ("UserPromptSubmit", "Stop")
+

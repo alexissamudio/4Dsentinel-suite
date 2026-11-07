@@ -1,0 +1,12 @@
+{
+  "name": "4dsentinel-suite",
+  "displayName": "4Dsentinel Suite",
+  "version": "0.22.2",
+  "description": "Bundle Google Antigravity de 4Dsentinel-suite (PoC multiharness): marco 4D de AI Fluency, hooks de contexto/discernimiento y subagentes sentinel read-only.",
+  "author": {
+    "name": "Alexis Samudio",
+    "url": "https://github.com/alexissamudio"
+  },
+  "homepage": "https://github.com/alexissamudio/4Dsentinel-suite",
+  "repository": "https://github.com/alexissamudio/4Dsentinel-suite"
+}
