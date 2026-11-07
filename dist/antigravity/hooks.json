@@ -1,0 +1,18 @@
+{
+  "fluency-4d": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "uv run --script hooks/fluency_hooks.py PreInvocation",
+        "timeout": 15
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "uv run --script hooks/fluency_hooks.py Stop",
+        "timeout": 15
+      }
+    ]
+  }
+}
